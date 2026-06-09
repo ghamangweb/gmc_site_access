@@ -1,78 +1,139 @@
-#### FUNCTIONAL REQUIREMNTS
+# FUNCTIONAL REQUIREMENTS
 
-
-### AUTH LAYER
+## AUTH LAYER
 
 This application implements a dual-layer authentication strategy combining identity verification with application-specific access control:
 
-**Identity Layer**: Strict Microsoft Entra ID (formerly Azure AD) authentication, enforcing the organization's Multi-Factor Authentication (MFA) policies. 
+**Identity Layer**: Strict Microsoft Entra ID (formerly Azure AD) authentication, enforcing the organization's Multi-Factor Authentication (MFA) policies.
+
 **Application Layer**: A mandatory 4-digit security PIN required for dashboard access, acting as an independent authorization barrier.
 
-# User Registration - Sign Up
+### User Registration - Sign Up
 
 Users must register using a valid Microsoft Account.
 
 **Initial Access Control**: Successful Microsoft authentication does not grant immediate dashboard access.
-**Routing**: Upon successful identity verification, all new users are automatically routed to an `/unauthorized` landing page.
-**Admin Provisioning**: Access is granted solely by a System Administrator.  The admin must manually verify the user's eligibility and promote their status from user to authorized_admin within the system. This ensures that possession of a valid Microsoft account alone is insufficient for entry.
 
-# Onboarding 
+**Routing**: Upon successful identity verification, all new users are redirected automatically routed to `/unauthorized` page. On this page, the user is prompted to choose the appropriate role from the available options with CTA to make a request to the system administrator for authorization.
 
-Once promoted by an administrator, the user must complete a compulsory onboarding step:
+**Admin Provisioning**: Access is granted solely by a `System Administrator`. The `System Administrator` must manually verify the user's eligibility and promote their status from user to `admin` within the system. This ensures that possession of a valid Microsoft account alone is insufficient for entry.
+
+---
+
+### Sign In
+
+**Microsoft Authentication**: The user authenticates via Microsoft, satisfying all configured MFA requirements (e.g., push notification, authenticator code).
+
+**PIN Verification**: Immediately following successful Microsoft login, the user must enter their 4-digit security PIN.
+
+**Failure Condition**: Failure at either stage denies access to the dashboard.
+
+---
+
+### Onboarding
+
+First time signed in users will be prompted to set a unique 4-digit security PIN (e.g., 8655), through a compulsory onboarding step.
 
 **PIN Creation**: The user is required to set a unique 4-digit security PIN (e.g., 8655).
-Security Function: This PIN serves as the second factor of the application layer, distinct from Microsoft’s MFA. It ensures that even if a user’s Microsoft credentials are compromised or MFA is bypassed, the application remains secure. 
 
+**Security Function**: This PIN serves as the second factor of the application layer, distinct from Microsoft's MFA. It ensures that even if a user's Microsoft credentials are compromised or MFA is bypassed, the application remains secure.
 
+---
 
-# Sign in
-
-The login process requires successful completion of both layers:
-
-**Microsoft Authentication**: The user authenticates via Microsoft, satisfying all configured MFA requirements (e.g., push notification, authenticator code). 
-**PIN Verification**: Immediately following successful Microsoft login, the user must enter their 4-digit security PIN.
-**Failure Condition**: Failure at either stage denies access to the dashboard. 
-
-
-# Passcode Recovery and Reset
+### Passcode Recovery and Reset
 
 To maintain the integrity of the second security layer:
 
-**System Admin-Only Reset**: Admins cannot self-reset their PIN. Only a System Administrator can reset a user’s PIN.
-**Rationale**: This prevents unauthorized actors who may have gained Microsoft access from bypassing the application layer by resetting the PIN themselves
+**System Admin-Only Reset**: Admins cannot self-reset their PIN. Only a System Administrator can reset a user's PIN.
 
-In essence, the system features three(3) types of users: `User`, `Admin` and `System Admin`.
+**Rationale**: This prevents unauthorized actors who may have gained Microsoft access from bypassing the application layer by resetting the PIN themselves.
 
-**User Privileges**: 
-- `User`: Cannot access the dashboard. 
+In essence, the system features three (3) types of users: `User`, `Admin` and `System Admin`.
+
+### Role Definition
+
+The system distinguishes between two categories of roles:
+
+**1. System Roles (Access Control Roles)**
+
+These roles define access to the application:
+
+- **User**: Standard applicant with no administrative privileges.
+- **Admin**: Can access dashboards and perform administrative monitoring functions but cannot reset security credentials.
+- **System Admin**: Has full system privileges including user management, role assignment, and security resets.
+
+**2. Workflow Roles (Approval Roles)**
+
+These roles define responsibilities within the application workflow: Receptionist, DMD, HCM, GMM, Hospital, Training School, Security, and Information Technology.
+
+These roles are not system login roles and are assigned based on organizational responsibilities within the workflow.
+
+**User Privileges**:
+
+- `User`: Cannot access the dashboard.
 - `Admin`: Can access the dashboard but cannot reset PINs.
-- `System Admin`: Can access the dashboard, reset PINs, and senstive actions such as demoting and promoting users.
+- `System Admin`: Can access the dashboard, reset PINs, and perform sensitive actions such as demoting and promoting users.
 
+---
 
-### RECEPTION LAYER
+## WORKFLOW RULES (GLOBAL)
 
+### Approval Flow Structure
 
+Reception → Hospital → Training School → Security → IT
 
-## Data
-The reception layer features six(6) distict sections(Section 1 - Section 6)
+### Global Rule
 
+Each layer:
 
-# Input Types
-Input types include input boxes, text area, file upload, radio buttons, checkboxes,dropdown menus and date picker.
+- Can only edit its own data while active
+- Becomes read-only after approval and forward movement
 
+### Notification Rule
 
-# Compulsory File uploads
+Every action (approve, reject, submit) triggers:
+
+- Dashboard notification
+- Email notification
+
+### Rejection Rule
+
+If any layer rejects:
+
+- Record returns to Reception
+- Workflow restarts from Reception
+- Previous layers remain read-only unless record is back in Reception
+
+---
+
+## RECEPTION LAYER
+
+### Data
+
+The reception layer features six (6) distinct sections (Section 1 – Section 6).
+
+### Input Types
+
+Input types include input boxes, text area, file upload, radio buttons, checkboxes, dropdown menus and date picker.
+
+---
+
+### Compulsory File Uploads
+
 The following file uploads are required at the reception layer, without these required uploads the next layer downstream cannot proceed with anything. The required uploads are:
 
-- Passport biodata page(scanned)
+- Passport biodata page (scanned)
 - Valid visa (visa type will be toggled via radio buttons)
 - MINCOM letter of approval or consent
 - Work or residence permit
 - Ghana Card
-- Letter of assignement / Contract from sponsor
-- Proof of medical/travel Insurance
+- Letter of assignment / Contract from sponsor
+- Proof of medical/travel insurance
 
-# Required Data inputs 
+---
+
+### Required Data Inputs
+
 The following data inputs are required at the reception layer, without these required inputs the next layer downstream cannot proceed with anything. The required inputs are:
 
 - Employment Status
@@ -87,16 +148,16 @@ The following data inputs are required at the reception layer, without these req
 - Emergency Contact Name
 - Emergency Contact No
 - Company Name
-- Contact Name for Monthly reporting
+- Contact Name for Monthly Reporting
 - Contact Email Address
 - Emergency Contact Name within your company
 - Emergency Contact Telephone No. within your company
-- GMC Site – Liaison person
+- GMC Site – Liaison Person
 - GMC Liaison Department
 - Date of Arrival
 - Date of Departure
 - Reason for Request
-- Airport pickup/Protocol Required
+- Airport Pickup/Protocol Required
 - Transport Required To
 - Transport Required From
 - Accommodation Required
@@ -107,18 +168,18 @@ The following data inputs are required at the reception layer, without these req
 - Bringing Equipment on Site
 - PPE Required
 - IT Access Required
-- Visa type
+- Visa Type
 - Access Level
-- Accommodation confirmed
+- Accommodation Confirmed
 - Itinerary Attached
 - Inflight Updated
 - Remarks/Other Information
 
+---
 
+### Required Approvals
 
-
-# Required Approvals
-The system shoud feature three approval methods, Signature draw pad, signature upload and Text input 
+The system should feature three approval methods: signature draw pad, signature upload, and text input.
 
 - HCM Approval Name
 - HCM Signature of Approver
@@ -127,15 +188,17 @@ The system shoud feature three approval methods, Signature draw pad, signature u
 - DMD Approval Name
 - DMD Signature of Approver
 
-The system will automaticaly record the timestamps for the following fields:
+The system will automatically record the timestamps for the following fields:
+
 - HCM Date
 - GMM Date
 - DMD Date
 
+---
 
-##  Form Sections and Fields
+### Form Sections and Fields
 
-# Section 1 - Employee/ Contractor/ Visitor Details
+#### Section 1 – Employee / Contractor / Visitor Details
 
 - Employment Status
 - Full Name
@@ -149,25 +212,25 @@ The system will automaticaly record the timestamps for the following fields:
 - Emergency Contact Name
 - Emergency Contact No
 
-# Section 2 - Company Details
+#### Section 2 – Company Details
 
 - Company Name
-- Contact Name for Monthly reporting
+- Contact Name for Monthly Reporting
 - Contact Email Address
 - Emergency Contact Name within your company
 - Emergency Contact Telephone No. within your company
 
-# Section 3 - Access Details
+#### Section 3 – Access Details
 
-- GMC Site – Liaison person
+- GMC Site – Liaison Person
 - GMC Liaison Department
 - Date of Arrival
 - Date of Departure
 - Reason for Request
 
-# Section 4 - Site Support Requirements
+#### Section 4 – Site Support Requirements
 
-- Airport pickup/Protocol Required
+- Airport Pickup/Protocol Required
 - Transport Required To
 - Transport Required From
 - Accommodation Required
@@ -178,10 +241,10 @@ The system will automaticaly record the timestamps for the following fields:
 - Bringing Equipment on Site
 - PPE Required
 - IT Access Required
-- Visa type
+- Visa Type
 - Access Level
 
-# Section 5 - Authorization
+#### Section 5 – Authorization
 
 - HCM Approval Name
 - HCM Signature of Approver
@@ -190,41 +253,36 @@ The system will automaticaly record the timestamps for the following fields:
 - DMD Approval Name
 - DMD Signature of Approver
 
+#### Section 6 – Administration
 
-# Section 6 - Administration
-- Accommodation confirmed
+- Accommodation Confirmed
 - Itinerary Attached
 - Inflight Updated
 - Remarks/Other Information
 
+---
 
+### Notifications
 
+The system should be designed to support both dashboard and email notifications. At the dashboard level, the user should be able to make an approval request to HCM, GMM and DMD with a button click (this specific notification should be receivable via both dashboard and email). Upon approval by all three parties, the system should automatically send both an email and a dashboard notification to the next layer downstream (Hospital).
 
+---
 
+## HOSPITAL LAYER
 
-# Notifications
+### Notifications
 
-The system should be designed to support both dashboard and email notifiations. At the dashboard level, the user should be able to make an approval request to HCM, GMM and DMD with a button click(This specific notification should be receivable via both dashboard and email). Upon approval by all three parties, the system should automatically send both an email and a dashboard notification to the next layer downstream(Hospital).
+The hospital layer is triggered by a notification from the reception layer.
 
+The following data is **available to the Hospital Layer from the shared application record**:
 
-
-
-
-
-
-### HOSPITAL LAYER
-
-# Notifications
-The hospital layer is triggered by a notification from the reception layer. 
-
-The following data is passed from the reception layer to the hospital layer:
 - Employment Status
-- Fullname
-- Date of birth 
+- Full Name
+- Date of Birth
 - Gender
 - Nationality
 - Email Address
--Telephone No. (Off Site)
+- Telephone No. (Off Site)
 - Telephone No. (On Site)
 - Emergency Contact Name
 - Emergency Contact No.
@@ -240,32 +298,42 @@ The following data is passed from the reception layer to the hospital layer:
 - GMM Date
 - DMD Date
 
-Note: `Emergency Contact Name within your company` is required at Reception but is not passed to Hospital (only `Emergency Tel. (Company)` is passed).
+> **Note**: `Emergency Contact Name within your company` is required at Reception but is not referenced by Hospital (only `Emergency Tel. (Company)` is referenced).
 
+---
 
+### Compulsory File Uploads
 
-# Compulsory File uploads
 The following file uploads are required at the hospital layer, without these required uploads the next layer downstream cannot proceed with anything. The required uploads are:
 
 - Hospital fitness form
 
-# Required data
-The following data is required from the Hospital layer:
+---
+
+### Required Data
+
+The following data is required from the Hospital Layer:
+
 - Medical clearance status
 - Doctor Comments
 
 The system will automatically record timestamps for the following data:
-- medical clearance date
 
-### TRAINING SCHOOL LAYER
+- Medical clearance date
 
-# Notifications
-The Training School layer is triggered by a notification from the hospital layer. 
+---
 
-The following data is passed from the hospital layer to the Training School layer:
+## TRAINING SCHOOL LAYER
+
+### Notifications
+
+The Training School layer is triggered by a notification from the hospital layer.
+
+The following data is **available to the Training School Layer from the shared application record**:
+
 - Employment Status
-- Fullname
-- Date of birth 
+- Full Name
+- Date of Birth
 - Gender
 - Nationality
 - Email Address
@@ -274,10 +342,10 @@ The following data is passed from the hospital layer to the Training School laye
 - Emergency Contact Name
 - Emergency Contact No.
 - Company Name
-- GMC Liaison person
+- GMC Liaison Person
 - GMC Liaison Department
-- Date of arrival 
-- Date of departure
+- Date of Arrival
+- Date of Departure
 - HCM Approval Name
 - HCM Signature of Approver
 - GMM Approval Name
@@ -287,39 +355,45 @@ The following data is passed from the hospital layer to the Training School laye
 - HCM Date
 - GMM Date
 - DMD Date
-- overall status
-- Medical clearance status
-- Medical clearance date
+- Overall Status
+- Medical Clearance Status
+- Medical Clearance Date
 - Doctor Comments
 
-# Compulsory File uploads
+### Compulsory File Uploads
+
 The following file uploads are required at the training school layer, without these required uploads the next layer downstream cannot proceed with anything. The required uploads are:
 
 - Induction declaration form
 - Induction registration form
 
+---
 
+### Required Data
 
-# Required data
-The following data is required from the Training School layer:
+The following data is required from the Training School Layer:
+
 - General site induction
 - Other inductions and training
-- induction status
+- Induction status
 - Induction completion date
 - Induction sign-off (signature)
 
 The system will automatically record timestamps for the following data:
+
 - Completion date (triggered by induction sign-off)
-- induction status(triggered by induction sign-off)
+- Induction status (triggered by induction sign-off)
 
+---
 
+## SECURITY LAYER
 
-### SECURITY LAYER
+### Notifications
 
-# Notifications
-The Security layer is triggered by a notification from the Training School layer. 
+The Security layer is triggered by a notification from the Training School layer.
 
-The following data is passed from the Training School layer to the Security layer:
+The following data is **available to the Security Layer from the shared application record**:
+
 - Employment Status
 - Full Name
 - Date of Birth
@@ -334,7 +408,7 @@ The following data is passed from the Training School layer to the Security laye
 - Company Name
 - Emergency Contact Name within your company
 - Emergency Contact Telephone No. within your company
-- GMC Site – Liaison person
+- GMC Site – Liaison Person
 - GMC Liaison Department
 - Date of Arrival
 - Date of Departure
@@ -346,9 +420,9 @@ The following data is passed from the Training School layer to the Security laye
 - Other Inductions or Training
 - Bringing Equipment on Site
 - PPE Required
-- Visa type
+- Visa Type
 - Access Level
-- Accommodation confirmed
+- Accommodation Confirmed
 - HCM Approval Name
 - HCM Signature of Approver
 - GMM Approval Name
@@ -358,23 +432,28 @@ The following data is passed from the Training School layer to the Security laye
 - HCM Date
 - GMM Date
 - DMD Date
-- Medical clearance status
-- Medical clearance date
-- induction status
-- completion date
+- Medical Clearance Status
+- Medical Clearance Date
+- Induction Status
+- Completion Date
 
-# Required data
+### Required Data
+
 The Security layer audits data from prior layers and notifies Information Technology to complete biometric enrollment. Security does not capture additional form fields beyond audit actions and workflow notifications.
 
-### INFORMATION TECHNOLOGY LAYER
+---
 
-# Notifications
+## INFORMATION TECHNOLOGY LAYER
+
+### Notifications
+
 The Information Technology layer is triggered by a notification from the Security layer (after Security has audited the record).
 
 The system should support both dashboard and email notifications. Upon successful biometric enrollment, the system should automatically send both an email and a dashboard notification to **Security** and **Reception**.
 
-# Data passed
-The following data is passed from the Security layer to the Information Technology layer:
+### Data Passed
+
+The following data is **available to the Information Technology Layer from the Security Layer shared application record**:
 
 - Employment Status
 - Full Name
@@ -388,7 +467,6 @@ The following data is passed from the Security layer to the Information Technolo
 - Company Name
 - Date of Arrival
 - Date of Departure
-- IT Access Required
 - Visa Type
 - Access Level
 - Permanent Access Badge
@@ -404,23 +482,28 @@ The following data is passed from the Security layer to the Information Technolo
 - HCM Date
 - GMM Date
 - DMD Date
-- Medical clearance status
-- Medical clearance date
-- induction status
-- completion date
-- PPEs required
+- Medical Clearance Status
+- Medical Clearance Date
+- Induction Status
+- Completion Date
+- PPEs Required
 - Record ID
 - Registration Timestamp
 - Overall Status
 
+---
 
-# Compulsory File uploads
+### Compulsory File Uploads
+
 The following file uploads are required at the information technology layer, without these required uploads the next layer downstream cannot proceed with anything. The required uploads are:
 
-- Visitor passport sized photo
+- Visitor passport-sized photo
 
-# Required data
-The following data is required from the Information Technology layer:
+---
+
+### Required Data
+
+The following data is required from the Information Technology Layer:
 
 - ID Type
 - Biometric Captured
@@ -436,5 +519,6 @@ The system will automatically record timestamps for the following data:
 - Access Card Expiry Date (default tied to permit or departure date; IT may override)
 - Overall Status (set to Active on successful enrollment)
 
+---
 
-#### NON-FUNCTIONAL REQUIREMENTS
+# NON-FUNCTIONAL REQUIREMENTS
