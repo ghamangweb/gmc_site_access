@@ -14,7 +14,8 @@ Users must register using a valid Microsoft Account.
 
 **Initial Access Control**: Successful Microsoft authentication does not grant immediate dashboard access.
 
-**Routing**: Upon successful identity verification, all new users are redirected automatically routed to `/unauthorized` page. On this page, the user is prompted to choose the appropriate role from the available options with CTA to make a request to the system administrator for authorization.
+**Routing**: Upon successful identity verification, all new users are redirected automatically routed to 
+`/unauthorized` page. On this page, the user is prompted to choose the appropriate role from the available options with CTA to make a request to the system administrator for authorization.
 
 **Admin Provisioning**: Access is granted solely by a `System Administrator`. The `System Administrator` must manually verify the user's eligibility and promote their status from user to `admin` within the system. This ensures that possession of a valid Microsoft account alone is insufficient for entry.
 
@@ -36,6 +37,23 @@ First time signed in users will be prompted to set a unique 4-digit security PIN
 
 **PIN Creation**: The user is required to set a unique 4-digit security PIN (e.g., 8655).
 
+#### PIN Restrictions
+
+The following PINs shall be explicitly rejected by the system:
+
+| Restricted Pattern | Example |
+|---|---|
+| All zeros | `0000` |
+| Repeating digits | `1111`, `2222` |
+| Ascending sequence | `1234` |
+| Descending sequence | `4321` |
+| Any repeating or sequential pattern | `1122`, `1235` |
+
+---
+
+### Failed Attempt Policy
+- PIN entry attempts shall be **rate-limited** to prevent automated guessing
+
 **Security Function**: This PIN serves as the second factor of the application layer, distinct from Microsoft's MFA. It ensures that even if a user's Microsoft credentials are compromised or MFA is bypassed, the application remains secure.
 
 ---
@@ -48,7 +66,7 @@ To maintain the integrity of the second security layer:
 
 **Rationale**: This prevents unauthorized actors who may have gained Microsoft access from bypassing the application layer by resetting the PIN themselves.
 
-In essence, the system features three (3) types of users: `User`, `Admin` and `System Admin`.
+In essence, the system features four (4) types of users: `User`, `Guest`, `Admin` and `System Admin`.
 
 ### Role Definition
 
@@ -59,6 +77,7 @@ The system distinguishes between two categories of roles:
 These roles define access to the application:
 
 - **User**: Standard applicant with no administrative privileges.
+- **Guest**: Read-only user assigned to a workflow role. Guests may be promoted to Admin by a System Administrator.
 - **Admin**: Can access dashboards and perform administrative monitoring functions but cannot reset security credentials.
 - **System Admin**: Has full system privileges including user management, role assignment, and security resets.
 
@@ -71,6 +90,7 @@ These roles are not system login roles and are assigned based on organizational 
 **User Privileges**:
 
 - `User`: Cannot access the dashboard.
+- `Guest`" Can access the dashboard in `read only` mode.
 - `Admin`: Can access the dashboard but cannot reset PINs.
 - `System Admin`: Can access the dashboard, reset PINs, and perform sensitive actions such as demoting and promoting users.
 
@@ -86,8 +106,9 @@ Reception → Hospital → Training School → Security → IT
 
 Each layer:
 
-- Can only edit its own data while active
+- Admins can only edit their own data while active
 - Becomes read-only after approval and forward movement
+- Guests have read-only access and cannot create, edit, approve, reject, or delete records.
 
 ### Notification Rule
 
@@ -100,7 +121,7 @@ Every action (approve, reject, submit) triggers:
 
 If any layer rejects:
 
-- Record returns to Reception
+- Record returns to Reception as draft or correction.
 - Workflow restarts from Reception
 - Previous layers remain read-only unless record is back in Reception
 
@@ -194,7 +215,59 @@ The system will automatically record the timestamps for the following fields:
 - GMM Date
 - DMD Date
 
+
+### Approval Rules
+
+#### Standard Approval
+
+The system shall **simultaneously notify HCM, GMM, and DMD** via dashboard and email when an approval is requested.
+
+Approval from **any one** of the three authorized approvers (HCM, GMM, or DMD) is sufficient to satisfy the approval requirement.
+
+Upon receipt of a valid approval, the system shall automatically:
+
+- Mark the approval stage as **completed**
+- Record the **approval timestamp**
+- Set the record to **read-only** at the Reception layer
+- Progress the workflow to the **Hospital layer**
+- Send dashboard and email notifications to the **Hospital layer**
+
 ---
+
+## Delegated Approval
+
+Where HCM, GMM, and DMD are all unavailable, the Receptionist may initiate a **Delegated Approval Request**.
+
+### Initiation
+
+Upon initiation, a predefined notification template shall be sent via email and dashboard notification to:
+
+- HCM
+- GMM
+- DMD
+- System Administrator
+
+### Granting Delegation
+
+The System Administrator may grant **temporary delegated approval privileges** to the Receptionist.
+
+While delegated approval privileges are active, the Receptionist may perform a **single approval action** on the affected record.
+
+### Required Records
+
+The system shall record the following for every delegated approval:
+
+| Field | Description |
+|---|---|
+| Delegated Approver Name | Name of the Receptionist granted privileges |
+| Delegation Granted By | Name of the System Administrator |
+| Delegation Granted Date | Date privileges were granted |
+| Delegated Approval Date | Date the approval action was performed |
+| Reason for Delegation | Justification for the delegation request |
+
+### Audit & Revocation
+All delegated approvals shall be recorded in the **audit log**.
+The System Administrator may **revoke** delegated approval privileges at any time.
 
 ### Form Sections and Fields
 
@@ -519,6 +592,60 @@ The system will automatically record timestamps for the following data:
 - Access Card Expiry Date (default tied to permit or departure date; IT may override)
 - Overall Status (set to Active on successful enrollment)
 
----
+
+## ACCESS TERMINATION
+
+### Purpose
+
+The system shall support the termination and revocation of access for registered users(expatriate).
+
+
+### Access Termination Request
+
+Users assigned to the **Reception** workflow role shall have access to a **Terminate Access** action from the dashboard.
+
+The termination request shall require the following inputs:
+
+| Field | Requirement |
+|---|---|
+| Record Selection | Mandatory |
+| Termination Reason | Mandatory |
+
+
+### Workflow
+
+Upon submission of a termination request, the system shall automatically:
+
+1. Create an **Access Termination Request**
+2. Send dashboard and email notifications to the **System Administrator**
+3. Mark the affected record as **Pending Access Revocation**
+
+
+### System Administrator Action
+
+The System Administrator shall review the termination request and may either:
+
+- **Approve** Access Revocation
+- **Reject** Access Revocation
+
+The System Administrator may provide comments before completing the action.
+
+### IT Notification
+
+Upon approval of the termination request:
+
+- The system shall send dashboard and email notifications to the **Information Technology** layer.
+- The Information Technology layer shall be responsible for removing the registered user from the system.
+
+
+## Audit Trail
+
+The system shall maintain a complete audit log of:
+
+- Termination Request creation
+- System Administrator decision (approval or rejection)
+- IT access removal confirmation
+- All comments entered throughout the process
+
 
 # NON-FUNCTIONAL REQUIREMENTS
