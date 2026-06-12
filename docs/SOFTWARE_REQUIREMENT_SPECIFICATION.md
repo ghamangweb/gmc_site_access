@@ -337,7 +337,7 @@ The System Administrator may **revoke** delegated approval privileges at any tim
 
 ### Notifications
 
-The system should be designed to support both dashboard and email notifications. At the dashboard level, the user should be able to make an approval request to HCM, GMM and DMD with a button click (this specific notification should be receivable via both dashboard and email). Upon approval by all three parties, the system should automatically send both an email and a dashboard notification to the next layer downstream (Hospital).
+The system should be designed to support both dashboard and email notifications. At the dashboard level, the user should be able to make an approval request to HCM, GMM and DMD with a button click (this specific notification should be receivable via both dashboard and email). Upon approval from any one of HCM, GMM, or DMD, the system should automatically send both an email and a dashboard notification to the next layer downstream (Hospital).
 
 ---
 
