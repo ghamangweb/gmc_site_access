@@ -119,11 +119,30 @@ Every action (approve, reject, submit) triggers:
 
 ### Rejection Rule
 
-If any layer rejects:
+If a layer records a rejection:
 
-- Record returns to Reception as draft or correction.
-- Workflow restarts from Reception
-- Previous layers remain read-only unless record is back in Reception
+- The record does not automatically reset to Reception.
+- The action is handled according to layer-specific workflow rules.
+- The Hospital-to-Training timeout exception still applies (direct route back to Hospital for re-checkup).
+
+### Visa/Work-Permit Expiry Reset Rule
+
+If a valid visa or work/residence permit expires while a record is in workflow:
+
+- The record is returned to Reception as draft/correction for document renewal.
+- Workflow restarts from Reception after updated valid documents are provided.
+- The system sends dashboard and email notifications to Reception, Security, and Information Technology.
+- Previous layers remain read-only until Reception resubmits the record.
+
+### Hospital-to-Training Revalidation Timeout Rule
+
+When a record reaches Training School after Hospital clearance:
+
+- Training School must record induction completion/sign-off within 3 months of the Hospital medical clearance date.
+- If completion/sign-off is not recorded within this 3-month window, the Hospital clearance is marked invalid/expired.
+- An invalid/expired Hospital clearance blocks progression to Security and IT until a new Hospital checkup is completed.
+- In this timeout case, the record routes directly to Hospital for re-checkup (not Reception).
+- Any active Training School progress for that cycle is removed from active workflow and retained as archived history.
 
 ---
 
@@ -139,9 +158,11 @@ Input types include input boxes, text area, file upload, radio buttons, checkbox
 
 ---
 
-### Compulsory File Uploads
+### Applicable File Uploads
 
-The following file uploads are required at the reception layer, without these required uploads the next layer downstream cannot proceed with anything. The required uploads are:
+At the Reception layer, file uploads are not compulsory by default. The Receptionist selects which document uploads are applicable for the visitor. Only the uploads marked as applicable become required for that record.
+
+The Receptionist may mark any of the following as applicable:
 
 - Passport biodata page (scanned)
 - Valid visa (visa type will be toggled via radio buttons)
@@ -150,6 +171,8 @@ The following file uploads are required at the reception layer, without these re
 - Ghana Card
 - Letter of assignment / Contract from sponsor
 - Proof of medical/travel insurance
+
+The record cannot advance to the next layer until all applicable uploads have been provided. Uploads not marked as applicable are not required.
 
 ---
 
@@ -394,6 +417,15 @@ The system will automatically record timestamps for the following data:
 
 - Medical clearance date
 
+### Revalidation on Training Timeout
+
+If Training School does not complete induction within 3 months of Hospital medical clearance date, the system shall:
+
+- Mark the existing Hospital clearance as invalid/expired
+- Return the record directly to Hospital for fresh medical checkup
+- Require new Hospital clearance before Training School can proceed again
+- Send dashboard and email notifications that revalidation is required
+
 ---
 
 ## TRAINING SCHOOL LAYER
@@ -456,6 +488,15 @@ The system will automatically record timestamps for the following data:
 
 - Completion date (triggered by induction sign-off)
 - Induction status (triggered by induction sign-off)
+
+### Timeout Handling and Archiving
+
+If induction completion/sign-off is not recorded within 3 months of the linked Hospital medical clearance date, the system shall:
+
+- Remove the current Training School cycle from active workflow
+- Archive the Training School cycle for audit/history purposes (not hard delete)
+- Route the record directly back to Hospital for re-checkup
+- Send dashboard and email notifications to relevant parties indicating Hospital revalidation is required
 
 ---
 

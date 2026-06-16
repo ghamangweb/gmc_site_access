@@ -6,7 +6,7 @@ GMC Site Access is a web-based workflow management system that digitizes the end
 
 The system is secured by a dual-layer authentication model — Microsoft Entra ID (with MFA) as the identity layer, and a mandatory 4-digit security PIN as an independent application-level barrier. Access is role-controlled: only users provisioned by a System Administrator can reach the dashboard.
 
-Once inside, the system routes each visitor record through five sequential processing layers — Reception, Hospital, Training School, Security, and Information Technology, enforcing strict handoff rules between them. No layer can act until the one before it has completed and notified the next. Every action triggers both a dashboard and email notification. Rejections at any layer return the record to `Reception` for correction before the workflow can resume.
+Once inside, the system routes each visitor record through five sequential processing layers — Reception, Hospital, Training School, Security, and Information Technology, enforcing strict handoff rules between them. No layer can act until the one before it has completed and notified the next. Every action triggers both a dashboard and email notification. Reception reset is triggered by visa/work-permit expiry, while Hospital-to-Training revalidation timeout returns the record directly to `Hospital` for a fresh checkup.
 
 The system supports both Admin and Guest access at each layer, with full audit logging, delegated approval for exceptional cases, and a complete access termination workflow for when a visitor's access needs to be revoked.
 
@@ -42,29 +42,24 @@ Each Admin or Guest is assigned one or more workflow roles based on their depart
 | Workflow role | Department | Responsibility |
 |---|---|---|
 | **Receptionist** | Reception | Captures visitor data, uploads documents, requests stakeholder approval, initiates access termination |
-| **HCM / GMM / DMD** | Management | Approves visitor access requests (any one approval is sufficient) |
-| **Hospital** | Medical | Conducts fitness assessment and records medical clearance |
-| **Training School** | Training | Conducts site induction and records completion |
-| **Security** | Security | Audits prior layers and forwards records for biometric enrollment |
-| **Information Technology** | IT | Completes biometric enrollment, assigns access cards, revokes access on termination |
-
-### Record subjects (not system users)
-
-- **Foreign visitors** and **expatriates** (Employee, Contractor, or Visitor) whose site access is being registered
-- **Local visitors** are not supported in the current phase
+| **HCM / GMM / DMD** | Reception | Approves visitor access requests (any one approval is sufficient) |
+| **Hospital Records Staff** | Hospital | Records medical clearance |
+| **Training School Staff** | Training School | Records induction records |
+| **Security Staff** | Security | Audits prior layers and forwards records for biometric enrollment |
+| **Information Technology Staff** | IT | Completes biometric enrollment, assigns access cards, revokes access on termination |
 
 
 ## Success criteria
 
 The project is successful when GMC can run the full site access lifecycle digitally, with the problems of the paper process resolved.
 
-### Workflow and visibility
+#### Workflow and visibility
 
 - Every visitor record follows the defined five-layer path (Reception → Hospital → Training School → Security → IT) with no layer able to act before the previous one has completed
 - Any authorized user can see where a record stands in the workflow at any time
-- Rejections at any layer return the record to Reception for correction and restart the workflow from there
 
-### Notifications and handoffs
+
+#### Notifications and handoffs
 
 - Every submit, approve, and reject action triggers both a dashboard notification and an email to the relevant parties
 - Downstream departments are automatically notified when a record is ready for them — removing reliance on manually forwarded emails that may go unread
@@ -75,41 +70,41 @@ The project is successful when GMC can run the full site access lifecycle digita
 - Stakeholder approvals (HCM, GMM, DMD) are captured with approver name, signature, and date
 - Delegated approvals and access termination requests are fully logged with justification and decision history
 
-### Security and access control
+#### Security and access control
 
 - Only users provisioned by a System Administrator can reach the dashboard
 - All dashboard access requires both Microsoft Entra ID authentication (with MFA) and a valid application PIN
 - Access termination follows a formal workflow: Reception requests → System Administrator approves → IT revokes
 
-### End-to-end completion
+#### End-to-end completion
 
 - A record can progress from initial submission at Reception through to Active status after IT completes biometric enrollment
-- Required documents and data fields are enforced at each layer — a record cannot advance with missing compulsory inputs
+- Required documents and data fields are enforced at each layer — a record cannot advance with missing compulsory inputs. At Reception, only document types marked as applicable by the Receptionist are required.
 - IT can confirm removal of a departed expatriate's access through the termination workflow
 
 
 ## Core User Flow
 
-### Reception
+#### Reception
 
-The **Reception** layer captures and submits visitor information. This includes uploading required documents, entering visitor details, and obtaining approval from stakeholders (HCM, DMD, GMM). All three are notified simultaneously; approval from any one of them is sufficient to advance the record.
+The **Reception** layer captures and submits visitor information. The Receptionist selects which document uploads are applicable to the visitor; only those selections become required uploads. This also includes entering visitor details and obtaining approval from stakeholders (HCM, DMD, GMM). All three are notified simultaneously; approval from any one of them is sufficient to advance the record.
 
-### Hospital
+#### Hospital
 
 The **Hospital** layer processes visitor information after being notified by Reception. Its main purpose is to conduct a medical assessment of the visitor and record the results in the system.
 
-When the assessment is complete and the visitor is fit to proceed, Hospital notifies the next layer (Training School). If the visitor is not fit to proceed, Hospital notifies Reception to handle the case from there. These notifications are automatically sent by the system based on user actions.
+When the assessment is complete and the visitor is fit to proceed, Hospital notifies the next layer (Training School). Hospital clearance remains valid for up to three months while the record is at Training School. If Training School does not record completion/sign-off within that period, the Hospital clearance becomes invalid and the record is routed back to Hospital for re-checkup. These notifications are automatically sent by the system based on user actions.
 
 
-### Training School
+#### Training School
 
-The **Training School** layer conducts visitor induction. Once induction is complete and the visitor is fit to proceed, Training School notifies the next layer (Security) so the visitor can move forward.
+The **Training School** layer conducts visitor induction. Once induction is complete and the visitor is fit to proceed, Training School notifies the next layer (Security) so the visitor can move forward. If induction completion is not recorded within three months of Hospital clearance, Training School progress is removed from the active workflow and retained as archived history, and the record returns to Hospital for a new medical checkup.
 
-### Security
+#### Security
 
 The **Security** layer audits results from prior layers, then notifies Information Technology to complete biometric enrollment.
 
-### Information Technology
+#### Information Technology
 
 The **Information Technology** layer completes biometric enrollment. After enrollment succeeds, Security and Reception are notified. At the same time, this layer also is responsible for revoking a visitor's access if they are to exit the system.
 
@@ -120,10 +115,11 @@ The **Information Technology** layer completes biometric enrollment. After enrol
 - Role-based access control (system roles: User, Guest, Admin, System Admin; workflow roles per department)
 - Five-layer sequential workflow (Reception → Hospital → Training School → Security → IT)
 - Multi-section form input with validation across all layers
-- Compulsory document uploads at each layer
+- Applicable document upload selection at Reception (Receptionist marks which uploads apply; only those are required)
+- Compulsory document uploads at Hospital, Training School, and IT layers
 - Stakeholder approval workflow (HCM / GMM / DMD) with delegated approval fallback
 - Dashboard and email notifications on every action
-- Rejection and correction loop (record returns to Reception)
+- Visa/work-permit expiry reset loop (record returns to Reception)
 - Access termination and revocation workflow
 - Full audit logging
 - Guest read-only access per workflow layer
