@@ -106,7 +106,7 @@ The system supports three access paths, determined at Reception:
 |---|---|---|
 | Coming to work | — | Reception → Hospital → Training School → Security → IT |
 | Coming to visit | No | Reception only |
-| Coming to visit | Yes | Reception → Training School |
+| Coming to visit | Yes | Reception → Training School → Security → IT |
 
 The full five-layer sequence applies only to the **work path**.
 
@@ -121,7 +121,7 @@ Path assignment:
 
 - `Coming to work` → work path (all layers)
 - `Coming to visit` + mine site visit `No` → visit-only path (Reception only)
-- `Coming to visit` + mine site visit `Yes` → visit-with-mine-site path (Reception → Training School)
+- `Coming to visit` + mine site visit `Yes` → visit-with-mine-site path (Reception → Training School → Security → IT)
 
 The assigned path controls which downstream layers are required, which notifications are sent, and which layer-specific rules apply.
 
@@ -280,7 +280,7 @@ Upon receipt of a valid approval, the system shall automatically:
 - Route the record according to its assigned access path:
   - **Work path** → progress to Hospital and notify Hospital
   - **Visit-only path** → mark Reception complete; no downstream layer notification
-  - **Visit-with-mine-site path** → progress directly to Training School and notify Training School (Hospital is skipped)
+  - **Visit-with-mine-site path** → progress directly to Training School and notify Training School (Hospital is skipped; Security and IT still apply after Training)
 - Send dashboard and email notifications to the next required layer(s) for that path
 
 ---
@@ -534,7 +534,7 @@ The system will automatically record timestamps for the following data:
 Upon induction completion/sign-off:
 
 - **Work path**: Training School notifies Security for audit and biometric enrollment handoff.
-- **Visit-with-mine-site path**: Training School marks the record complete; Security and IT are not required.
+- **Visit-with-mine-site path**: Training School notifies Security for audit and IT handoff.
 
 ### Timeout Handling and Archiving
 
@@ -551,11 +551,11 @@ If induction completion/sign-off is not recorded within 3 months of the linked H
 
 ## SECURITY LAYER
 
-The Security layer applies only to records on the **work path**.
+The Security layer applies to records on the **work path** and the **visit-with-mine-site path**.
 
 ### Notifications
 
-The Security layer is triggered by a notification from the Training School layer for work-path records only.
+The Security layer is triggered by a notification from the Training School layer for work-path and visit-with-mine-site records.
 
 The following data is **available to the Security Layer from the shared application record**:
 
@@ -610,11 +610,11 @@ The Security layer audits data from prior layers and notifies Information Techno
 
 ## INFORMATION TECHNOLOGY LAYER
 
-The Information Technology layer applies only to records on the **work path**.
+The Information Technology layer applies to records on the **work path** and the **visit-with-mine-site path**.
 
 ### Notifications
 
-The Information Technology layer is triggered by a notification from the Security layer (after Security has audited the record) for work-path records only.
+The Information Technology layer is triggered by a notification from the Security layer (after Security has audited the record) for work-path and visit-with-mine-site records.
 
 The system should support both dashboard and email notifications. Upon successful biometric enrollment, the system should automatically send both an email and a dashboard notification to **Security** and **Reception**.
 

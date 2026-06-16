@@ -6,7 +6,7 @@ GMC Site Access is a web-based workflow management system that digitizes the end
 
 The system is secured by a dual-layer authentication model — Microsoft Entra ID (with MFA) as the identity layer, and a mandatory 4-digit security PIN as an independent application-level barrier. Access is role-controlled: only users provisioned by a System Administrator can reach the dashboard.
 
-Once inside, the system routes each record through workflow layers based on access purpose captured at Reception. **Coming to work** follows the full path (Reception → Hospital → Training School → Security → IT). **Coming to visit without mine-site access** is handled entirely at Reception. **Coming to visit with mine-site access** goes from Reception directly to Training School for induction. Strict handoff rules apply within each path: no layer can act until the previous required layer has completed and notified the next. Every action triggers both a dashboard and email notification. Reception reset is triggered by visa/work-permit expiry, while Hospital-to-Training revalidation timeout (work path only) returns the record directly to `Hospital` for a fresh checkup.
+Once inside, the system routes each record through workflow layers based on access purpose captured at Reception. **Coming to work** follows the full path (Reception → Hospital → Training School → Security → IT). **Coming to visit without mine-site access** is handled entirely at Reception. **Coming to visit with mine-site access** follows Reception → Training School → Security → IT (Hospital is skipped). Strict handoff rules apply within each path: no layer can act until the previous required layer has completed and notified the next. Every action triggers both a dashboard and email notification. Reception reset is triggered by visa/work-permit expiry, while Hospital-to-Training revalidation timeout (work path only) returns the record directly to `Hospital` for a fresh checkup.
 
 The system supports both Admin and Guest access at each layer, with full audit logging, delegated approval for exceptional cases, and a complete access termination workflow for when a visitor's access needs to be revoked.
 
@@ -55,7 +55,7 @@ The project is successful when GMC can run the full site access lifecycle digita
 
 #### Workflow and visibility
 
-- Every record follows the access path determined at Reception (work, visit-only, or visit-with-mine-site)
+- Every record follows the access path determined at Reception (work, visit-only, or visit-with-mine-site-access)
 - Within each path, no layer can act before the previous required layer has completed
 - Any authorized user can see where a record stands in the workflow at any time
 
@@ -92,9 +92,9 @@ Records are routed at Reception based on **access purpose** and, for visitors, w
 
 | Access purpose | Mine site visit | Path |
 |---|---|---|
-| Coming to work | — | Reception → Hospital → Training School → Security → IT |
+| Coming to work | Yes| Reception → Hospital → Training School → Security → IT |
 | Coming to visit | No | Reception only |
-| Coming to visit | Yes | Reception → Training School |
+| Coming to visit | Yes | Reception → Training School → Security → IT |
 
 #### Reception
 
@@ -102,19 +102,19 @@ The **Reception** layer captures and submits visitor information. The Receptioni
 
 #### Hospital
 
-The **Hospital** layer applies only to the **work path**. It processes records after Reception approval and conducts a medical assessment. When the visitor is fit to proceed, Hospital notifies Training School. Hospital clearance remains valid for up to three months while the record is at Training School. If Training School does not record completion/sign-off within that period, Hospital clearance becomes invalid and the record is routed back to Hospital for re-checkup.
+The **Hospital** layer applies only to the **work path**. It processes records after Reception approval and conducts a medical assessment. When the visitor is fit to proceed, Hospital notifies Training School. Hospital clearance remains valid for up to **three months** while the record is at Training School. If Training School does not record completion/sign-off within that period, Hospital clearance becomes invalid and the record is routed back to Hospital for re-checkup.
 
 #### Training School
 
-The **Training School** layer conducts induction. On the **work path**, it follows Hospital clearance. On the **visit-with-mine-site path**, records are sent directly from Reception to Training School (Hospital is skipped). Once induction is complete, work-path records proceed to Security; visit-with-mine-site records complete at Training School. On the work path, if induction completion is not recorded within three months of Hospital clearance, Training School progress is archived and the record returns to Hospital for a new medical checkup.
+The **Training School** layer conducts induction. On the **work path**, it follows Hospital clearance. On the **visit-with-mine-site-access path**, records are sent directly from Reception to Training School (Hospital is skipped). Once induction is complete, records on both paths proceed to Security. On the work path, if induction completion is not recorded within three months of Hospital clearance, Training School progress is archived and the record returns to Hospital for a new medical checkup.
 
 #### Security
 
-The **Security** layer applies only to the **work path**. It audits results from prior layers, then notifies Information Technology to complete biometric enrollment.
+The **Security** layer applies to both the **work path** and the **visit-with-mine-site-access path**. It audits results from prior layers, then notifies Information Technology to complete biometric enrollment and visitor card issuance.
 
 #### Information Technology
 
-The **Information Technology** layer applies only to the **work path**. It completes biometric enrollment. After enrollment succeeds, Security and Reception are notified. This layer is also responsible for revoking access when a visitor's access needs to be terminated.
+The **Information Technology** layer applies to both the **work path** and the **visit-with-mine-site-access path**. It completes biometric enrollment and issues access/visitor cards. After enrollment succeeds, Security and Reception are notified. This layer is also responsible for revoking access when a visitor's access needs to be terminated.
 
 
 ## Features in scope
