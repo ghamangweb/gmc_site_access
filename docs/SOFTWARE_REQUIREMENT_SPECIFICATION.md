@@ -100,7 +100,30 @@ These roles are not system login roles and are assigned based on organizational 
 
 ### Approval Flow Structure
 
-Reception → Hospital → Training School → Security → IT
+The system supports three access paths, determined at Reception:
+
+| Access purpose | Mine site visit | Path |
+|---|---|---|
+| Coming to work | — | Reception → Hospital → Training School → Security → IT |
+| Coming to visit | No | Reception only |
+| Coming to visit | Yes | Reception → Training School |
+
+The full five-layer sequence applies only to the **work path**.
+
+### Access Path Selection Rule
+
+At Reception, the system shall determine the workflow path using:
+
+- **Access purpose**: `Coming to work` or `Coming to visit`
+- **Mine site visit** (required when access purpose is `Coming to visit`): `Yes` or `No`
+
+Path assignment:
+
+- `Coming to work` → work path (all layers)
+- `Coming to visit` + mine site visit `No` → visit-only path (Reception only)
+- `Coming to visit` + mine site visit `Yes` → visit-with-mine-site path (Reception → Training School)
+
+The assigned path controls which downstream layers are required, which notifications are sent, and which layer-specific rules apply.
 
 ### Global Rule
 
@@ -123,7 +146,7 @@ If a layer records a rejection:
 
 - The record does not automatically reset to Reception.
 - The action is handled according to layer-specific workflow rules.
-- The Hospital-to-Training timeout exception still applies (direct route back to Hospital for re-checkup).
+- The Hospital-to-Training timeout exception applies only on the work path (direct route back to Hospital for re-checkup).
 
 ### Visa/Work-Permit Expiry Reset Rule
 
@@ -136,7 +159,7 @@ If a valid visa or work/residence permit expires while a record is in workflow:
 
 ### Hospital-to-Training Revalidation Timeout Rule
 
-When a record reaches Training School after Hospital clearance:
+This rule applies only to records on the **work path** when Training School follows Hospital clearance:
 
 - Training School must record induction completion/sign-off within 3 months of the Hospital medical clearance date.
 - If completion/sign-off is not recorded within this 3-month window, the Hospital clearance is marked invalid/expired.
@@ -178,8 +201,10 @@ The record cannot advance to the next layer until all applicable uploads have be
 
 ### Required Data Inputs
 
-The following data inputs are required at the reception layer, without these required inputs the next layer downstream cannot proceed with anything. The required inputs are:
+The following data inputs are required at the reception layer, without these required inputs the record cannot proceed:
 
+- Access purpose (Coming to work / Coming to visit)
+- Mine site visit (required when access purpose is Coming to visit)
 - Employment Status
 - Full Name
 - Date of Birth
@@ -252,8 +277,11 @@ Upon receipt of a valid approval, the system shall automatically:
 - Mark the approval stage as **completed**
 - Record the **approval timestamp**
 - Set the record to **read-only** at the Reception layer
-- Progress the workflow to the **Hospital layer**
-- Send dashboard and email notifications to the **Hospital layer**
+- Route the record according to its assigned access path:
+  - **Work path** → progress to Hospital and notify Hospital
+  - **Visit-only path** → mark Reception complete; no downstream layer notification
+  - **Visit-with-mine-site path** → progress directly to Training School and notify Training School (Hospital is skipped)
+- Send dashboard and email notifications to the next required layer(s) for that path
 
 ---
 
@@ -296,6 +324,8 @@ The System Administrator may **revoke** delegated approval privileges at any tim
 
 #### Section 1 – Employee / Contractor / Visitor Details
 
+- Access purpose (Coming to work / Coming to visit)
+- Mine site visit (required when access purpose is Coming to visit)
 - Employment Status
 - Full Name
 - Date of Birth
@@ -360,15 +390,17 @@ The System Administrator may **revoke** delegated approval privileges at any tim
 
 ### Notifications
 
-The system should be designed to support both dashboard and email notifications. At the dashboard level, the user should be able to make an approval request to HCM, GMM and DMD with a button click (this specific notification should be receivable via both dashboard and email). Upon approval from any one of HCM, GMM, or DMD, the system should automatically send both an email and a dashboard notification to the next layer downstream (Hospital).
+The system should be designed to support both dashboard and email notifications. At the dashboard level, the user should be able to make an approval request to HCM, GMM and DMD with a button click (this specific notification should be receivable via both dashboard and email). Upon approval from any one of HCM, GMM, or DMD, the system should automatically send both an email and a dashboard notification to the next required layer(s) based on the record's access path.
 
 ---
 
 ## HOSPITAL LAYER
 
+The Hospital layer applies only to records on the **work path**. Visit-only and visit-with-mine-site records do not enter this layer.
+
 ### Notifications
 
-The hospital layer is triggered by a notification from the reception layer.
+The hospital layer is triggered by a notification from the reception layer for work-path records only.
 
 The following data is **available to the Hospital Layer from the shared application record**:
 
@@ -430,9 +462,17 @@ If Training School does not complete induction within 3 months of Hospital medic
 
 ## TRAINING SCHOOL LAYER
 
+The Training School layer applies to:
+
+- **Work path** records after Hospital clearance
+- **Visit-with-mine-site path** records sent directly from Reception (Hospital skipped)
+
 ### Notifications
 
-The Training School layer is triggered by a notification from the hospital layer.
+The Training School layer is triggered by:
+
+- A notification from the Hospital layer (work path), or
+- A notification from the Reception layer after stakeholder approval (visit-with-mine-site path)
 
 The following data is **available to the Training School Layer from the shared application record**:
 
@@ -489,7 +529,16 @@ The system will automatically record timestamps for the following data:
 - Completion date (triggered by induction sign-off)
 - Induction status (triggered by induction sign-off)
 
+### Path Completion Rules
+
+Upon induction completion/sign-off:
+
+- **Work path**: Training School notifies Security for audit and biometric enrollment handoff.
+- **Visit-with-mine-site path**: Training School marks the record complete; Security and IT are not required.
+
 ### Timeout Handling and Archiving
+
+This rule applies only to records on the **work path** with a linked Hospital medical clearance date.
 
 If induction completion/sign-off is not recorded within 3 months of the linked Hospital medical clearance date, the system shall:
 
@@ -502,9 +551,11 @@ If induction completion/sign-off is not recorded within 3 months of the linked H
 
 ## SECURITY LAYER
 
+The Security layer applies only to records on the **work path**.
+
 ### Notifications
 
-The Security layer is triggered by a notification from the Training School layer.
+The Security layer is triggered by a notification from the Training School layer for work-path records only.
 
 The following data is **available to the Security Layer from the shared application record**:
 
@@ -559,9 +610,11 @@ The Security layer audits data from prior layers and notifies Information Techno
 
 ## INFORMATION TECHNOLOGY LAYER
 
+The Information Technology layer applies only to records on the **work path**.
+
 ### Notifications
 
-The Information Technology layer is triggered by a notification from the Security layer (after Security has audited the record).
+The Information Technology layer is triggered by a notification from the Security layer (after Security has audited the record) for work-path records only.
 
 The system should support both dashboard and email notifications. Upon successful biometric enrollment, the system should automatically send both an email and a dashboard notification to **Security** and **Reception**.
 
