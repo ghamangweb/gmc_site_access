@@ -1,53 +1,70 @@
 # Build Plan
 
-Ordered steps for scaffolding and building GMC Site Access. Agents: follow in order unless a step is already done.
+Ordered steps for building GMC Site Access. Follow in order unless a step is already done.
+
 
 ---
 
-## Step 0 — Local dev environment
+## Step 0 — Project scaffold & local dev
 
-**Docker runs PostgreSQL only.** The Next.js app runs on the host.
+**Owner:** Developer — scaffold the project manually. This step is a checklist of what to set up, not a script to run.
 
-### Prerequisites
+### Stack & structure
 
-- Node.js (LTS)
-- Docker + Docker Compose
-- Azure app registration values for Entra ID (dev redirect URIs)
+Use the stack and folder layout in `context/architecture.md`. Key points:
 
-### First run
+- Next.js (App Router), TypeScript strict, Tailwind + shadcn/ui
+- PostgreSQL via Drizzle
+- Azure services (Blob, Queue, Graph, Functions) — wired when needed; stubs are fine at first
 
-```text
-cp .env.example .env
-docker compose up -d
-npm install
-npx drizzle-kit migrate    # after drizzle schema exists
-npm run dev
-```
+### What to create
 
-App: `http://localhost:3000`  
-Postgres: `localhost:5432`
+| Item | Notes |
+|---|---|
+| Next.js app | App Router; `app/`, `components/`, `lib/`, etc. per `context/architecture.md` |
+| `package.json` + lockfile | pnpm |
+| `docker-compose.yml` | PostgreSQL only — not the Next.js app |
+| `.env.example` | `DATABASE_URL` and Azure env var placeholders |
+| `.gitignore` | `.env`, `node_modules`, `.next`, and other build artifacts |
 
-### `DATABASE_URL` (local)
+### Local dev layout
+
+| Piece | Where it runs |
+|---|---|
+| PostgreSQL | Docker Compose → `localhost:5432` |
+| Next.js app | Host machine → `localhost:3000` |
+
+Local `DATABASE_URL`:
 
 ```text
 postgresql://gmc:gmc@localhost:5432/gmc_site_access
 ```
 
-### Reset local database
+`docker-compose.yml` should provision a Postgres 16 instance with user `gmc`, password `gmc`, database `gmc_site_access`.
 
-```text
-docker compose down -v
-docker compose up -d
-```
+### Azure services (local)
 
-### Notes
+| Service | Approach |
+|---|---|
+| Entra ID | Azure app registration with dev redirect URIs |
+| Blob / Queue / Graph | Azure dev resources, or skip/stub until needed |
+| Azure Functions | Run separately when testing background jobs |
+
+### Rules
 
 - Do not run Next.js inside Docker for local dev.
-- Blob, Queue, and Graph use Azure dev resources (or stubs) — not Docker on day one.
-- Full spec: `docs/superpowers/specs/2026-06-17-LOCAL-DEV-SETUP-DESIGN.md`
+- Do not commit `.env` or secrets.
+- Blob containers stay private in all environments.
+
+### Done when
+
+- [ ] Folder structure matches `context/architecture.md`
+- [ ] `pnpm dev` serves the app at `http://localhost:3000`
+- [ ] Postgres is up via Docker and reachable at `localhost:5432`
+- [ ] `.env.example` documents required env vars; `.env` is gitignored
 
 ---
 
 ## Step 1 — (pending)
 
-Scaffold Next.js app, folder structure per `context/architecture.md`.
+First feature milestone after scaffold — TBD.

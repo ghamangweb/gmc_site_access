@@ -52,7 +52,7 @@ The following PINs shall be explicitly rejected by the system:
 ---
 
 ### Failed Attempt Policy
-- PIN entry attempts shall be **rate-limited** to prevent automated guessing
+- PIN entry attempts shall be **rate-limited** to prevent automated guessing or brute-force attacks.
 
 **Security Function**: This PIN serves as the second factor of the application layer, distinct from Microsoft's MFA. It ensures that even if a user's Microsoft credentials are compromised or MFA is bypassed, the application remains secure.
 
@@ -104,7 +104,7 @@ The system supports three access paths, determined at Reception:
 
 | Access purpose | Mine site visit | Path |
 |---|---|---|
-| Coming to work | — | Reception → Hospital → Training School → Security → IT |
+| Coming to work | yes | Reception → Hospital → Training School → Security → IT |
 | Coming to visit | No | Reception only |
 | Coming to visit | Yes | Reception → Training School → Security → IT |
 
@@ -121,7 +121,7 @@ Path assignment:
 
 - `Coming to work` → work path (all layers)
 - `Coming to visit` + mine site visit `No` → visit-only path (Reception only)
-- `Coming to visit` + mine site visit `Yes` → visit-with-mine-site path (Reception → Training School → Security → IT)
+- `Coming to visit` + mine site visit `Yes` → visit-with-mine-site-access path (Reception → Training School → Security → IT)
 
 The assigned path controls which downstream layers are required, which notifications are sent, and which layer-specific rules apply.
 
@@ -144,15 +144,14 @@ Every action (approve, reject, submit) triggers:
 
 If a layer records a rejection:
 
-- The record does not automatically reset to Reception.
-- The action is handled according to layer-specific workflow rules.
+- The action is handled according to **layer-specific workflow rules.**
 - The Hospital-to-Training timeout exception applies only on the work path (direct route back to Hospital for re-checkup).
 
 ### Visa/Work-Permit Expiry Reset Rule
 
 If a valid visa or work/residence permit expires while a record is in workflow:
 
-- The record is returned to Reception as draft/correction for document renewal.
+- The record in question is flagged by the system with a complete log of the expiry event.
 - Workflow restarts from Reception after updated valid documents are provided.
 - The system sends dashboard and email notifications to Reception, Security, and Information Technology.
 - Previous layers remain read-only until Reception resubmits the record.
@@ -191,7 +190,7 @@ The Receptionist may mark any of the following as applicable:
 - Valid visa (visa type will be toggled via radio buttons)
 - MINCOM letter of approval or consent
 - Work or residence permit
-- Ghana Card
+- Ghana Card (scanned)
 - Letter of assignment / Contract from sponsor
 - Proof of medical/travel insurance
 
@@ -743,3 +742,5 @@ The system shall maintain a complete audit log of:
 
 
 # NON-FUNCTIONAL REQUIREMENTS
+System should be deployed on Azure platform
+system should be scalable to handle locals
