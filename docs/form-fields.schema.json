@@ -1,0 +1,504 @@
+{
+  "sections": [
+    {
+      "id": "section_1",
+      "title": "Section 1 - Employee / Contractor / Visitor Details",
+      "fields": [
+        {
+          "name": "employment_status",
+          "label": "Employment Status",
+          "type": "dropdown",
+          "options": ["Employee", "Contractor", "Visitor(Expatriate)"],
+          "required": true
+        },
+        {
+          "name": "full_name",
+          "label": "Full Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "date_of_birth",
+          "label": "Date of Birth",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "gender",
+          "label": "Gender",
+          "type": "dropdown",
+          "options": ["Male", "Female", "Other"],
+          "required": true
+        },
+        {
+          "name": "passport_no",
+          "label": "Passport No.",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "nationality",
+          "label": "Nationality",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "email_address",
+          "label": "Email Address",
+          "type": "email",
+          "required": true
+        },
+        {
+          "name": "telephone_off_site",
+          "label": "Telephone No. (Off Site)",
+          "type": "phone",
+          "required": true
+        },
+        {
+          "name": "telephone_on_site",
+          "label": "Telephone No. (On Site)",
+          "type": "phone",
+          "required": true
+        },
+        {
+          "name": "emergency_contact_name",
+          "label": "Emergency Contact Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "emergency_contact_no",
+          "label": "Emergency Contact No.",
+          "type": "phone",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "section_2",
+      "title": "Section 2 - Company Details",
+      "fields": [
+        {
+          "name": "company_name",
+          "label": "Company Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "contact_name_monthly",
+          "label": "Contact Name (Monthly Reporting)",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "contact_email",
+          "label": "Contact Email Address",
+          "type": "email",
+          "required": true
+        },
+        {
+          "name": "company_emergency_name",
+          "label": "Emergency Contact (Company)",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "company_emergency_tel",
+          "label": "Emergency Tel. (Company)",
+          "type": "phone",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "section_3",
+      "title": "Section 3 - Access Details",
+      "fields": [
+        {
+          "name": "gmc_liaison_person",
+          "label": "GMC Liaison Person",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "gmc_liaison_dept",
+          "label": "GMC Liaison Department",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "date_of_arrival",
+          "label": "Date of Arrival",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "date_of_departure",
+          "label": "Date of Departure",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "reason_for_request",
+          "label": "Reason for Request",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "section_4",
+      "title": "Section 4 - Site Support Requirements",
+      "fields": [
+        {
+          "name": "airport_pickup",
+          "label": "Airport Pickup / Protocol Required",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "transport_to",
+          "label": "Transport Required To",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "transport_from",
+          "label": "Transport Required From",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "accommodation_required",
+          "label": "Accommodation Required",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "permanent_access_badge",
+          "label": "Permanent Access Badge",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "ghana_visa_required",
+          "label": "Ghana Visa Required",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "general_site_induction",
+          "label": "General Site Induction",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "other_inductions",
+          "label": "Other Inductions / Training",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "bringing_equipment",
+          "label": "Bringing Equipment on Site",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "ppe_required",
+          "label": "PPE Required",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "it_access_required",
+          "label": "IT Access Required",
+          "type": "radio",
+          "options": ["Yes", "No"],
+          "required": true
+        },
+        {
+          "name": "visa_type",
+          "label": "Visa Type",
+          "type": "radio",
+          "options": [],
+          "required": true
+        },
+        {
+          "name": "access_level",
+          "label": "Access Level",
+          "type": "dropdown",
+          "options": [
+            " Visitor Access",
+            "Contractor/Service Personnel Access",
+            "Standard Employee Access",
+            "Operational Employee Access",
+            "High Security / Sensitive Areas",
+            "Executive / Emergency Access"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "compulsory_document_uploads",
+      "title": "Compulsory Document Uploads",
+      "fields": [
+        {
+          "name": "passport_biodata",
+          "label": "Passport Biodata Page",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "valid_visa",
+          "label": "Valid Visa",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "mincom_letter",
+          "label": "MINCOM Letter of Approval",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "work_residence_permit",
+          "label": "Work or Residence Permit",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "ghana_card",
+          "label": "Ghana Card",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "assignment_letter",
+          "label": "Letter of Assignment / Contract",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "insurance_proof",
+          "label": "Proof of Medical/Travel Insurance",
+          "type": "file",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "section_5",
+      "title": "Section 5 - Authorization",
+      "fields": [
+        {
+          "name": "hcm_approval_name",
+          "label": "HCM Approval Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "hcm_signature",
+          "label": "HCM Signature of Approver",
+          "type": "signature",
+          "required": true
+        },
+        {
+          "name": "gmm_approval_name",
+          "label": "GMM Approval Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "gmm_signature",
+          "label": "GMM Signature of Approver",
+          "type": "signature",
+          "required": true
+        },
+        {
+          "name": "dmd_approval_name",
+          "label": "DMD Approval Name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "dmd_signature",
+          "label": "DMD Signature of Approver",
+          "type": "signature",
+          "required": true
+        },
+        {
+          "name": "hcm_approval_date",
+          "label": "HCM Approval Date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "gmm_approval_date",
+          "label": "GMM Approval Date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "dmd_approval_date",
+          "label": "DMD Approval Date",
+          "type": "date",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "section_6",
+      "title": "Section 6 - Administration",
+      "fields": [
+        {
+          "name": "accommodation_confirmed",
+          "label": "Accommodation Confirmed",
+          "type": "checkbox",
+          "required": true
+        },
+        {
+          "name": "itinerary_attached",
+          "label": "Itinerary Attached",
+          "type": "checkbox",
+          "required": true
+        },
+        {
+          "name": "inflight_updated",
+          "label": "Inflight Updated",
+          "type": "checkbox",
+          "required": true
+        },
+        {
+          "name": "remarks",
+          "label": "Remarks / Other Information",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "hospital_layer",
+      "title": "Hospital Layer",
+      "fields": [
+        {
+          "name": "medical_clearance_status",
+          "label": "Medical Clearance Status",
+          "type": "dropdown",
+          "options": [
+            "Fit to Start proposed job/ continue with usaual job without restrictions",
+            "Fit to Start proposed job/ continue with usual job with some restrictions",
+            "Further action required before decision",
+            "Not fit for position"
+          ],
+          "required": true
+        },
+        {
+          "name": "doctor_comments",
+          "label": "Doctor Comments",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "medical_clearance_date",
+          "label": "Medical Clearance Date",
+          "type": "date",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "training_school_layer",
+      "title": "Training School Layer",
+      "fields": [
+        {
+          "name": "induction_status",
+          "label": "Induction Status",
+          "type": "dropdown",
+          "options": ["Completed", "Not Completed"],
+          "required": true
+        },
+        {
+          "name": "induction_completion_date",
+          "label": "Induction Completion Date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "induction_signoff",
+          "label": "Induction Sign-off",
+          "type": "signature",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "information_technology_layer",
+      "title": "Information Technology Layer",
+      "fields": [
+        {
+          "name": "id_type",
+          "label": "ID Type",
+          "type": "dropdown",
+          "required": true
+        },
+        {
+          "name": "biometric_captured",
+          "label": "Biometric Captured",
+          "type": "yes_no",
+          "required": true
+        },
+        {
+          "name": "biometric_image",
+          "label": "Biometric Image",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "access_card_number",
+          "label": "Access Card Number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "access_card_expiry",
+          "label": "Access Card Expiry Date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "overall_status",
+          "label": "Overall Status",
+          "type": "dropdown",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "system_generated",
+      "title": "System Generated",
+      "fields": [
+        {
+          "name": "record_id",
+          "label": "Record ID",
+          "type": "auto",
+          "required": true
+        },
+        {
+          "name": "registration_timestamp",
+          "label": "Registration Timestamp",
+          "type": "datetime",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
