@@ -121,14 +121,14 @@ The **Information Technology** layer applies to both the **work path** and the *
 
 - Dual-layer authentication (Microsoft Entra ID with MFA + mandatory 4-digit application PIN)
 - Role-based access control (system roles: User, Guest, Admin, System Admin; workflow roles per department)
-- Access-path-based workflow routing (work, visit-only, visit-with-mine-site)
+- Access-path-based workflow routing (work, visit-only, visit-with-mine-site-access)
 - Five-layer sequential workflow for work-path records (Reception → Hospital → Training School → Security → IT)
 - Multi-section form input with validation across all layers
 - Applicable document upload selection at Reception (Receptionist marks which uploads apply; only those are required)
 - Compulsory document uploads at Hospital, Training School, and IT layers
 - Stakeholder approval workflow (HCM / GMM / DMD) with delegated approval fallback
 - Dashboard and email notifications on every action
-- Visa/work-permit expiry reset loop (record returns to Reception)
+- Visa/work-permit expiry flagging 
 - Access termination and revocation workflow
 - Full audit logging
 - Guest read-only access per workflow layer
