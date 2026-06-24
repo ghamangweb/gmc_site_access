@@ -23,7 +23,7 @@ Docker is **not** running your whole app. It only runs **PostgreSQL** so you don
 
 - `localhost:3000` — your app (`pnpm dev`)
 - `localhost:5432` — the database (inside Docker)
-- Connection string: `DATABASE_URL=postgresql://gmc:gmc@localhost:5432/gmc_site_access`
+- Connection string: copy `.env.example` to `.env` and set `DATABASE_URL` (password must match `POSTGRES_PASSWORD`)
 
 ---
 
@@ -84,22 +84,39 @@ pnpm create next-app@latest ./"
 
 ## Phase 2 — Docker Postgres
 
-### Create `docker-compose.yml` at project root
+### Environment file
+
+Copy the example env file and set a local password:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` — set `POSTGRES_PASSWORD` and use the same value in `DATABASE_URL`. `.env` is gitignored; never commit secrets.
+
+### `docker-compose.yml` at project root
+
+Postgres credentials come from `.env` (not hardcoded in compose):
 
 ```yaml
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: gmc-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: gmc
-      POSTGRES_PASSWORD: gmc
-      POSTGRES_DB: gmc_site_access
+      POSTGRES_USER: ${POSTGRES_USER:-gmc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-gmc_site_access}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres_data:
@@ -107,11 +124,13 @@ volumes:
 
 | Line | Meaning |
 |---|---|
-| `image: postgres:16` | Official Postgres 16 image |
+| `image: postgres:16-alpine` | Official Postgres 16 (Alpine) image |
+| `environment` | `POSTGRES_*` values from `.env` (Compose loads it automatically) |
 | `container_name: gmc-postgres` | Name shown in `docker ps` |
 | `POSTGRES_*` | User, password, and database created on first start |
-| `ports: "5432:5432"` | Host port 5432 → container port 5432 |
+| `ports: "127.0.0.1:5432:5432"` | Host-only access on port 5432 |
 | `volumes: postgres_data` | Data persists across container restarts |
+| `healthcheck` | Reports healthy when Postgres accepts connections |
 
 ### Start the database
 
@@ -145,13 +164,7 @@ Inside `psql`:
 \q     -- quit
 ```
 
-### Create `.env`
-
-```env
-DATABASE_URL=postgresql://gmc:gmc@localhost:5432/gmc_site_access
-```
-
-Add `.env` to `.gitignore`. Document the key in `.env.example` for other developers.
+`.env` should already exist from the step above. See `.env.example` for the full list of keys.
 
 ---
 
@@ -269,7 +282,7 @@ pnpm dev
 - [ ] Next.js app scaffolded
 - [ ] `docker-compose.yml` added
 - [ ] `docker compose up -d` — `psql` test passes
-- [ ] `.env` with `DATABASE_URL`
+- [ ] `.env` created from `.env.example` with `POSTGRES_PASSWORD` and matching `DATABASE_URL`
 - [ ] Drizzle packages installed
 - [ ] `drizzle.config.ts`, `lib/db/client.ts`, `lib/db/schema.ts` created
 - [ ] `pnpm drizzle-kit generate` and `migrate` succeed
