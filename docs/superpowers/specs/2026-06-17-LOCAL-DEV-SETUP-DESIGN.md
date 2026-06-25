@@ -61,24 +61,31 @@ Azure services in local dev:
 ```yaml
 services:
   postgres:
-    image: postgres:16
-    ports:
-      - "5432:5432"
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: gmc
-      POSTGRES_PASSWORD: gmc
-      POSTGRES_DB: gmc_site_access
+      POSTGRES_USER: ${POSTGRES_USER:-gmc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-gmc_site_access}
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
-  pgdata:
+  postgres_data:
 ```
 
-### `DATABASE_URL`
+### `.env` / `DATABASE_URL`
+
+Credentials live in `.env` (from `.env.example`). `DATABASE_URL` password must match `POSTGRES_PASSWORD`:
 
 ```text
-postgresql://gmc:gmc@localhost:5432/gmc_site_access
+postgresql://gmc:<your-password>@localhost:5432/gmc_site_access
 ```
 
 ---

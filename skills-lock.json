@@ -13,6 +13,12 @@
       "skillPath": "skills/azure-storage/SKILL.md",
       "computedHash": "7373be6f1fa6c5ccde0d512acbe238be42de2deffb5e26e3123978b91eea1106"
     },
+    "docker-patterns": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/docker-patterns/SKILL.md",
+      "computedHash": "b9b2764274bb4e4d1c398bf0214b528b547edc4847690b861b0b1ef5d8900934"
+    },
     "drizzle-orm": {
       "source": "mindrally/skills",
       "sourceType": "github",
