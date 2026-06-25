@@ -14,7 +14,7 @@ Users must register using a valid Microsoft Account.
 
 **Initial Access Control**: Successful Microsoft authentication does not grant immediate dashboard access.
 
-**Routing**: Upon successful identity verification, all new users are redirected automatically routed to 
+**Routing**: Upon successful identity verification, all new users are redirected automatically routed to
 `/unauthorized` page. On this page, the user is prompted to choose the appropriate role from the available options with CTA to make a request to the system administrator for authorization.
 
 **Admin Provisioning**: Access is granted solely by a `System Administrator`. The `System Administrator` must manually verify the user's eligibility and promote their status from user to `admin` within the system. This ensures that possession of a valid Microsoft account alone is insufficient for entry.

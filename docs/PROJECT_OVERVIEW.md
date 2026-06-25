@@ -128,7 +128,7 @@ The **Information Technology** layer applies to both the **work path** and the *
 - Compulsory document uploads at Hospital, Training School, and IT layers
 - Stakeholder approval workflow (HCM / GMM / DMD) with delegated approval fallback
 - Dashboard and email notifications on every action
-- Visa/work-permit expiry flagging 
+- Visa/work-permit expiry flagging
 - Access termination and revocation workflow
 - Full audit logging
 - Guest read-only access per workflow layer

@@ -1,7 +1,7 @@
 # GMC Site Access — Architecture Design (Technical Reference)
 
-**Date:** 2026-06-17  
-**Status:** Approved — builder reference  
+**Date:** 2026-06-17
+**Status:** Approved — builder reference
 **Visual guide (read first):** [2026-06-17-GMC-SITE-ACCESS-ARCHITECTURE-GUIDE.md](./2026-06-17-GMC-SITE-ACCESS-ARCHITECTURE-GUIDE.md)
 
 ---
@@ -92,7 +92,7 @@ StakeholderApproval
 
 ### 2.4 State machines
 
-**Workflow:** `Draft → AtReception → AtHospital → AtTraining → AtSecurity → AwaitingProvisioning → Completed`  
+**Workflow:** `Draft → AtReception → AtHospital → AtTraining → AtSecurity → AwaitingProvisioning → Completed`
 (Visit-only and visit+mine variants — see Visual Guide Part 3)
 
 **Access:** `Pending → Active → Expired | TerminationRequested → Terminated`
