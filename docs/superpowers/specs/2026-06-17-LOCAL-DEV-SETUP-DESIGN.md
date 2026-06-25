@@ -1,7 +1,7 @@
 # Local Dev Setup — Design
 
-**Date:** 2026-06-17  
-**Status:** Approved  
+**Date:** 2026-06-17
+**Status:** Approved
 **Scope:** How two developers run the app locally with minimal setup
 
 ---

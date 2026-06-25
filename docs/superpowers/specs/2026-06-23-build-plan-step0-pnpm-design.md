@@ -1,7 +1,7 @@
 # Build Plan Step 0 — Scaffold Guide (Design)
 
-**Date:** 2026-06-23  
-**Status:** Approved  
+**Date:** 2026-06-23
+**Status:** Approved
 **Scope:** Step 0 documents *what* the developer should set up; the developer scaffolds manually
 
 ---

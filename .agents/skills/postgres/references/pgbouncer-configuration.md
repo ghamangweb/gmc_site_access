@@ -10,7 +10,7 @@ tags: postgres, pgbouncer, connection-pooling, configuration
 
 Server connections per user/database pair. **Default: 20**
 
-**Multiplication:** 2 users × 3 databases = `6 × default_pool_size` connections  
+**Multiplication:** 2 users × 3 databases = `6 × default_pool_size` connections
 **Example:** 45 with 2 users and 3 databases = 270 backend connections
 
 **Recommended values:**
@@ -42,4 +42,3 @@ Multiple users/databases: `default_pool_size = 25, max_user_connections = 150, p
 ```sql
 SELECT datname, usename, COUNT(*) FROM pg_stat_activity WHERE backend_type = 'client backend' GROUP BY datname, usename;
 ```
-

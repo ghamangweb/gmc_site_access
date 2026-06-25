@@ -1,6 +1,6 @@
 # GMC Site Access — Visual Architecture Guide
 
-**Read this first.** Flows and mental models for understanding the system.  
+**Read this first.** Flows and mental models for understanding the system.
 **Technical reference:** [2026-06-17-GMC-SITE-ACCESS-ARCHITECTURE-DESIGN.md](./2026-06-17-GMC-SITE-ACCESS-ARCHITECTURE-DESIGN.md)
 
 > **Diagrams:** Light boxes, dark text and lines — readable in light and dark editors. Refresh preview after edits.
