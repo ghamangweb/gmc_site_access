@@ -34,13 +34,13 @@ Use the stack and folder layout in `context/architecture.md`. Key points:
 | PostgreSQL | Docker Compose → `localhost:5432` |
 | Next.js app | Host machine → `localhost:3000` |
 
-Local `DATABASE_URL`:
+Local credentials live in `.env` (copy from `.env.example`). `DATABASE_URL` password must match `POSTGRES_PASSWORD`:
 
 ```text
-postgresql://gmc:gmc@localhost:5432/gmc_site_access
+postgresql://gmc:<your-password>@localhost:5432/gmc_site_access
 ```
 
-`docker-compose.yml` should provision a Postgres 16 instance with user `gmc`, password `gmc`, database `gmc_site_access`.
+`docker-compose.yml` should provision a Postgres 16 instance (user `gmc`, database `gmc_site_access`) with secrets loaded from `.env`.
 
 ### Azure services (local)
 
