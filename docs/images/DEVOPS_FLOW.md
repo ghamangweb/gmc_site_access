@@ -56,10 +56,12 @@ CD defines how the app moves through environments: Auto-deploy to dev/staging af
 
 Each environment needs Azure resources(App Service Plan, App Service (Web App), Azure Key Vault, Application Insights, Database)
 
-### SETTING IT UP WITH AZURE PORTAL
-https://learn.microsoft.com/en-us/azure/deployment-environments/quickstart-create-and-configure-devcenter 
+### SETTING UP ENVIRONMENTS WITH AZURE PORTAL
+https://youtu.be/PN6eZOlsxOA?si=bXtYtMH90TLgL8wQ
 
+### WITH BICEP
+https://www.youtube.com/watch?v=CW_ItvVNV-Y
 
 ### CONNECTING GITHUB ACTIONS TO AZURE
-https://www.youtube.com/watch?v=XkhkkLBkAT4 
-https://www.youtube.com/watch?v=r5QdsjjdRDs 
+https://www.youtube.com/watch?v=XkhkkLBkAT4
+https://www.youtube.com/watch?v=r5QdsjjdRDs
