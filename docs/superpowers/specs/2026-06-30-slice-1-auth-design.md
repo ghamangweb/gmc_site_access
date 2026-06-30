@@ -424,3 +424,79 @@ Run these checks when the slice is complete:
 - [ ] System Admin resets a user's PIN → user lands on `/pin/setup` on next login
 - [ ] Non-SystemAdmin hitting `/dashboard/admin/*` → 403
 - [ ] `tsc --noEmit` → zero errors
+
+---
+
+## Developer Steps
+
+Manual steps a human must complete — the AI cannot do these.
+
+### Before the AI starts building
+
+**1. Azure App Registration** (Azure Portal)
+
+- Go to Entra ID → App Registrations → New registration
+- Add redirect URI: `http://localhost:3000/api/auth/callback/azure-ad` (type: Web)
+- Grant API permission: `User.Read` (Microsoft Graph, Delegated) → Grant admin consent
+- Create a Client Secret under Certificates & Secrets; copy the value immediately (shown once)
+- Note down: Directory (Tenant) ID, Application (Client) ID, Client Secret value
+- For `GRAPH_SENDER_EMAIL`: the mailbox account must have a Microsoft 365 licence with `Mail.Send`
+
+**2. Create `.env.local`** (copy from `.env.example`, fill in real values)
+
+```
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gmc_site_access
+NEXTAUTH_SECRET=          # generate: openssl rand -base64 32
+NEXTAUTH_URL=http://localhost:3000
+AZURE_TENANT_ID=          # from App Registration
+AZURE_CLIENT_ID=          # from App Registration
+AZURE_CLIENT_SECRET=      # from App Registration
+GRAPH_SENDER_EMAIL=       # licensed M365 mailbox with Mail.Send
+SEED_ADMIN_ENTRA_ID=      # your Entra Object ID: Azure Portal → Users → your user → Object ID
+SEED_ADMIN_EMAIL=         # your email address
+```
+
+**3. Start Docker**
+
+```bash
+docker compose up -d
+```
+
+### After the AI writes the schema
+
+**4. Run migrations**
+
+```bash
+pnpm db:generate
+pnpm db:migrate
+```
+
+**5. Seed the first System Admin**
+
+```bash
+pnpm db:seed
+```
+
+Idempotent — safe to re-run.
+
+### After the AI configures shadcn/ui
+
+**6. Initialise shadcn/ui** (interactive prompt — cannot be scripted)
+
+```bash
+npx shadcn@latest init
+```
+
+When prompted: Style → Default · Base colour → Neutral · CSS variables → Yes
+
+**7. Install Slice 1 components**
+
+```bash
+npx shadcn@latest add button input label card form alert
+```
+
+### During testing
+
+**8.** Sign in with a real Microsoft account and confirm the Entra redirect works.
+
+**9.** Sign in as the seeded System Admin and confirm access to `/dashboard/admin/users`.

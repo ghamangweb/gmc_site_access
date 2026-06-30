@@ -3,6 +3,9 @@
 Each slice delivers a **complete, working, testable feature** from database to UI.
 Build and verify one slice end-to-end before starting the next. No orphaned plumbing.
 
+Each slice spec includes a **Developer Steps** section — manual setup a human must complete
+before the AI can build or the slice can be tested (Azure config, secrets, migrations, seeding).
+
 ---
 
 ## Step 0 — Scaffold ✓
