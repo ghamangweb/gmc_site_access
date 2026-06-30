@@ -51,4 +51,4 @@ Read in this exact order before any implementation:
 - Do NOT change file structure
 - Prefer minimal, surgical changes
 - Follow existing patterns exactly
-Ask before making architectural decisions
+- Ask before making architectural decisions

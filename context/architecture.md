@@ -18,80 +18,70 @@
 
 ## Folder Structure
 
+All Next.js application code lives under `src/`. The `@/` alias resolves to `./src/`.
+Azure Functions and Drizzle migrations sit at project root (outside `src/`).
+
 ```
 /
 ├── AGENTS.md
+├── CLAUDE.md
 ├── context/
-│   ├── project_overview.md
-│   ├── architecture.md
-│   ├── ui-tokens.md
-│   ├── ui-rules.md
-│   ├── ui-registry.md
-│   ├── code-standards.md
-│   ├── library-docs.md
-│   ├── build-plan.md
-│   └── progress-tracker.md
 ├── docs/
+├── drizzle/                              → migration files
+├── drizzle.config.ts
 ├── docker-compose.yml                    → local Postgres only (see build-plan.md Step 0)
 ├── .env.example
-├── app/
-│   ├── layout.tsx
-│   ├── page.tsx
-│   ├── (auth)/                           → sign-in surface (Microsoft, PIN, unauthorized)
-│   ├── dashboard/
-│   │   └── [layer]/                      → per workflow role queues
-│   └── api/
-│       ├── engagements/
-│       ├── documents/
-│       ├── notifications/
-│       └── status/
-├── actions/
-│   ├── engagements.ts                    → workflow mutations (Server Actions)
-│   └── admin.ts                          → user provisioning, termination approval
-├── lib/
-│   ├── domain/
-│   │   ├── engagement.ts                 → aggregate + invariants
-│   │   ├── person.ts
-│   │   ├── staff-user.ts
-│   │   ├── workflow-states.ts
-│   │   └── types.ts
-│   ├── services/
-│   │   ├── workflow-service.ts           → transitions, guards, path routing
-│   │   ├── person-registry-service.ts    → passport lookup
-│   │   ├── document-service.ts
-│   │   ├── notification-service.ts       → dashboard alerts (sync)
-│   │   └── termination-service.ts
-│   ├── repositories/
-│   │   ├── engagement-repository.ts
-│   │   ├── person-repository.ts
-│   │   └── staff-user-repository.ts
-│   ├── azure/
-│   │   ├── blob.ts
-│   │   ├── queue.ts
-│   │   └── graph-mail.ts
-│   ├── email/
-│   │   ├── enqueue.ts
-│   │   ├── send.ts
-│   │   └── templates.ts
-│   ├── auth/
-│   │   ├── entra.ts
-│   │   ├── pin.ts
-│   │   ├── session.ts
-│   │   ├── guards.ts
-│   │   └── middleware.ts
-│   └── db/
-│       └── client.ts
-├── components/
-│   ├── ui/
-│   ├── layout/
-│   └── workflow/
-├── functions/
+├── functions/                            → Azure Functions (not Next.js code)
 │   ├── check-visa-expiry/
 │   ├── check-hospital-timeout/
 │   └── send-email/
-├── drizzle/
-└── types/
-    └── index.ts
+└── src/
+    ├── middleware.ts                     → single Next.js middleware pipeline
+    ├── app/
+    │   ├── layout.tsx
+    │   ├── page.tsx                      → redirect to dashboard or sign-in
+    │   ├── (auth)/                       → sign-in, PIN, PIN setup, unauthorized
+    │   ├── dashboard/
+    │   │   ├── [layer]/                  → per workflow role queues
+    │   │   └── admin/                    → System Admin pages (users, terminations)
+    │   └── api/
+    │       ├── auth/[...nextauth]/       → NextAuth catch-all route
+    │       ├── documents/                → multipart upload handler
+    │       └── notifications/            → mark-read endpoint
+    ├── actions/
+    │   ├── auth.ts                       → requestAccess, verifyPin, setupPin
+    │   ├── engagements.ts                → workflow mutations (Server Actions)
+    │   └── admin.ts                      → provisioning, PIN reset, termination approval
+    ├── lib/
+    │   ├── domain/
+    │   │   └── types.ts                  → SystemRole, WorkflowRole, and shared type aliases
+    │   ├── services/
+    │   │   ├── workflow-service.ts       → transitions, guards, path routing
+    │   │   ├── person-registry-service.ts → passport lookup
+    │   │   ├── document-service.ts
+    │   │   ├── notification-service.ts   → dashboard alerts (sync) + email enqueue
+    │   │   └── termination-service.ts
+    │   ├── azure/
+    │   │   ├── blob.ts
+    │   │   ├── queue.ts                  → used in Slice 10 (async email)
+    │   │   └── graph-mail.ts             → Microsoft Graph email (sync for local dev)
+    │   ├── email/
+    │   │   ├── enqueue.ts                → used in Slice 10; direct send.ts call until then
+    │   │   ├── send.ts
+    │   │   └── templates.ts              → one function per workflow event
+    │   ├── auth/
+    │   │   ├── entra.ts                  → NextAuth config
+    │   │   ├── pin.ts                    → hash, verify, validate, lockout
+    │   │   ├── session.ts                → SessionUser type + getSession helper
+    │   │   └── guards.ts                 → requireWriteAccess, requireSystemAdmin, etc.
+    │   └── db/
+    │       ├── client.ts
+    │       ├── schema.ts                 → all Drizzle table definitions
+    │       └── seed.ts                   → first System Admin seed (local only)
+    └── components/
+        ├── ui/                           → shadcn/ui components
+        ├── layout/                       → sidebar, dashboard shell
+        └── workflow/                     → per-layer forms and queue components
 ```
 
 ---
@@ -100,16 +90,17 @@
 
 | Folder | Owns |
 |---|---|
-| `app/` | Pages and API routes only. No business logic. |
-| `actions/` | Server Actions for form mutations only. No file uploads. |
-| `lib/domain/` | Entities, state enums, invariants. No React, no Azure SDK. |
-| `lib/services/` | Business logic — workflow transitions, flagging, notifications. |
-| `lib/repositories/` | PostgreSQL reads/writes. Called by services only. |
-| `lib/azure/` | Thin Azure SDK clients only (Blob, Queue, Graph). |
-| `lib/email/` | All outbound email — enqueue, templates, send. |
-| `lib/auth/` | All authentication — Entra ID, PIN, session, middleware, role guards. |
-| `components/` | UI only. No direct DB or workflow logic. |
-| `functions/` | Timer and queue-triggered background jobs. |
+| `src/app/` | Pages and API routes only. No business logic. |
+| `src/actions/` | Server Actions for form mutations only. No file uploads. |
+| `src/lib/domain/` | Shared types and role/state string unions. No React, no Azure SDK, no Drizzle. |
+| `src/lib/services/` | Business logic — workflow transitions, flagging, notifications. |
+| `src/lib/azure/` | Thin Azure SDK clients only (Blob, Queue, Graph). |
+| `src/lib/email/` | All outbound email — templates, send, enqueue (Slice 10). |
+| `src/lib/auth/` | All authentication — Entra ID, PIN, session, guards. |
+| `src/lib/db/` | Drizzle client, schema, seed. |
+| `src/components/` | UI only. No direct DB or workflow logic. |
+| `src/middleware.ts` | Single Next.js middleware pipeline — reads JWT token only, no DB calls. |
+| `functions/` | Azure Functions — timer and queue-triggered background jobs. |
 
 ---
 
@@ -118,11 +109,11 @@
 ### Dashboard reads (Server Components)
 
 ```
-app/dashboard/[layer]/page.tsx
+src/app/dashboard/[layer]/page.tsx
         ↓
-lib/services/workflow-service.ts
+src/lib/services/workflow-service.ts
         ↓
-lib/repositories/engagement-repository.ts
+src/lib/db/schema.ts (Drizzle queries inline in services)
         ↓
 PostgreSQL
 ```
@@ -132,21 +123,19 @@ PostgreSQL
 Form submissions — transitions, approvals, layer field updates. No file bytes.
 
 ```
-components/workflow/
+src/components/workflow/
         ↓
-actions/engagements.ts
+src/actions/engagements.ts
         ↓
-lib/auth/guards.ts
+src/lib/auth/guards.ts
         ↓
-lib/services/workflow-service.ts
-        ↓
-lib/repositories/engagement-repository.ts
+src/lib/services/workflow-service.ts
         ↓
 PostgreSQL
         ↓
-lib/services/notification-service.ts       → notifications table
-lib/email/enqueue.ts                       → email-jobs queue
-        ↓
+src/lib/services/notification-service.ts   → notifications table
+src/lib/email/send.ts                      → Graph API (local dev, sync)
+        ↓                                  → lib/email/enqueue.ts (Slice 10, async)
 revalidatePath or redirect
 ```
 
@@ -155,19 +144,17 @@ revalidatePath or redirect
 Multipart file uploads only — never Server Actions.
 
 ```
-components/workflow/
+src/components/workflow/
         ↓
-app/api/documents/route.ts
+src/app/api/documents/route.ts
         ↓
-lib/auth/middleware.ts
+src/middleware.ts (auth check)
         ↓
-lib/services/document-service.ts
+src/lib/services/document-service.ts
         ↓
-lib/azure/blob.ts
+src/lib/azure/blob.ts
         ↓
-lib/services/workflow-service.ts
-        ↓
-lib/repositories/engagement-repository.ts  → documents table
+PostgreSQL (documents table)
 ```
 
 ### Background jobs (Azure Functions)
@@ -178,22 +165,26 @@ Timers and queue workers — no HTTP request from the browser.
 functions/check-visa-expiry/
 functions/check-hospital-timeout/
         ↓
-lib/services/workflow-service.ts
+src/lib/services/workflow-service.ts
         ↓
-lib/repositories/engagement-repository.ts
+PostgreSQL
         ↓
-lib/services/notification-service.ts
-lib/email/enqueue.ts
+src/lib/services/notification-service.ts
+src/lib/email/send.ts (or enqueue.ts after Slice 10)
 ```
 
-### Email delivery (Queue worker)
+### Email delivery
+
+**Local dev (Slices 1–9):** synchronous Graph API call from `src/lib/email/send.ts`
+
+**Production (Slice 10+):** async queue worker
 
 ```
 functions/send-email/
         ↓
-lib/email/send.ts
+src/lib/email/send.ts
         ↓
-lib/azure/graph-mail.ts
+src/lib/azure/graph-mail.ts
         ↓
 Microsoft Graph API
 ```
@@ -309,10 +300,10 @@ Microsoft Graph API
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| engagement_id | uuid | FK |
-| recipient_role | text | |
+| recipient_staff_user_id | uuid | FK → staff_users |
+| engagement_id | uuid | Nullable FK — null for auth notifications |
 | message | text | |
-| read_at | timestamptz | |
+| read_at | timestamptz | Null until read |
 | created_at | timestamptz | |
 
 ### `termination_requests`
@@ -342,18 +333,21 @@ Access: private containers; upload via `app/api/documents/`; view via short-live
 ## Authentication
 
 - Provider: Microsoft Entra ID (org MFA) + 4-digit app PIN (hashed in `staff_users`)
-- Sign-in flow: Entra → provisioned check → PIN → session → dashboard
-- Unprovisioned users (`system_role = User`): `/unauthorized` only
-- Middleware: `lib/auth/middleware.ts` — single pipeline for all protected routes
-- Protected routes: `/dashboard/*` and all write API routes
-- PIN reset: System Admin only
-- All auth logic lives in `lib/auth/` — nowhere else
+- Sign-in flow: Entra → provisioned check → PIN confirmed → dashboard
+- Unprovisioned users (`system_role = User`): `/unauthorized` — role selector + access request CTA
+- Middleware: `src/middleware.ts` — single Next.js middleware; reads JWT only (no DB calls per request)
+- Protected routes: `/dashboard/*`
+- PIN lockout: 3 failed attempts → 15-minute lock
+- PIN rules: no all-zeros, no repeating digits, no ascending/descending sequences
+- First login: PIN setup screen before dashboard
+- PIN reset: System Admin only — clears `pin_hash`; user re-creates on next login
+- All auth logic lives in `src/lib/auth/` — nowhere else
 
 ---
 
 ## Workflow States
 
-Defined in `lib/domain/workflow-states.ts`.
+Defined as typed string unions in `src/lib/domain/types.ts`.
 
 **workflow_state:** `Draft`, `AtReception`, `AtHospital`, `AtTraining`, `AtSecurity`, `AwaitingProvisioning`, `Completed`
 
@@ -365,10 +359,11 @@ Path-specific transitions — see `context/project_overview.md` Core User Flow.
 
 ## Email Pattern
 
-- All outbound mail through `lib/email/` — HTTP handlers never call Graph directly
-- `notification-service` writes dashboard alerts (sync), then calls `lib/email/enqueue`
-- `functions/send-email` dequeues and calls `lib/email/send`
-- Timer jobs use the same enqueue API
+- All outbound mail through `src/lib/email/` — HTTP handlers never call Graph directly
+- `notification-service` writes dashboard alerts (sync), then calls `src/lib/email/send.ts`
+- **Local dev (Slices 1–9):** `send.ts` calls `graph-mail.ts` directly (synchronous)
+- **Production (Slice 10+):** `notification-service` calls `enqueue.ts` → Storage Queue → `functions/send-email` → `send.ts` → `graph-mail.ts`
+- Timer jobs (visa expiry, hospital timeout) use the same email path
 
 ---
 

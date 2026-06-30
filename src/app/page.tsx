@@ -17,7 +17,7 @@ export default function Home() {
             Ghana Managanese Company Limited
           </h1>
           <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Site Access workflow Management System
+            Site Access Workflow Management System
           </p>
         </div>
         <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
