@@ -41,12 +41,12 @@ Read in this exact order before any implementation:
 
 ## Important Notes
 
-- NEVER commit .env.keys 
+- NEVER commit .env.keys
 - ALWAYS follow existing code patterns. Ask permission before introducing a new pattern or changing an existing one.
 - NEVER GUESS. Load the necessary skills before implementing a feature. Ask when unsure.
 - NEVER should you break an existing logic or something that works while trying to fix another thing
 - BE CONCISE in plan mode — keep plans short and scannable.
-- Do NOT introduce new libraries unless explicitly requested. You may ask if library is needed to implement the task at hand, then proceed if given the permisison to install.
+- Do NOT introduce new libraries unless explicitly requested. You may ask if library is needed to implement the task at hand, then proceed if given the permission to install.
 - Do NOT refactor unrelated code
 - Do NOT change file structure
 - Prefer minimal, surgical changes
