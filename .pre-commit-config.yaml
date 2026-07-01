@@ -23,7 +23,7 @@ repos:
    rev: v2.2.6
    hooks:
      - id: codespell
-       args: [--skip, app-ui/package-lock.json]
+       args: [--skip, pnpm-lock.yaml, --ignore-words-list, brin]
  - repo: local
    hooks:
      - id: build
