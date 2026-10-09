@@ -3,11 +3,11 @@
 ## About the Project
 GMC Site Access is a digital visitor and contractor site-access registration system for Ghana Manganese Company (GMC).
 
-The system replaces the manual process of registering visitors, obtaining the required approvals, completing site-access requirements, and activating or terminating access.
+The system replaces the manual process of registering visitors, obtaining the required approvals, completing site-access requirements, and activating or terminating access. The required approval is issued before the visitor acts: the Department Head sends an invitation link that authorises the pre-registration submission.
 
-Visitors do not create accounts or log into the system. They begin the process by submitting a public pre-registration form. Once submitted, GMC staff take over the process and move the request through the appropriate approval and access workflow.
+Visitors do not create accounts or log into the system. They begin the process by opening an invitation link sent to them by the Department Head and submitting the pre-registration form in a token-gated session. The form page itself is public, but submission requires a valid, unrevoked invitation link. Once submitted, GMC staff take over the process and move the request through the appropriate access workflow.
 
-The workflow begins with the Department Head, continues through Reception, and then follows different processing paths depending on the visitor's purpose and whether mine-site access is required.
+The workflow begins with the Department Head, who generates the invitation link in the invitation console and emails it to the visitor. It continues through Reception, and then follows different processing paths depending on the visitor's purpose and whether mine-site access is required.
 
 The system maintains a clear distinction between:
 
@@ -35,11 +35,11 @@ Visitors, expatraites, contractors, or representatives who provide information f
 External users:
 - Do not create accounts.
 - Do not log into the system.
-- Submit information through the public pre-registration process.
+- Submit information through the pre-registration form, which they reach by opening an invitation link from the Department Head.
 
 #### GMC Staff
 
-GMC employees use the system to review, process, approve, and manage visitor access.
+GMC employees use the system to invite, review, process, and manage visitor access. Department Heads issue invitations; other staff process the resulting requests.
 
 Staff access is controlled through Microsoft Entra ID authentication and a 4-digit PIN, with permissions determined by their assigned roles.
 
@@ -61,7 +61,7 @@ The system features both **system roles** and **workflow responsibilities**.
 
 | Responsibility | Area |
 |---|---|
-| **Department Head** | Reviews and approves pre-registration requests |
+| **Department Head** | Issues and revokes invitation links for their GMC Liaison Department |
 | **Receptionist** | Creates and manages Engagements and coordinates the access process |
 | **HCM / GMM / DMD** | Provides stakeholder approval |
 | **Hospital Staff** | Handles medical fitness clearance |
@@ -72,11 +72,11 @@ The system features both **system roles** and **workflow responsibilities**.
 
 ## Registration Process
 
-The process begins when a pre-registration request is made through the public form.
+The process begins with the Department Head, who generates an invitation link and emails it to the visitor. The visitor then opens that link and submits the pre-registration form.
 
-The request contains the information required for the initial review, including the selected **GMC Liaison Department**.
+The request contains the information required for the initial review, including the **GMC Liaison Department**, which is carried by the invitation link.
 
-The GMC Liaison Department is selected from a controlled list maintained by GMC. Each department on the list has a designated Department Head responsible for reviewing requests assigned to that department.
+The GMC Liaison Department is a controlled list maintained by GMC, and it is injected from the invitation link rather than chosen by the visitor. Each department on the list has a designated Department Head who issues invitation links for that department, so the link determines where the request is routed.
 
 At this stage:
 
@@ -85,28 +85,28 @@ At this stage:
 - No Engagement is created.
 - No documents are uploaded.
 
-The submitted request is sent to the appropriate Department Head for review.
+The submitted request is recorded against the invitation that admitted it, and is available to Reception as reference data.
 
 ## Department Approval
 
-The Department Head reviews requests associated with their GMC Liaison Department.
+The Department Head's decision is made before the visitor acts, from the invitation console associated with their GMC Liaison Department.
 
-The Department Head(GMC Liaison Person) can approve the request.
+Generating and emailing the invitation link is the approval. Each link carries the GMC Liaison Department it was issued for, remains valid until the Department Head revokes it, and may be used by any holder within that period.
 
-There is no rejection action at this stage. If the Department Head does not approve the request, it remains pending.
+There is no rejection action at this stage. If the Department Head does not issue a link, no request exists; declining is simply withholding the invitation.
 
-Once approved, the request is made available to Reception for further processing and Reception.
+Once the invited submission arrives, it is treated as approved and made available to Reception for further processing.
 
 
 ## Reception
 
-Reception is the point at which the approved request becomes an actual visit or work engagement.
+Reception is the point at which the invited submission becomes an actual visit or work engagement.
 
 The Receptionist:
 
-- Looks up an existing record or creates a new record using the visitors passport number.
+- Performs the passport lookup manually, typing the visitor's passport number (no OCR), then reuses or creates the Person record.
 - Creates a new Engagement.
-- Determines which documents are applicable.
+- Determines which document uploads are applicable; only the marked types are required.
 - Coordinates the required stakeholder approval.
 - Continues the Engagement through the appropriate workflow.
 
@@ -143,7 +143,7 @@ If the visitor does not get cleared by training school after three months, they 
 
 
 
-## 9. Training School
+## Training School
 
 Training School processing applies to:
 
@@ -160,14 +160,14 @@ For the work path, if induction is not completed within three months of Hospital
 
 
 
-## 10. Security
+## Security
 
 Security reviews the information and requirements completed by the previous stages.
 
 Once the requirements are satisfied, Security forwards the Engagement to IT for biometric enrollment and access-card processing.
 
 
-## 11. Information Technology
+## Information Technology
 
 IT completes the final access setup.
 
@@ -189,11 +189,11 @@ Once access is successfully activated, Security and Reception are notified.
 
 The Engagement follows one of three main paths depending on the purpose of the visit and whether mine-site access is required.
 
-| Access Purpose | Mine-Site Access | Workflow |
+| Access Purpose | Mine-Site Access | Workflow (from invitation → submission) |
 |---|---|---|
-| Coming to work | Yes | Department → Reception → Hospital → Training School → Security → IT |
-| Coming to visit | No | Department → Reception |
-| Coming to visit | Yes | Department → Reception → Training School → Security → IT |
+| Coming to work | Yes | Reception → Hospital → Training School → Security → IT |
+| Coming to visit | No | Reception only |
+| Coming to visit | Yes | Reception → Training School → Security → IT |
 
 Each stage must be completed before the Engagement can move to the next required stage.
 
@@ -242,16 +242,18 @@ The termination request, approval, and access revocation are recorded in the sys
 
 #### Registration Request
 
-A Registration Request represents the initial information submitted through the public pre-registration process.
+A Registration Request represents the initial information submitted by a visitor who arrived through a valid invitation link.
 
-It contains the visitor's initial information and selected GMC Liaison Department.
+It contains the visitor's initial information and the GMC Liaison Department injected from the invitation link.
 
 A Registration Request is not an actual visit and therefore does not contain workflow or access information.
 
 It can be:
 
-- Pending Department Approval
+- Submitted
 - Approved
+
+A request is created with the status `Submitted` and becomes `Approved` on invited submission, since the invitation is the approval.
 
 #### Person
 
@@ -267,7 +269,7 @@ Visit-specific documents, approvals, and workflow information do not belong dire
 
 An Engagement represents a specific visit or work request.
 
-It is created by Reception after the Department has approved the Registration Request.
+It is created by Reception once the invited submission has arrived. The invitation itself is the approval, so there is no separate Department approval step after submission.
 
 The Engagement contains the information and activities associated with that particular visit, including:
 
@@ -296,14 +298,14 @@ Guests have read-only access within their assigned workflow areas and cannot mod
 
 ### Department Head
 
-Department Heads can approve Registration Requests assigned to their GMC Liaison Department. They do not have an explicit rejection action and write access to visitor record except for approvals.
+Department Heads issue and revoke invitation links for their GMC Liaison Department. They email links to visitors, may resend them, and may revoke an outstanding link at any time. They have no explicit rejection action and no write access to visitor records beyond the invitation console.
 
 ### System Administrator
 
 System Administrators manage staff access to the system and perform administrative functions such as user provisioning, role assignment, PIN management, and termination approval.
 
 
-## 17. Notifications and Audit Trail
+## Notifications and Audit Trail
 
 The system provides notifications and audit logging throughout the workflow.
 
@@ -331,16 +333,16 @@ The audit trail records information such as:
 
 
 
-## 18. Key Business Rules
+## Key Business Rules
 
 The following rules define the expected behaviour of the system:
 
-- The public pre-registration process does not require authentication.
+- The pre-registration form is viewable without authentication, but submission requires a valid, unrevoked invitation link.
 - Visitors do not create accounts or log into the system.
 - Staff must authenticate before accessing staff functions.
-- Department Heads approve requests assigned to their GMC Liaison Department.
-- There is no explicit rejection action at the Department stage.
-- An unapproved request remains pending.
+- Department Heads issue invitation links for their GMC Liaison Department. The invitation is the approval; there is no separate approval step after submission.
+- There is no explicit rejection action at the Department stage; declining is withholding the invitation.
+- A submission remains tied to its invitation, and an invitation link stays valid until the Department Head revokes it.
 - Registration Requests do not create Persons or Engagements.
 - Engagements are created only at Reception.
 - Passport documents are supporting evidence and do not automatically populate visitor information.
@@ -349,16 +351,17 @@ The following rules define the expected behaviour of the system:
 - A workflow stage cannot act before the required previous stage is completed.
 - Visa and permit issues must be resolved before the Engagement can continue.
 - Access-card expiry cannot exceed the earliest applicable visa/permit expiry or departure date.
-- Registration approval must not result in duplicate processing or duplicate notifications.
-- GMC Liaison Department is selected from a controlled list.
+- Invitation submission must not result in duplicate processing or duplicate notifications.
+- GMC Liaison Department is a controlled list, injected from the invitation link; a Department Head is seeded for every value on the list.
+- Repeated or concurrent submissions on one invitation link never create a second Registration Request.
 - Important workflow actions are notified and audit-logged.
 
 
 
-## 19. Features In Scope
+## Features In Scope
 
-- Public visitor and contractor pre-registration.
-- Department Head approval.
+- Pre-registration form, viewable by anyone but submittable only by visitors holding a valid invitation link from the Department Head.
+- Department Head invitation console: generate, email, resend, and revoke invitation links.
 - Staff authentication using Microsoft Entra ID and PIN.
 - Role-based staff access.
 - Reception processing and Engagement creation.
@@ -376,7 +379,7 @@ The following rules define the expected behaviour of the system:
 - Foreign visitor and expatriate registration.
 
 
-## 20. Features Out of Scope
+## Features Out of Scope
 
 - Local visitor registration.
 - Native mobile application.
@@ -394,15 +397,19 @@ The following rules define the expected behaviour of the system:
 - Airport pickup booking.
 
 
-## 21. Overall Process
+## Overall Process
 
 At a high level, GMC Site Access follows this process:
 
-**Public Pre-Registration**
+**Department Head Issues Invitation Link**
 
 ↓
 
-**Department Head Approval**
+**Visitor Submits Pre-Registration Form (token-gated)**
+
+↓
+
+**Department Approval (given by the invitation)**
 
 ↓
 
@@ -427,6 +434,3 @@ At a high level, GMC Site Access follows this process:
 ↓
 
 **Visitor Access Remains Active Until Expiry or Termination**
-
-The system is centered around a simple principle:
-
