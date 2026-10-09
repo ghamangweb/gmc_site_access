@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "duncan.land"]
+  "exclude": ["node_modules", "duncan.land", "tools/oxlint/anti-slop"]
 }

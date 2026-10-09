@@ -3,19 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "lefthook install",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
+    "lint:anti-slop": "oxlint",
     "format": "biome format --write",
-    "db:start": "docker-compose up -d && drizzle-kit studio",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx --env-file=.env src/lib/db/seed.ts"
+    "env:encrypt": "dotenvx encrypt -f .env.development --no-native",
+    "env:decrypt": "dotenvx decrypt -f .env.development --no-native",
+    "db:start": "dotenvx run -f .env.development -- drizzle-kit studio",
+    "db:generate": "dotenvx run -f .env.development -- drizzle-kit generate",
+    "db:migrate": "dotenvx run -f .env.development -- drizzle-kit migrate",
+    "db:seed": "dotenvx run -f .env.development -- tsx src/lib/db/seed.ts"
+  },
+  "overrides": {
+    "@next/env": "npm:@dotenvx/next-env"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
     "@azure/storage-blob": "^12.33.0",
+    "@dotenvx/dotenvx": "^2.34.1",
+    "@dotenvx/next-env": "^2.4.5",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-label": "^2.1.11",
     "@radix-ui/react-slot": "^1.3.0",
@@ -43,12 +52,15 @@
   "devDependencies": {
     "@auth/core": "0.41.2",
     "@biomejs/biome": "2.2.0",
+    "@oxlint/plugins": "1.87.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.10",
+    "lefthook": "^2.2.1",
+    "oxlint": "1.87.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.0",
     "typescript": "^5"
@@ -58,6 +70,7 @@
     "unrs-resolver"
   ],
   "trustedDependencies": [
+    "lefthook",
     "sharp",
     "unrs-resolver"
   ]

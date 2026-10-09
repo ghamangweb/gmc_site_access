@@ -1,0 +1,71 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome check
+      glob: "*.{js,jsx,ts,tsx,cjs,cts,mjs,mts,json,jsonc}"
+      run: bunx biome check --write --files-ignore-unknown=true --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+
+    - name: check-yaml
+      glob: "*.{yml,yaml}"
+      run: |
+        for f in {staged_files}; do
+          python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f" || exit 1
+        done
+
+    - name: check-json
+      glob: "*.{json,jsonc}"
+      run: |
+        for f in {staged_files}; do
+          bun -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$f" || exit 1
+        done
+
+    - name: end-of-file-fixer
+      glob: "*"
+      run: |
+        for f in {staged_files}; do
+          grep -Iq . "$f" 2>/dev/null || continue
+          [ -s "$f" ] || continue
+          [ "$(tail -c1 "$f")" = "" ] || printf '\n' >> "$f"
+        done
+      stage_fixed: true
+
+    - name: trailing-whitespace
+      glob: "*"
+      run: |
+        for f in {staged_files}; do
+          grep -Iq . "$f" 2>/dev/null || continue
+          sed -i 's/[ \t]*$//' "$f"
+        done
+      stage_fixed: true
+
+    - name: check-added-large-files
+      run: |
+        for f in {staged_files}; do
+          size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
+          if [ "$size" -gt 11264000 ]; then
+            echo "$f is larger than 11000KB"
+            exit 1
+          fi
+        done
+
+    - name: check-merge-conflict
+      run: |
+        for f in {staged_files}; do
+          grep -Iq . "$f" 2>/dev/null || continue
+          if grep -nE '^(<{7}|={7}|>{7})( |$)' "$f"; then
+            echo "Merge conflict markers found in $f"
+            exit 1
+          fi
+        done
+
+    - name: no-commit-to-branch
+      run: |
+        branch=$(git rev-parse --abbrev-ref HEAD)
+        if ! echo "$branch" | grep -Eq '^(fix|feature|bugfix|chore|hotfix)/[a-zA-Z0-9-]+$'; then
+          echo "Direct commits to '$branch' are not allowed. Use fix/, feature/, bugfix/, chore/, or hotfix/ branches."
+          exit 1
+        fi
+
+    - name: build
+      run: bun run build

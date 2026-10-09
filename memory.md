@@ -2,6 +2,11 @@
 
 Last updated: 2026-07-08
 
+> **Superseded.** This snapshot predates Slices 2–7 and the Neon/dotenvx/Lefthook/Oxlint/Bun
+> migrations (2026-10-09). Its "Next session starts with" items are long resolved. Do not act
+> on this file via `/remember restore` without checking `docs/context/progress-tracker.md` for
+> current state first.
+
 ## What was built
 
 - `context/architecture.md` — documented a `dashboard/(workflow)/` route group holding
