@@ -24,6 +24,10 @@ export default async function AdminUsersPage() {
     pendingRequests.find((n) => n.requesterStaffUserId === staffUserId)
       ?.requestedRole ?? null;
 
+  const getRequestedDepartment = (staffUserId: string) =>
+    pendingRequests.find((n) => n.requesterStaffUserId === staffUserId)
+      ?.requestedDepartment ?? null;
+
   const sortedUsers = [...users].sort((a, b) => {
     const pendingA = isPending(a.id) ? 1 : 0;
     const pendingB = isPending(b.id) ? 1 : 0;
@@ -69,6 +73,7 @@ export default async function AdminUsersPage() {
                   user={user}
                   isPending={isPending(user.id)}
                   requestedRole={getRequestedRole(user.id)}
+                  requestedDepartment={getRequestedDepartment(user.id)}
                 />
               ))}
             </TableBody>

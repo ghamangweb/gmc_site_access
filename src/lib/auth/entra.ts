@@ -59,17 +59,44 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           .from(staffUsers)
           .where(eq(staffUsers.entraObjectId, entraObjectId));
 
+        const entraEmail = profile.email ?? "";
+        const entraDisplayName = profile.name ?? profile.email ?? "";
+
         if (!staffUser) {
           [staffUser] = await db
             .insert(staffUsers)
             .values({
               entraObjectId,
-              email: profile.email ?? "",
-              displayName: profile.name ?? profile.email ?? "",
+              email: entraEmail,
+              displayName: entraDisplayName,
               systemRole: "User",
               workflowRoles: [],
             })
             .returning();
+        } else if (
+          (entraDisplayName && entraDisplayName !== staffUser.displayName) ||
+          (entraEmail && entraEmail !== staffUser.email)
+        ) {
+          // Entra owns the name and email, so a rename there has to reach
+          // everything that reads them back — the Department Head's name on a
+          // pre-registration form, notification copy, the user list. Empty
+          // claims are ignored rather than written over good stored values,
+          // and a failed refresh never blocks a sign-in: the stale row still
+          // authenticates.
+          try {
+            const [refreshed] = await db
+              .update(staffUsers)
+              .set({
+                displayName: entraDisplayName || staffUser.displayName,
+                email: entraEmail || staffUser.email,
+              })
+              .where(eq(staffUsers.id, staffUser.id))
+              .returning();
+
+            staffUser = refreshed ?? staffUser;
+          } catch (error) {
+            console.error("[auth/entra]", error);
+          }
         }
 
         token.staffUserId = staffUser.id;

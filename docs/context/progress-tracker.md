@@ -29,11 +29,26 @@ means that step is still outstanding regardless of the heading.
 (Server Actions/Server Components querying Drizzle directly) and a cold-provisioning
 UI bug were both fixed as part of this slice's closeout.
 
+**Department Head + GMC Liaison Department (2026-10-09):** Added `"DepartmentHead"` to
+`WorkflowRole` and a canonical `GmcLiaisonDepartment` TS union (`GMC_LIAISON_DEPARTMENTS`
+in `src/lib/domain/types.ts`) — Mining, Mine Maintenance (EME), Carbonate Plant, Assay
+Lab, Information Technology, Human Capital, Social Responsibility & External Relations —
+filling the "values TBD" gap `architecture.md` had left open. `staff_users` gained a
+nullable `department` column; `notifications` gained a nullable `requestedDepartment`
+column. Self-service `/unauthorized` requests and the System Admin's Provision Dialog
+both gained a conditional department `Select` when `"DepartmentHead"` is chosen — see
+`ui-registry.md`'s Provision Dialog + Radio badge group entries. Scoped narrowly to the
+provisioning/self-request layer — the Department Head invitation console, `/register`
+page, and `registration_requests` table (described in `architecture.md` but unbuilt)
+remain a separate, not-yet-planned slice. `reception-form.tsx`'s free-text
+`gmcLiaisonDept` field was deliberately left unconverted — a later task.
+
 ### Schema
 - [x] `staff_users` table
 - [x] `notifications` table
 - [x] `notifications.requester_staff_user_id` — replaces email-substring matching for
       access-request tracking
+- [x] `staff_users.department`, `notifications.requestedDepartment` (2026-10-09)
 
 ### Seed
 - [x] `src/lib/db/seed.ts` — first System Admin
@@ -346,9 +361,294 @@ introduces a new doc type (Training, IT) only needs an entry in
 
 ---
 
-## Slice 4 — Training School 🔲
+## Department Head Invitation Console + Public Pre-Registration 🔶
 
-*Not started.*
+**Not a numbered build-plan slice** — `build-plan.md` has no slice for this yet; it's the
+first real build-out of the Department-Head-invitation flow `project-overview.md`/
+`architecture.md` describe, now end-to-end from invitation to a stored, auto-approved
+Registration Request.
+
+**What's built:**
+- `/dashboard/department` — a Department Head enters a visitor's email, picks a
+  **Registration Type (Local/Foreign)**, sends an invitation (random token, SHA-256 hash
+  persisted, raw token only in the emailed link), and sees a log of invitations they've sent
+  (email, type, sent date, status) with a revoke action. Scoped to the signed-in HOD's own
+  `department`; Guests see the log read-only, no form/revoke.
+- `/register?token=...` — public, unauthenticated. Validates the token (unrevoked,
+  unconsumed), then renders either `ReceptionForm` (Foreign — reused via its new
+  `publicToken` prop, same passport/nationality/visa fields, document uploads hidden) or
+  `LocalRegistrationForm` (Local — new component, same shape minus
+  Nationality/Ghana-Visa-Required/Visa-Type/GMC-Liaison-Department, "Ghana Card No."
+  instead of "Passport No.", backed by `persons.passport_no` reused as a generic ID-number
+  column). Submission atomically consumes the token and inserts a `registration_requests`
+  row with `status: "Approved"` directly — no separate approval step exists, per
+  `project-overview.md`. Matching Department Head(s) are notified by dashboard + email.
+- Local visitor registration moved from Features Out of Scope to In Scope in
+  `project-overview.md` (2026-10-09).
+
+- **Visitor document uploads (2026-10-09).** The public forms now collect documents too,
+  rather than leaving Reception to chase them. `documents` became polymorphic —
+  `engagement_id` xor `invitation_id` (CHECK-enforced), `uploaded_by` nullable for
+  visitor-uploaded files — so Reception's future hand-off is a pointer update with no blob
+  copy. Blob paths re-keyed to `documents/{documentId}/...` so they never move. Uploads go
+  through `POST /api/register/documents`, the project's only unauthenticated write surface,
+  authorized purely by the invitation token and scoped to that invitation's own documents
+  (GET for a SAS view URL and DELETE likewise). Required sets differ by registration type
+  (`REGISTRATION_DOCUMENT_TYPES` in `lib/domain/types.ts`): Foreign needs passport biodata +
+  valid visa, Local needs Ghana Card; permit/MINCOM/assignment/insurance are offered but
+  optional, since a short familiarization visit doesn't need them. Enforced server-side in
+  `createRegistrationRequest` before the token is consumed.
+
+**What's deliberately NOT built:** Reception's hand-off (picking up an approved
+`registration_requests` row and turning it into a real `Person`/`Engagement` — `engagements`
+has no `registration_request_id` column yet, and nothing re-points visitor documents onto the
+Engagement yet), resend (revoke + re-send a fresh invite is the only path today), any format
+validation on the Ghana Card number, and cleanup of documents uploaded against an invitation
+that is then abandoned or revoked (orphans, harmless but unreaped).
+
+### Schema
+- [x] `invitations` (`department`, `registration_type`, `email`, `token_hash` unique,
+      `issued_by` FK, `issued_at`, `revoked_at`, `consumed_at`)
+- [x] `registration_requests` (`invitation_id` unique FK, `department`, `registration_type`,
+      `form_data` jsonb, `status`, `approved_by` FK, `approved_at`, `created_at`)
+- [x] `notifications.registration_request_id` (nullable FK)
+- Migrations `0009`–`0012`
+
+### Services
+- [x] `src/lib/services/invitation-service.ts` — `issueInvitation`, `revokeInvitation`
+      (scoped to `issuedBy`), `listInvitationsForIssuer`, `validateInvitationToken`,
+      `consumeInvitation` (atomic, transaction-safe)
+- [x] `src/lib/services/registration-service.ts` (new) — `createRegistrationRequest`,
+      `LocalRegistrationFormInput` type
+
+### Pages + components
+- [x] `dashboard/(workflow)/department/page.tsx`, `invite-form.tsx` (+ registration-type
+      picker), `invitation-row.tsx` (+ type column)
+- [x] `dashboard/page.tsx` root routing extended: DepartmentHead → `/dashboard/department`
+- [x] `dashboard-breadcrumbs.tsx` — `department` label added
+- [x] `src/app/register/page.tsx` (new) — token validation + form branch
+- [x] `src/components/workflow/reception-form.tsx` — `publicToken` prop (hides document
+      uploads, posts to the public action, "Thank you" confirmation instead of linking to an
+      engagement)
+- [x] `src/components/workflow/local-registration-form.tsx` (new)
+
+### `/register` presentation pass (2026-10-11)
+- [x] `src/app/register/page.tsx` — two-pane layout: left image pane (`bg-auth.jpg`) carrying
+      the GMC logo and the page `<h1>` ("Ghana Manganese Company Mine Site Access
+      Registration"), right form pane in a shadcn `ScrollArea`; panes split the viewport
+      50/50. The old "Pre-Registration" header above the form is gone
+- [x] `src/components/ui/scroll-area.tsx` — shadcn `ScrollArea` installed (no new dependency;
+      `radix-ui` was already present). The CLI emitted `import { cn } from "cn"` and installed
+      a junk `cn` package — import repointed to `@/lib/utils`, package removed
+- [x] `ACCESS_PURPOSE_LABELS.Work` ("Nature of Visit") → "Require mine site access"
+      (`src/lib/domain/types.ts`); `local-registration-form.tsx`'s own copy left as
+      "Coming to work", as in the 2026-10-09 relabel
+- [x] `tsc --noEmit`, `biome check`, `oxlint`, `bun run build` all clean
+- [x] GMC Liaison Person / Department prefilled from the invitation and locked:
+      `validateInvitationToken` returns `issuerName` (join on `invitations.issued_by`),
+      `/register` passes both as `defaultValues`, both inputs render `disabled`, and
+      `createRegistrationRequest` overwrites them server-side from the invitation
+- [x] `src/lib/auth/entra.ts` — `display_name`/`email` refreshed from the Entra claim on every
+      sign-in (previously written once, on the row's first sign-in), so a rename in Entra
+      reaches the prefilled liaison name on outstanding invitation links
+- [x] Visa Type option "Other" → "Visa on Arrival" (`VISA_TYPE_OPTIONS` + zod enum in
+      `reception-form.tsx`, `VisaType` in `lib/domain/types.ts`)
+- [x] "Visa on Arrival" removes `valid_visa` from the compulsory uploads — shared rule in
+      `getRequiredRegistrationDocTypes` (`lib/domain/types.ts`), used by `ReceptionForm`
+      (watched `visaType`) and by `getMissingRegistrationDocTypes`/`createRegistrationRequest`
+- [x] Visa Type + Access Level pinned to the same row in `reception-form.tsx`
+- [x] "Administration" section removed from the public form — gated behind `!publicToken` in
+      `reception-form.tsx`, deleted from `local-registration-form.tsx` (with its orphaned
+      `CheckboxField` helper + `Checkbox` import)
+- [x] Public submit button label "Submit Pre-Registration" → "Submit" in both forms
+- [x] English ⇄ 简体中文 toggle on the public form (`lib/i18n/registration-dictionary.ts`,
+      `registration-language-provider.tsx`, `registration-language-toggle.tsx`,
+      `registration-headline.tsx`, `registration-invalid-link.tsx`); `t()` applied inside the
+      field helpers, `FormMessage`, `DocumentSelector` and `PhoneInput`; `ActionResult` gained
+      `errorCode`/`missingDocTypes` and `RegistrationError` carries the code out of the service
+- [x] Public upload route returns 400 + the real reason for a rejected file
+      (`DocumentValidationError`), instead of folding it into "Internal server error"
+### Hospital dashboard (2026-10-12)
+- [x] Status column removed from the queue (every row is `AtHospital` by definition); Arrival,
+      Departure and a "Record Clearance" action in its place
+- [x] Record page is identity (name + passport) plus the clearance form only — no engagement
+      preview; `ReceptionSummary` deleted (no callers left)
+- [x] Clearance form: label corrected to "Fit with Conditions" and each outcome now states what
+      it does to the engagement. Upload of `hospital_fitness_form` was already required and
+      still gates submit
+- [ ] Manual in-browser check — a work-path engagement at AtHospital: upload the fitness form,
+      pick each outcome and confirm the consequence line, then submit
+
+### Stakeholder approvals dashboard (2026-10-11)
+- [x] Migration `0018` — `engagements.approval_requested_at`, stamped by
+      `submitForStakeholderApproval` (the request previously left no trace on the record)
+- [x] `listEngagementsAwaitingApproval(delegatedApproverId?)` — `AtReception`, requested, not
+      yet approved; scoped to the one engagement for a delegate
+- [x] `/dashboard/approvals` queue with days-waiting column; HCM/GMM/DMD land there at sign-in
+- [x] Approval still happens on the engagement page: stakeholders see the read-only
+      `ReceptionDetailsPreview` plus the existing `StakeholderPanel`
+- [x] `approvals` breadcrumb label added
+- [x] Dashboard shows both halves of the stakeholder's work: Awaiting Approval (pending pill)
+      and Approved (who signed, role, date, current stage) via
+      `listRecentStakeholderApprovals`
+- [x] Stakeholders fully separated from Reception (2026-10-12): `EngagementDetail` extracted
+      and rendered by both `/dashboard/reception/:id` and the new `/dashboard/approvals/:id`,
+      so their breadcrumb reads Approvals rather than Reception; Reception's queue and
+      `LAYER_ROLES.reception` are Receptionist-only
+- [x] Post-approval redirect fixed — `StakeholderPanel.returnHref` sends a stakeholder back to
+      `/dashboard/approvals` instead of Reception's dashboard; the action revalidates both
+- [x] `src/lib/db/seed-approvals.ts` + `bun run db:seed:approvals` — takes seeded submissions
+      through the real services (`buildEngagementInput` → `createEngagement` →
+      `linkRequestToEngagement`) and stamps `approval_requested_at`, leaving them exactly where
+      a stakeholder picks them up. Stops at 2 and skips when that many already wait. Notifications
+      and emails are deliberately not sent — it is seed data, not a workflow event
+- [ ] Manual in-browser check — convert a submission, request approval as Reception, then sign
+      in as HCM/GMM/DMD: the row appears, "Review & Approve" opens the preview, and approving
+      clears it from the queue
+
+### Reception sees submitted registrations (2026-10-11)
+- [x] Migration `0016_fair_ma_gnuci.sql` — `registration_requests.engagement_id`
+      (nullable FK), generated and **applied**
+- [x] `registration-service`: `listRegistrationRequests`, `getRegistrationRequest`,
+      `linkRequestToEngagement` (only updates still-unlinked rows)
+- [x] `reception/page.tsx` — "Submitted Registrations" table above the Engagements queue,
+      with an "N awaiting" count pill; `registration-request-row.tsx` (Server Component)
+- [x] Preview mode renders each document as a page-style preview (`DocumentPreview`: A4 sheet
+      with offset sheets behind it, ghost View/Download beneath) with View and Download; migration `0017` adds `documents.file_name`/`content_type`, captured in
+      `onUploadComplete` and backfilled for the 8 seeded rows; new
+      `/api/documents/[documentId]/download` route streams with an attachment disposition
+- [x] The engagement detail page opens in preview mode too, with "Edit engagement" revealing
+      the form; no toggle when the record is read-only. `CreateEngagementPanel` generalised to
+      `PreviewEditPanel` and `RegistrationSubmissionPreview` renamed `ReceptionDetailsPreview`,
+      both now shared by the two Reception screens
+- [x] Create Engagement reworked to preview + edit mode: read-only submission preview and a
+      "Reception Completes" card (Administration four, applicable documents, plus nationality
+      and visa answers for Local), with "Edit submission" swapping in the full prefilled form.
+      New action `createEngagementFromRequestAction` + `buildEngagementInput` assemble the
+      payload server-side from the stored submission
+- [x] "Create Engagement" → `/dashboard/reception/new?requestId=…`, which prefills
+      `ReceptionForm` from the submission via `lib/domain/registration-prefill.ts` and
+      redirects to the Engagement if the request was already converted
+- [x] `submitReceptionAction` takes an optional `registrationRequestId` and links it
+- [x] `tsc --noEmit`, `biome check`, `bun run build` clean
+- [x] Uploaded files always render in `DocumentSelector` (previously hidden until the
+      "applicable" box was ticked); Create Engagement shows the visitor's files with their
+      boxes pre-ticked
+- [x] Visitor's pre-registration uploads re-point onto the Engagement at conversion
+      (`attachInvitationDocumentsToEngagement`) — previously they stayed on the invitation and
+      Reception saw an empty uploads card
+- [x] Local / Foreign / All filter on the submissions table, driven by `?type=` search param
+- [x] Dashboard content column widened `max-w-5xl` → `max-w-7xl` (shell + top bar together,
+      per the shared-width invariant) so the 7-column submissions table fits without
+      horizontal scrolling
+- [x] Seed also attaches each submission's compulsory documents — a real 1×1 PNG uploaded via
+      `UTApi` when `UPLOADTHING_TOKEN` is set, otherwise placeholder rows (listed and handed
+      off correctly, but View can't open them). Per-invitation idempotent, so re-running after
+      adding the token fills in what's missing. 8 real documents attached on 2026-10-11
+- [x] `src/lib/db/seed-registrations.ts` + `bun run db:seed:registrations` — 5 dummy
+      submissions (3 Foreign, 2 Local) with a consumed invitation each; skips if any
+      `@seed.gmc.local` invitation already exists. Local dev only
+- [ ] Manual in-browser check — submit a pre-registration, confirm it appears in Reception's
+      new table, click Create Engagement and confirm the form arrives prefilled, create it,
+      then confirm the row flips to a Converted badge linking to that engagement
+
+### Storage switched to UploadThing (2026-10-11)
+- [x] `uploadthing@7.7.4` + `@uploadthing/react@7.3.3` installed (approved — replaces Azure Blob)
+- [x] `src/app/api/uploadthing/core.ts` — `registrationDocument` (invitation-token middleware)
+      and `engagementDocument` (doc-type → role middleware); `route.ts` handler
+- [x] `src/lib/uploadthing/client.ts` (typed `useUploadThing`/`uploadFiles`) and `api.ts`
+      (15-minute signed view URLs + delete via `UTApi`)
+- [x] `document-service.uploadDocument` → `recordUploadedDocument` (DB row only — bytes never
+      reach this server); view/delete now go through UploadThing
+- [x] `src/lib/azure/blob.ts` deleted; `/api/documents/route.ts` deleted (held only POST);
+      `/api/register/documents` kept its GET/DELETE
+- [x] Migrations `0014` (empties `documents`, adds `file_key`/`file_url`) + `0015` (drops
+      `blob_url`) generated and **applied** — verified: 9 columns, 0 rows
+- [x] `DocType` now derives from a runtime `DOC_TYPES` tuple so the router can `z.enum` it
+- [x] `tsc --noEmit`, `biome check`, `oxlint` (new files), `bun run build` all clean
+- [ ] **Needs you:** add `UPLOADTHING_TOKEN` to `.env.development` and run `bun run env:encrypt`;
+      the two `AZURE_STORAGE_*` vars are now dead and can be removed
+- [ ] Manual in-browser check — upload a document on `/register` and on a Reception
+      engagement, view it (signed URL opens), delete it, and confirm a >16MB or .docx file is
+      rejected client-side with a readable message in both languages
+
+- [ ] ~~**Blocked — config:** blob uploads fail with `getaddrinfo ENOTFOUND
+      siteaccessmanagement.blob.core.windows.net`. `AZURE_STORAGE_CONNECTION_STRING`'s
+      `AccountName` is the container name, not a real storage account; re-copy the connection
+      string from the account's Access keys blade. DB side verified healthy (all 14 migrations
+      applied, `documents.invitation_id` present)~~ — resolved by moving off Azure Blob
+- [ ] Manual in-browser check — ask the user: image pane fills the full viewport height
+      (hard-reload or restart the dev server; `h-screen` is new to the project), form scrolls
+      inside its own pane, both registration forms still submit, and the two liaison
+      fields arrive filled in and non-editable, and picking "Visa on Arrival" turns the
+      visa upload optional so submit unblocks without it; and the 中文 toggle translates
+      labels, options, validation errors, the uploader and submit errors while keeping
+      anything already typed, with /dashboard/reception still entirely in English
+
+### Server Actions
+- [x] `src/actions/registration.ts` — `issueInvitationAction`, `revokeInvitationAction`,
+      `submitRegistrationRequestAction` (public, no guard)
+
+### Email templates
+- [x] `departmentInvitationTemplate`, `registrationSubmittedTemplate` in `templates.ts`
+
+### Verification
+- [x] `tsc --noEmit` clean
+- [x] `bun run build` clean (`/dashboard/department`, `/register` registered)
+- [ ] Manual in-browser walkthrough — ask the user to verify (agent does not start a dev
+      server per `CLAUDE.md`): sending a Foreign invite renders the passport-style form at
+      `/register`, a Local invite renders the Ghana-Card-style form; submitting either
+      consumes the token (a second visit to the same link shows "invalid"), inserts an
+      Approved `registration_requests` row, and notifies the matching Department Head;
+      revoking an unused invite's link also shows "invalid" at `/register`.
+
+---
+
+## Queue scale: search + pagination (2026-10-12)
+- [x] `lib/domain/pagination.ts` — `Page<T>`, `PageRequest`, `toPageRequest`, 20 per page
+- [x] `QueueSearch` (client, 300ms debounce, URL-driven, resets page) + `QueuePagination`
+      (server, plain links, preserves other params)
+- [x] SQL-side filtering: `ilike` on name/passport + `count()` in `listEngagementsWithPerson`,
+      `listEngagementsForLayer`, `listEngagementsAwaitingApproval`,
+      `listRecentStakeholderApprovals`
+- [x] Reception split into two views (`?view=`) instead of two stacked tables; tab counts from
+      dedicated `count()` queries
+- [x] Applied to Reception, Approvals (both tables), Hospital, Training
+- [x] `listAllEngagementsWithPerson` for the delegation picker, which needs every row
+- [ ] Known limit: submission search filters in memory (name/ID live in jsonb) — promote them
+      to columns if that queue ever grows past a few thousand
+- [ ] Manual in-browser check — search, page through, switch Reception views, and confirm the
+      filter keeps the search term
+
+## Slice 4 — Training School ✅ (2026-10-12)
+
+### Schema
+- [x] `induction_records` table (migration `0019`) — cycle-scoped, mirrors `hospital_clearances`
+- [x] `induction_declaration_form` + `induction_registration_form` doc types, owned by TrainingStaff
+- [x] `ApplicableDocType` / `LayerOwnedDocType` so layer forms can't be offered to visitors
+
+### Services + actions
+- [x] `checkHospitalClearanceAge` (90-day validity, 30-day warning, work-path only)
+- [x] `recordInductionCompletion` — both uploads required, expiry re-checked at submit,
+      row-locked transaction → `AtSecurity` + transition row + Security notified
+- [x] `getLatestInductionRecord`, `submitTrainingCompletionAction`, `inductionCompletedTemplate`
+
+### Pages
+- [x] `/dashboard/training` queue (Work + VisitMine at `AtTraining`), `/dashboard/training/[id]`
+- [x] TrainingStaff routed there from `/dashboard`; `training` breadcrumb label
+- [x] `WORKFLOW_STATE_LABELS` — states render without the `At…` prefix
+
+### Verification
+- [x] `tsc --noEmit`, `biome check`, `oxlint` (new files), `bun run build` clean
+- [ ] Manual in-browser check — clear a work-path record at Hospital, confirm it reaches
+      Training, upload both forms, sign off, confirm it moves to Security and Security is
+      notified. The Security dashboard is Slice 5, so that email links to `/dashboard`
+
+### Not built (deliberate)
+- Signature on sign-off — dropped to match Hospital, which records a medical decision without
+  one; the staff user and timestamp are on the transition row
+- The scheduled job that returns expired records to Hospital is Slice 9; Training only blocks
+  sign-off today
 
 ---
 

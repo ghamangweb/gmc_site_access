@@ -8,13 +8,49 @@ export type WorkflowRole =
   | "HospitalStaff"
   | "TrainingStaff"
   | "SecurityStaff"
-  | "ITStaff";
+  | "ITStaff"
+  | "DepartmentHead";
+
+export const GMC_LIAISON_DEPARTMENTS = [
+  "Mining",
+  "Mine Maintenance (EME)",
+  "Carbonate Plant",
+  "Assay Lab",
+  "Information Technology",
+  "Human Capital",
+  "Social Responsibility & External Relations",
+] as const;
+
+export type GmcLiaisonDepartment = (typeof GMC_LIAISON_DEPARTMENTS)[number];
+
+export type RegistrationType = "Local" | "Foreign";
+
+// `error`/`warning` stay English sentences — every existing staff call site
+// renders them directly. The public pre-registration form is the only client
+// that translates, so it reads `errorCode` when present and falls back to the
+// sentence. `missingDocTypes` carries the parameters of the one code that
+// needs them.
+export type ActionErrorCode =
+  | "invalid_invitation"
+  | "missing_documents"
+  | "submit_failed";
 
 export type ActionResult =
-  | { success: true; warning?: string }
-  | { success: false; error: string };
+  | { success: true; warning?: string; warningCode?: string }
+  | {
+      success: false;
+      error: string;
+      errorCode?: ActionErrorCode;
+      missingDocTypes?: DocType[];
+    };
 
 export type AccessPurpose = "Work" | "Visit" | "VisitMine";
+
+export const ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string> = {
+  Work: "Require mine site access",
+  Visit: "Familiarization Visit",
+  VisitMine: "Require Mine Tour",
+};
 
 export type WorkflowState =
   | "Draft"
@@ -26,6 +62,21 @@ export type WorkflowState =
   | "Completed"
   | "Cancelled";
 
+// What a workflow state is called on screen. The stored values keep their
+// `At…` prefix — they are the state machine's own vocabulary — but a badge
+// reading "AtHospital" just names the layer the record is sitting in, so the
+// label drops the prefix. Single source, like ACCESS_PURPOSE_LABELS.
+export const WORKFLOW_STATE_LABELS: Record<WorkflowState, string> = {
+  Draft: "Draft",
+  AtReception: "Reception",
+  AtHospital: "Hospital",
+  AtTraining: "Training",
+  AtSecurity: "Security",
+  AwaitingProvisioning: "Awaiting Provisioning",
+  Completed: "Completed",
+  Cancelled: "Cancelled",
+};
+
 export type AccessState =
   | "Pending"
   | "Active"
@@ -33,25 +84,116 @@ export type AccessState =
   | "TerminationRequested"
   | "Terminated";
 
-export type DocType =
-  | "passport_biodata"
-  | "valid_visa"
-  | "mincom_letter"
-  | "work_residence_permit"
-  | "ghana_card"
-  | "assignment_letter"
-  | "insurance_proof"
-  | "hospital_fitness_form";
+// A runtime tuple, not just a union: the UploadThing file router validates
+// the incoming docType with `z.enum(DOC_TYPES)`, which needs real values.
+// `DocType` is derived from it, so the two can never drift.
+export const DOC_TYPES = [
+  "passport_biodata",
+  "valid_visa",
+  "mincom_letter",
+  "work_residence_permit",
+  "ghana_card",
+  "assignment_letter",
+  "insurance_proof",
+  "hospital_fitness_form",
+  "induction_declaration_form",
+  "induction_registration_form",
+] as const;
+
+export type DocType = (typeof DOC_TYPES)[number];
+
+// Documents a layer owns and produces itself — never something Reception
+// marks "applicable" for a visitor to supply.
+export type LayerOwnedDocType =
+  | "hospital_fitness_form"
+  | "induction_declaration_form"
+  | "induction_registration_form";
+
+// What Reception can require of a visitor.
+export type ApplicableDocType = Exclude<DocType, LayerOwnedDocType>;
+
+export const DOCUMENT_LABELS: Record<DocType, string> = {
+  passport_biodata: "Passport biodata page",
+  valid_visa: "Valid visa",
+  mincom_letter: "MINCOM letter of approval",
+  work_residence_permit: "Work or residence permit",
+  ghana_card: "Ghana Card",
+  assignment_letter: "Letter of assignment / contract",
+  insurance_proof: "Proof of medical/travel insurance",
+  hospital_fitness_form: "Fitness form",
+  induction_declaration_form: "Induction declaration form",
+  induction_registration_form: "Induction registration form",
+};
+
+// Which documents a visitor must upload during pre-registration, by
+// registration type — a local has no passport/visa/permit to give, so asking
+// for them would block them outright. Lives in `domain/` (not
+// `document-service.ts`) so the public forms can import it without pulling
+// Drizzle/Azure into the client bundle. Enforced server-side by
+// `getMissingRegistrationDocTypes`, not just in the form UI.
+export const REGISTRATION_DOCUMENT_TYPES: Record<RegistrationType, DocType[]> =
+  {
+    Foreign: ["passport_biodata", "valid_visa"],
+    Local: ["ghana_card"],
+  };
+
+// Offered during pre-registration but never blocking — not every visitor
+// needs a MINCOM letter or a work permit (a short familiarization visit
+// doesn't), so these upload if the visitor has them and Reception chases the
+// rest later.
+export const REGISTRATION_OPTIONAL_DOCUMENT_TYPES: Record<
+  RegistrationType,
+  DocType[]
+> = {
+  Foreign: [
+    "work_residence_permit",
+    "mincom_letter",
+    "assignment_letter",
+    "insurance_proof",
+  ],
+  Local: ["assignment_letter", "insurance_proof"],
+};
+
+// A visitor collecting their visa at the airport has no visa document to
+// upload yet — Reception captures it once they have arrived. Every other visa
+// type means the visa already exists, so it stays compulsory.
+export function getRequiredRegistrationDocTypes(
+  registrationType: RegistrationType,
+  visaType?: VisaType,
+): DocType[] {
+  const required = REGISTRATION_DOCUMENT_TYPES[registrationType];
+
+  if (registrationType === "Foreign" && visaType === "Visa on Arrival") {
+    return required.filter((docType) => docType !== "valid_visa");
+  }
+
+  return required;
+}
+
+export function getRegistrationDocTypes(
+  registrationType: RegistrationType,
+): DocType[] {
+  return [
+    ...REGISTRATION_DOCUMENT_TYPES[registrationType],
+    ...REGISTRATION_OPTIONAL_DOCUMENT_TYPES[registrationType],
+  ];
+}
 
 export type ApproverRole = "HCM" | "GMM" | "DMD" | "Delegated";
 
-export type VisaType =
-  | "Tourist Visa"
-  | "Business Visa"
-  | "Work Visa"
-  | "Transit Visa"
-  | "Diplomatic Visa"
-  | "Other";
+// Runtime tuple like DOC_TYPES: the reception form and Reception's
+// completion form both render it, and `VisaType` derives from it so a new
+// visa type is added in exactly one place.
+export const VISA_TYPES = [
+  "Tourist Visa",
+  "Business Visa",
+  "Work Visa",
+  "Transit Visa",
+  "Diplomatic Visa",
+  "Visa on Arrival",
+] as const;
+
+export type VisaType = (typeof VISA_TYPES)[number];
 
 export type TerminationStatus = "Pending" | "Approved" | "Rejected";
 
@@ -69,9 +211,13 @@ export type ReceptionData = {
   gmcLiaisonDept: string;
   reasonForRequest: string;
   airportPickup: boolean;
+  // Only set when airportPickup is true — existing rows predate this field
+  pickupDate?: string;
   transportTo: boolean;
   transportFrom: boolean;
   accommodationRequired: boolean;
+  // Only set when accommodationRequired is true — a GHANA_LOCATIONS value
+  accommodationLocation?: string;
   permanentAccessBadge: boolean;
   ghanaVisaRequired: boolean;
   generalSiteInduction: boolean;
@@ -85,5 +231,5 @@ export type ReceptionData = {
   itineraryAttached: boolean;
   inflightUpdated: boolean;
   remarks: string;
-  applicableDocuments: Exclude<DocType, "hospital_fitness_form">[];
+  applicableDocuments: ApplicableDocType[];
 };

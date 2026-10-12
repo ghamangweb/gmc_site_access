@@ -41,6 +41,14 @@ After building any component: update this file immediately. Do not batch updates
 | Calendar | `src/components/ui/calendar.tsx` | 2026-07-09 |
 | Popover | `src/components/ui/popover.tsx` | 2026-07-09 |
 | Command | `src/components/ui/command.tsx` | 2026-07-23 |
+| ScrollArea | `src/components/ui/scroll-area.tsx` | 2026-10-11 |
+
+**`shadcn add` + the `cn` import (2026-10-11):** the CLI generated `scroll-area.tsx` with
+`import { cn } from "cn"` and installed a junk `cn` npm package for it, instead of reading
+`components.json`'s `utils` alias. Fixed by hand to `@/lib/utils` and `bun remove cn` — check
+the import line and `git diff package.json` after every `shadcn add` in this project. Radix
+primitives themselves need no new dependency: the unified `radix-ui` package is already
+installed and generated components import from it (`import { X as XPrimitive } from "radix-ui"`).
 
 **Button `ref` prop (2026-07-09):** Added `ref?: React.Ref<HTMLButtonElement>`
 to `ButtonProps` and pass it straight to the underlying `Comp` — React 19's
@@ -150,9 +158,9 @@ Last updated: 2026-07-08
 | Property | Class |
 |---|---|
 | Shell outer | `min-h-screen bg-background` |
-| Content column | `mx-auto w-full max-w-5xl p-6` |
+| Content column | `mx-auto w-full max-w-7xl p-6` |
 | Top bar | `sticky top-0 z-10 w-full bg-background` — no separate surface color, no border; blends into the page |
-| Top bar inner row | `mx-auto flex h-20 w-full max-w-5xl items-center justify-between px-6` |
+| Top bar inner row | `mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6` |
 | Bell button | `h-9 w-9 text-muted-foreground rounded-md`; unread dot `h-2 w-2 rounded-full bg-destructive` |
 | Avatar trigger | `h-8 w-8` Avatar, trigger `cursor-pointer rounded-full focus-visible:ring-1 focus-visible:ring-ring` |
 
@@ -180,7 +188,7 @@ pass-through) and pages never render the shell themselves. The shell's `<main>` 
 SystemAdmin → `/dashboard/system-admin/users`; other roles get a centered "coming soon" empty state
 until the workflow-layer dashboards exist.
 
-Width invariant: the top bar inner row and the shell content column are both `max-w-5xl` and
+Width invariant: the top bar inner row and the shell content column are both `max-w-7xl` and
 must always change together (resolved 2026-07-08 after a brief 4xl/5xl drift).
 
 **Notifications bell (2026-07-08):** Same `DropdownMenu` pattern as the avatar menu —
@@ -298,12 +306,17 @@ works because the radio dot's ring color (`border-muted-foreground` /
 `data-[state=checked]:border-primary-foreground`) is set explicitly on `RadioGroupItem`
 itself, not inherited via `currentColor` from the badge — an earlier version relied on
 inheritance and the ring silently disappeared when unchecked (see git history / memory
-2026-07-08 if this regresses); (2) `request-access-form.tsx` uses `defaultValue`
-(uncontrolled, posts via native `FormData`), `user-row.tsx` uses `value`/`onValueChange`
-(controlled, read into React state before calling a Server Action programmatically) —
-pick the mode based on whether the surrounding form actually submits via `FormData` or
-via a button `onClick`. Reuse this pattern for any future single-choice-from-a-small-set
-picker before reaching for `Select`.
+2026-07-08 if this regresses); (2) `user-row.tsx` uses `value`/`onValueChange` (controlled,
+read into React state before calling a Server Action programmatically); `request-access-form.tsx`
+switched from `defaultValue` to the same controlled `value`/`onValueChange` shape on
+2026-10-09 so the form can conditionally reveal a department `Select` when
+`"DepartmentHead"` is picked — per `ui-registry.md`'s own earlier note on `RadioGroup`,
+going controlled doesn't change how it posts through `FormData` (still a hidden native
+bubble input keyed by `name`), so this was a safe switch. Reuse this pattern for any
+future single-choice-from-a-small-set picker before reaching for `Select` directly —
+though note a *conditionally revealed* fixed dropdown (like the department picker) is a
+`Select`, not a second badge group; see the Provision Dialog and
+`request-access-form.tsx` entries for that shape.
 
 ### Provision Dialog
 
@@ -333,6 +346,20 @@ role; anything else → `systemRole: "Admin"`, `workflowRoles: [requestedRole]`)
 from the picker's local state. `provisionUserAction` still takes `workflowRoles:
 WorkflowRole[]` (the DB column stays `text[]`) — the UI just never sends more than one
 element.
+
+**Department picker (2026-10-09):** `"DepartmentHead"` is now a `WorkflowRole`, backed
+by `GMC_LIAISON_DEPARTMENTS`/`GmcLiaisonDepartment` (`src/lib/domain/types.ts`) and a
+new nullable `staff_users.department` column. A plain shadcn `Select` (not the
+Badge/RadioGroup pattern — that one doesn't generalize past a narrow single-choice-badge
+case, per the note above the Select/Checkbox history entry) appears conditionally in the
+cold-provisioning branch when `workflowRole === "DepartmentHead"`, and **Save** is
+disabled until a department is picked. The has-requested-role branch doesn't re-prompt
+for department either (same "requester already chose it once" precedent as the role
+itself) — it just names the requested department in the confirmation copy, sourced from
+a new `notifications.requestedDepartment` column populated by the matching picker added
+to `request-access-form.tsx` (see below). `provisionStaffUser` nulls out `department`
+whenever `workflowRoles` doesn't include `"DepartmentHead"`, matching `architecture.md`'s
+"only set when workflow_roles includes DepartmentHead" invariant.
 
 ### SessionRefresher
 
@@ -790,10 +817,12 @@ This app has zero responsive breakpoints anywhere else — it's desktop-only
 by design, not "desktop-first responsive." Rather than detect viewport
 width in JS (hydration flash risk, extra client state), it's a pure-CSS
 `fixed inset-0 z-50` overlay that's `hidden` by default and switches to
-`flex` via `max-lg:flex` — Tailwind's `lg` breakpoint (1024px) was picked to
-line up with the dashboard shell's own `max-w-5xl` content column
-(`architecture.md`): below that width the shell's layout doesn't have room
-to render properly anyway. Mounted once in the root `layout.tsx` (alongside
+`flex` via `max-lg:flex` — Tailwind's `lg` breakpoint (1024px) is the floor
+below which the shell's layout has no room to render properly. It originally
+matched the content column exactly; the column widened to `max-w-7xl`
+(1280px) on 2026-10-11, so between 1024px and 1280px the column simply fills
+the viewport (`w-full` with the max as a cap) and wide tables fall back to
+their own `overflow-x-auto`. Mounted once in the root `layout.tsx` (alongside
 `Toaster`) so it covers every route, including the pre-dashboard auth
 pages — this is a device-capability gate, not a workflow-layer concern.
 
@@ -888,6 +917,740 @@ recorded: Unfit — ... (date)") — the form itself always starts blank,
 ready for a fresh submission, since `hospital_clearances` is append-only
 (see `progress-tracker.md`'s Slice 3 entry). `readOnly` disables every
 field and hides the submit button, same precedent as `ReceptionForm`.
+
+### InviteForm / InvitationRow (Department Head invitation console)
+
+Files: `src/app/dashboard/(workflow)/department/invite-form.tsx`,
+`src/app/dashboard/(workflow)/department/invitation-row.tsx`
+Last updated: 2026-10-09
+
+**Pattern notes:**
+`InviteForm` is a one-field `<form action={handleSubmit}>` (plain `Input` +
+`Label`, no react-hook-form — same "one field doesn't justify RHF" call as
+`hospital-form.tsx`), wrapped in a `useTransition` client component exactly
+like `RequestAccessForm` (not `SubmitButton`, since `useTransition` already
+tracks pending state — per this file's own `Button loading` note, reach for
+`SubmitButton` only when there's no surrounding `useTransition`). Resets via
+a `formRef` on success instead of `useState` + conditional unmount, since the
+form stays visible after a send (unlike `RequestAccessForm`, which replaces
+itself with a static "submitted" message once).
+
+`InvitationRow` follows the Reception queue's row-actions pattern exactly:
+ghost icon `Button` + `MoreHorizontalIcon` + `DropdownMenu align="end"`, one
+item ("Revoke") confirmed via `window.confirm` (plain destructive yes/no, no
+extra data entry — same precedent as `CancelEngagementButton`/reset-PIN, not
+a `Dialog`). Status is a binary badge (`bg-status-success-bg`/`danger-bg`),
+derived from `revokedAt` being null, not a stored status column — the Actions
+column (and its `TableHead`) only renders at all when `canManage` (not a
+Guest), matching `ReceptionRow`'s identical `canManage`-gated column.
+
+**Registration-type picker (2026-10-09):** `InviteForm` gained a plain (not Badge-wrapped)
+`RadioGroup` for `"Local" | "Foreign"` — binary choice, same precedent as `YesNoField` in
+`reception-form.tsx`/`local-registration-form.tsx` (the Badge-wrapped variant is reserved
+for the auth role-selector's small-set-of-named-options case, not a plain two-way toggle).
+`InvitationRow`/the page's table gained a `Type` column showing it.
+
+### ReceptionForm `publicToken` mode / LocalRegistrationForm (2026-10-09)
+
+Files: `src/components/workflow/reception-form.tsx` (`publicToken` prop),
+`src/components/workflow/local-registration-form.tsx` (new)
+
+**Pattern notes:**
+`/register` reuses `ReceptionForm` wholesale for Foreign registrations rather than forking
+it — `publicToken?: string` switches three things: the "Applicable Document Uploads" `Card`
+doesn't render (no `engagementId`/authed uploader exists yet to attach uploads to), submit
+calls `submitRegistrationRequestAction(publicToken, payload)` instead of the
+Receptionist-only actions, and success shows a plain "Thank you" `Card` instead of the
+"Engagement created" one (nothing to link a public visitor to — they have no login).
+`allowLookup` is simply never passed in this mode, so the passport-lookup button stays off
+by default as it already was.
+
+`LocalRegistrationForm` is a separate, smaller component rather than a third `ReceptionForm`
+branch — same RHF/zod/field-helper shape (each helper duplicated locally, same convention as
+every other per-form helper set in this codebase, e.g. `HospitalForm`), minus
+`Nationality`/`Ghana Visa Required`/`Visa Type`/`GMC Liaison Department` (none apply to a
+Ghanaian national, and liaison department is already injected from the invitation token).
+"Passport No." becomes "Ghana Card No." on the same underlying field name (`passportNo`) —
+`persons.passport_no` is reused as a generic ID-number column rather than adding a second
+identity column; see `architecture.md`'s `invitations` notes for the reasoning. Always posts
+to the same `submitRegistrationRequestAction` as the Foreign path (a `LocalRegistrationFormInput`
+union member) — the two forms share the submission action, not the submission component.
+
+**Liaison fields prefilled + locked from the invitation (2026-10-11):** on `/register` the
+visitor no longer types who invited them. `validateInvitationToken` now joins `staff_users`
+and returns `issuerName` alongside `department`, and the page passes both down as
+`defaultValues` — `gmcLiaisonPerson` + `gmcLiaisonDept` for the Foreign form, `gmcLiaisonPerson`
+for the Local one (which has no department field at all, since the token already carries it).
+Both render `disabled`: `ReceptionForm` gained a `liaisonDisabled = disabled || !!publicToken`
+so the authenticated Reception page keeps them editable, while `LocalRegistrationForm` — public
+only — hard-codes `disabled`. `LocalRegistrationForm` gained a `defaultValues?:
+Partial<LocalFormValues>` prop to receive it, mirroring `ReceptionForm`'s existing prop rather
+than inventing a single-purpose one. A `disabled` `Input` is a DOM attribute only, so RHF still
+holds the value and the `.min(1)` zod rules still pass.
+
+`createRegistrationRequest` also overwrites both fields server-side from the invitation before
+inserting, because a Server Action takes whatever payload it is handed — the read-only inputs
+are UI, not enforcement. That function now validates the token up front and throws the
+"invalid, already used, or revoked" error there (it previously skipped the document check for a
+bad token and let the transaction raise the same error) so the issuer/department are available
+for the overwrite; the in-transaction `consumeInvitation` row was renamed `consumed` to stop it
+shadowing that outer `invitation`.
+
+**Site Support Requirements → checkboxes + conditional reveals (2026-10-09):** that whole
+section in `reception-form.tsx` moved from `YesNoField` (Yes/No `RadioGroup` per question) to
+`CheckboxField` — a checked box now means "required", so the explicit "No" option is gone.
+`YesNoField` was deleted from this file entirely (no remaining callers; `RadioGroup`'s import
+went with it) — note `local-registration-form.tsx` still has its own `YesNoField` copy and was
+deliberately left on radios. Two boxes reveal a dependent field when checked, each wrapped
+with its checkbox in a `flex flex-col gap-3` grid cell so the reveal sits directly under its
+own box rather than shifting the grid:
+- `airportPickup` → `DateField` ("Pickup Date")
+- `accommodationRequired` → `ComboboxField` ("Accommodation Location") over
+  `GHANA_LOCATIONS` (`src/lib/domain/ghana-locations.ts`, a curated list of ~87 Ghanaian
+  towns/cities — same static-list + searchable-`Combobox` pattern as `NATIONALITIES`, chosen
+  over a live Places/geocoding API so no new dependency or API key is involved)
+
+Both dependent values are required only while their box is checked, enforced by a
+`.superRefine()` on the schema object with a `path:` targeting the specific field (not
+`.min(1)` on the field itself, which would fire even when the box is unchecked). A `useEffect`
+per box clears the dependent value on uncheck, and `onSubmit` sends `undefined` rather than
+`""` for an unchecked box — so `receptionData` never carries an orphaned pickup date or
+location. `ReceptionData.pickupDate`/`accommodationLocation` are **optional** (`?`) precisely
+because `engagements.reception_data` is `jsonb` and existing rows predate both fields — that's
+also why this needed no migration.
+
+**`DocumentSelector` public/token mode (2026-10-09):** gained `invitationToken` (mutually
+exclusive with `engagementId`) and `requiredDocTypes`. With a token it posts to
+`/api/register/documents` and sends `token` instead of `engagementId`, and its view/delete
+calls swing to that same route (the staff `/api/documents/[id]` SAS + DELETE endpoints are
+`requirePinConfirmed`-guarded, so a visitor can't use them). `requiredDocTypes` splits
+`mode="required"` into genuinely-required vs offered-but-optional rows — optional ones render
+an "(optional)" suffix and their empty slot reads "Optional" instead of "Required". Because a
+real parent id (the invitation) exists from first page load, public uploads use the immediate
+`UploadSlot` path, **not** `PendingUploadSlot` — nothing is held in memory and a half-finished
+form never loses attachments. `DOCUMENT_LABELS` moved out of this file into
+`lib/domain/types.ts` so services can reuse it for error messages; same reason
+`REGISTRATION_DOCUMENT_TYPES`/`getRegistrationDocTypes` live in `domain/` rather than
+`document-service.ts` — a **value** import from that service into a `"use client"` form would
+pull Drizzle and the Azure SDK into the browser bundle (the long-standing `import type
+{ Document }` is fine, since types erase).
+
+**`CheckboxField` label-click fix (2026-10-09):** the `Checkbox` inside it carried
+`id={field.name}`, which (via Radix `Slot` prop precedence) overrode the `id={formItemId}`
+that `FormControl` supplies — the one `FormLabel`'s `htmlFor` points at. So clicking a
+checkbox's label did nothing. Dropping the manual `id` lets `FormControl` wire it up and makes
+labels toggle their box. Worth knowing before adding `id` to any other `FormControl` child.
+
+### Reception: submitted registrations queue (2026-10-11)
+
+Files: `src/app/dashboard/(workflow)/reception/page.tsx`,
+`registration-request-row.tsx` (new), `new/page.tsx`,
+`src/lib/domain/registration-prefill.ts` (new)
+
+| Property | Class |
+|---|---|
+| Section wrapper | `mb-6 flex flex-col gap-3`, above the Engagements table |
+| Section heading | `text-lg font-semibold text-foreground` + `bg-status-warning-bg text-status-warning-fg` count pill ("N awaiting") |
+| Table | the standard shadcn `Table` pattern — same header/cell classes as the Engagements queue |
+| Converted badge | `bg-status-success-bg text-status-success-fg`, wrapped in a `Link` to the Engagement |
+| Action button | shadcn `Button size="sm"` → `/dashboard/reception/new?requestId=…` |
+
+**Pattern notes:**
+Reception's page now leads with what the workflow actually starts from — the visitor's own
+submission — and the existing Engagements table sits below under its own `Engagements`
+heading. `RegistrationRequestRow` is a **Server Component**, unlike `ReceptionRow`: it has no
+dialog or client state, only a link. Rows are not clickable; the action column is the only
+target, since a submission has no detail page of its own.
+
+**An uploaded file is never hidden behind its checkbox (2026-10-11):** `DocumentSelector`'s
+`mode="select"` (Reception's "Applicable Document Uploads") only rendered a slot when the
+Receptionist had ticked that doc type, so a document the visitor had already supplied showed
+as nothing but an unticked checkbox — indistinguishable from a lost upload. `isApplicable` now
+also returns true when a matching `uploadedDocuments` entry exists, and the slot picker uses
+`UploadSlot` whenever `uploaded` is set even if there is no `engagementId` or
+`invitationToken` — view and delete address the file by **document id**
+(`/api/documents/:id`), so they work before an Engagement exists, under the staff PIN guard.
+`PendingUploadSlot` is still what renders for a ticked-but-empty type.
+
+`new/page.tsx` feeds that: it loads `getDocumentsForInvitation(request.invitationId)` and
+passes both `uploadedDocuments` and an `applicableDocuments` default built from what actually
+arrived, so the Create Engagement form opens with the visitor's files visible and their boxes
+already ticked. `isApplicableDocType` narrows `documents.doc_type` (a plain text column)
+against `DOC_TYPES` minus the hospital form, which is the one type that can never be a
+registration upload.
+
+**Visitor uploads now follow the submission into the Engagement (2026-10-11):** until this
+fix nothing re-pointed them — a visitor could upload every compulsory document during
+pre-registration and Reception's "Applicable Document Uploads" card would still render empty,
+because `getDocumentsForEngagement` filters on `documents.engagement_id` while the rows still
+carried `invitation_id`. `attachInvitationDocumentsToEngagement` (document-service) now runs
+as part of `linkRequestToEngagement`: it sets `engagement_id`, clears `invitation_id` (the
+`documents_single_parent_check` constraint demands exactly one parent, so both have to change
+in the same statement) and stamps the Engagement's active `workflow_cycle_id`, matching what a
+staff upload would have recorded. The file itself never moves — storage is keyed by the
+document's own id, which is why the row's parent can change freely. If the request was already
+converted the link update returns nothing and the documents are left with the first
+Engagement. Verified against the live schema in a rolled-back transaction: 2 documents
+re-pointed, both parents correct, both visible to `getDocumentsForEngagement`.
+
+**Local / Foreign filter (2026-10-11):** three `Button asChild` links (All / Local / Foreign)
+right-aligned on the section header row, each carrying its own count in a
+`text-xs opacity-70` span. The active one is `variant="default"`, the rest `variant="ghost"` —
+the same "one primary, others quiet" convention the rest of the dashboard uses, so no new
+primitive (no Tabs, no Select) was introduced for a three-way choice.
+
+Filtering is a **URL search param** (`/dashboard/reception?type=Local`), not client state: the
+page is a Server Component, so a link re-renders it on the server with no client JS, and a
+filtered view is shareable. An unrecognised `?type=` value falls back to All rather than
+rendering an empty table. The counts always come from the unfiltered list, while the
+"N awaiting" pill and the empty state follow the active filter — which is why the empty state
+reads "No Local submissions" with a prompt to switch back to All. The Engagements table below
+is untouched by the filter: an Engagement has no registration type once it exists, it belongs
+to a Person.
+
+### DocumentPreview (2026-10-11)
+
+File: `src/components/workflow/document-preview.tsx`
+Used by: `registration-submission-preview.tsx`
+
+| Property | Class |
+|---|---|
+| Wrapper | `flex flex-col items-center gap-4` — no card, no surface of its own |
+| Sheet stack | two `absolute` sheets at `-top-2 -right-2` and `-top-1 -right-1`, each `h-full w-full rounded-lg border border-border bg-card` |
+| Page | `relative aspect-[1/1.414] overflow-hidden rounded-lg border border-border bg-card`, `max-w-[260px]` |
+| Image | plain `<img>`, `h-full w-full object-contain` |
+| PDF | `<iframe>` with `#toolbar=0&navpanes=0&view=FitH`, `pointer-events-none` |
+| Fallback | lucide `FileTextIcon` `h-8 w-8` + "No preview", muted |
+| Actions | `Button variant="ghost" size="sm"` for View and Download, centred under the label |
+| Grid | `grid grid-cols-4 gap-8 pt-2` in the preview's Documents card |
+| Shadow | none — see below |
+
+**Pattern notes:**
+The document is rendered as a **page**: an A4-proportioned sheet (`aspect-[1/1.414]`) with two
+offset sheets behind it, and the actions as plain ghost buttons underneath. No card wrapper,
+no filled thumbnail well — the page itself is the object.
+
+**The reference design for this used a drop shadow for the stack.** `ui-rules.md` forbids
+`shadow-*` outright (flat surfaces; separation via `border-border`), so the stack is built
+from two offset bordered sheets instead. Same read, no elevation, invariant intact — worth
+knowing before anyone "fixes" it by adding a shadow.
+
+Three mechanics to keep:
+- **`<img>`, not `next/image`** — a short-lived signed URL is nothing the optimizer can cache,
+  and its host would need allow-listing for no gain.
+- **The PDF iframe is `pointer-events-none`** so it reads as a preview, not a viewer.
+- **Download goes through `/api/documents/:id/download`**, not the signed URL: a cross-origin
+  `download` attribute is ignored by browsers and `generateSignedURL` takes only `expiresIn`
+  (no content disposition), so the file would otherwise just open. That route is
+  `requirePinConfirmed`-guarded and streams the body back through this origin with
+  `Content-Disposition: attachment`, the stored filename, and `Cache-Control: private, no-store`.
+
+The signed URL is generated **server-side while the page renders** (`getSignedFileUrl`,
+15-minute window), caught per document so one failure degrades a single preview to the icon
+rather than breaking the page. This needed `documents.file_name` and `documents.content_type`
+(migration `0017`, both nullable): the UploadThing key carries neither, so without them there
+is no way to tell an image from a PDF or to name a download. Both are captured in the file
+router's `onUploadComplete` from `file.name` / `file.type`; rows predating the migration render
+the icon fallback, and the seeded ones were backfilled.
+
+### Queue search + pagination (2026-10-12)
+
+Files: `lib/domain/pagination.ts`, `components/layout/queue-search.tsx`,
+`components/layout/queue-pagination.tsx`; applied to Reception, Approvals, Hospital, Training
+
+| Property | Class |
+|---|---|
+| Search box | shadcn `Input` with `px-9`, lucide `SearchIcon` absolutely placed left, clear `XIcon` ghost button right, `max-w-xs` |
+| Queue card | `overflow-hidden rounded-xl border border-border bg-card` — the table and its pagination footer live inside one card, per `ui-rules.md`; a bare `bg-card` with no border reads as unstructured |
+| View switcher | segmented: `flex items-center gap-1 rounded-lg border border-border p-1` wrapping `Button size="sm"` (active `default`, rest `ghost`) |
+| Pagination bar | `flex items-center justify-between gap-4 border-t border-border px-4 py-3`, the card's footer |
+| Range / page text | `text-xs text-muted-foreground` — "1–20 of 137", "Page 2 of 7" |
+| Prev / Next | `Button variant="outline" size="sm"`; a `Link` when navigable, the same `Button` with `disabled` when not |
+
+**Two layout rules this got wrong first time, worth not repeating:**
+1. **Never wrap a Button's icon and label in a `<span>`.** `Button` is `inline-flex gap-2` and
+   its `[&_svg]` rules size the icon; a `span` child is a plain inline box, so the chevron and
+   its label collapsed onto each other. Children go directly on the Button in **both** the
+   enabled and disabled branches.
+2. **The toolbar's controls must share a height.** `Input` is `h-11`; `Button size="sm"` is
+   `h-9`, so the segmented switcher's `p-1` wrapper brings it to 44px and the two align. Mixing
+   a bare `h-9` control beside the search box is what made the row look thrown together.
+
+Pagination **renders nothing when there is only one page** — a footer saying "Page 1 of 1" is
+noise on a queue with four rows.
+
+**Pattern notes:**
+Every queue now pages at **20 rows** and filters **in Postgres** — `ilike` on name or passport
+via a shared `personSearchFilter`, with `count()` for the total. Before this, each queue
+`SELECT`ed every row and filtered in JS, which would not survive real volume.
+
+**Paging and search live in the URL, not client state** (`?q=`, `?page=`), so the view is
+shareable, survives a refresh, and the back button behaves. `QueueSearch` is the one client
+component: it debounces typing by 300ms and `router.replace`s, **always clearing the page
+param** — page 4 of the old result set is meaningless against a new search. `QueuePagination`
+is a Server Component rendering plain links, and takes the other params so paging preserves
+the search and filter.
+
+Pages with two queues give each its own params (`aq`/`apage` for Approvals' "Approved"
+table), so moving through one never resets the other.
+
+Each queue is **one toolbar row** (view switcher left, search right) above one card. Reception's
+Local/Foreign chips sit on a second, quieter row prefixed "Show", and the "N awaiting" pill was
+dropped from it — the count already rides on the view tab, and saying it twice was part of what
+made the screen feel crowded.
+
+**Reception is two views, not two stacked tables** (`?view=submissions|engagements`,
+submissions default since that is where the workflow starts). Stacking them meant two tables,
+two paginators and two searches competing on one screen. Only the active view is queried —
+the other costs nothing. The tab counts and the "N awaiting" pill come from their own
+`count()` queries (`countRegistrationRequestsByType`,
+`countOutstandingRegistrationRequests`) so they describe everything, not the page on screen.
+
+**One exception to SQL filtering:** `listRegistrationRequests` searches in memory, because a
+submission's name and ID live inside the `form_data` jsonb under keys that differ by
+registration type (`receptionData` vs `registrationData`) — there is no column to index. It
+is bounded by invitations issued rather than by every visitor ever; if that ever stops being
+true, promote name and ID to columns on `registration_requests` rather than indexing jsonb
+two ways.
+
+`listEngagementsWithPerson` now returns a `Page`; the delegation picker needs the whole list,
+so it calls **`listAllEngagementsWithPerson`** — kept separate so the paged queue can't be
+used by accident where a complete list is meant.
+
+### Training School (2026-10-12)
+
+Files: `dashboard/(workflow)/training/page.tsx`, `training/[engagementId]/page.tsx`,
+`training-form.tsx`, `workflow-service.ts` (`checkHospitalClearanceAge`,
+`recordInductionCompletion`, `getLatestInductionRecord`)
+
+**Pattern notes:**
+Same shape as Hospital, deliberately: a queue with no status column (every row is `AtTraining`
+by definition) carrying Nature of Visit, Arrival, Departure and a **"Record Induction"**
+action, and a record page that is identity plus the form — no engagement preview. The queue
+covers **both paths that reach induction**: `listEngagementsForLayer("AtTraining", ["Work",
+"VisitMine"])` — work-path visitors arriving from Hospital, and mine-site visitors who come
+straight from Reception.
+
+`TrainingForm` requires **both** `induction_declaration_form` and
+`induction_registration_form` before sign-off, mirroring Hospital's fitness-form gate, and
+`recordInductionCompletion` enforces it server-side rather than trusting the button state.
+
+**The clearance-age banner is unique to this layer.** A work-path medical is good for 90 days:
+under 30 remaining shows a `status-warning` banner, expired shows `status-danger` **and
+disables the form**, because a record sitting here for months would otherwise reach Security on
+a lapsed medical. `checkHospitalClearanceAge` returns `{ applicable: false }` for visit+mine
+records — they never went through Hospital — and the service re-checks expiry at submit, not
+just at render.
+
+Sign-off inserts an `induction_records` row, moves the engagement to `AtSecurity`, writes a
+`workflow_transitions` row and notifies Security in one transaction, behind the same
+`SELECT … FOR UPDATE` row lock Hospital uses against concurrent submissions.
+
+**`WORKFLOW_STATE_LABELS` (2026-10-12):** workflow states render without their `At…` prefix —
+"Reception", "Hospital", "Training", "Security". The stored values keep the prefix (it is the
+state machine's vocabulary); only the label drops it. Single source in `lib/domain/types.ts`
+beside `ACCESS_PURPOSE_LABELS`, used by `ReceptionRow` and the Approvals "Stage" column.
+
+**New doc types** `induction_declaration_form` / `induction_registration_form` (owned by
+`TrainingStaff`) widened `DocType`, which broke `ReceptionData.applicableDocuments`. That is
+now a named `ApplicableDocType` = `Exclude<DocType, LayerOwnedDocType>`, so a layer's own form
+can never be offered to a visitor as something to supply. Add a layer-owned type to
+`LayerOwnedDocType` and the rest follows.
+
+### Hospital dashboard and clearance (2026-10-12)
+
+Files: `dashboard/(workflow)/hospital/page.tsx`,
+`hospital/[engagementId]/page.tsx`, `hospital-form.tsx`,
+`reception-details-preview.tsx` (`approval` prop)
+
+**Pattern notes:**
+The queue **no longer shows a status column.** Every row in it is `AtHospital` by definition —
+`listEngagementsForLayer("AtHospital", ["Work"])` — so the badge restated the filter. It now
+carries Arrival and Departure instead, plus a **"Record Clearance"** action, matching the
+Approvals queue's "Review & Approve" shape.
+
+The record page is **identity plus the clearance form, nothing else**: a `PageHeader` with the
+visitor's name and passport number, then `HospitalForm`. Hospital records a clearance and
+moves on; reviewing the engagement is Reception's job, and the full record lives there. A
+fuller preview was tried here first and removed as noise — don't reintroduce it.
+
+**`ReceptionSummary` was deleted** — it was Hospital's old nine-field summary and had no other
+caller. Its `Field` styling lives on in `ReceptionDetailsPreview`.
+
+`HospitalForm` already carried the three documented outcomes and the required
+`hospital_fitness_form` upload (submit stays disabled until the form is attached). Two changes:
+"Fit With Conditions" → **"Fit with Conditions"**, matching `project-overview.md`, and each
+outcome now states its consequence under the select — Fit proceeds to Training School, Fit with
+Conditions proceeds *and* notifies Reception, Unfit holds at Hospital and notifies Reception.
+The three are not interchangeable and the form shouldn't make them look it.
+
+### Stakeholders never touch Reception's routes (2026-10-12)
+
+Files: `components/workflow/engagement-detail.tsx` (new),
+`dashboard/(workflow)/approvals/[engagementId]/page.tsx` (new),
+`dashboard/(workflow)/reception/[engagementId]/page.tsx` (now a thin wrapper),
+`reception/page.tsx`, `proxy.ts`
+
+**Pattern notes:**
+The engagement record is one component, `EngagementDetail`, rendered by **two routes**:
+`/dashboard/reception/:id` for Reception and `/dashboard/approvals/:id` for whoever signs off.
+Same screen, different breadcrumb trail — a stakeholder's reads `Home › Dashboard › Approvals ›
+Engagement` instead of being routed through a queue that isn't theirs. The UUID segment already
+renders as "Engagement" via `labelFor`, and `approvals` is in `SEGMENT_LABELS`, so both trails
+work with no breadcrumb special-casing. This is why the fix is a route rather than relabelling
+a crumb: `ui-rules.md` requires every crumb to have a real route behind it.
+
+`queueHref` is the only prop that differs between them, and it does three jobs: the breadcrumb
+(implicitly, via the URL), where `StakeholderPanel` returns after approving, and **who may
+open the record** — Receptionist on the reception route; a stakeholder role or
+`engagement.delegated_approver_id === session.staffUserId` on the approvals one. The delegate
+check needs the engagement loaded, so the guard sits after the fetch, not before it.
+
+Access was narrowed to match: `reception/page.tsx` now redirects anyone who isn't a
+Receptionist (HCM/GMM/DMD previously landed there), and `proxy.ts`'s `LAYER_ROLES.reception`
+dropped the three stakeholder roles. **`approvals` is deliberately absent from `LAYER_ROLES`** —
+a delegated approver holds no workflow role at all, so a role matcher would lock out exactly
+the person the grant was for; the page does the checking instead. Note the proxy answers a
+plain 403 for a stakeholder who follows an old `/dashboard/reception/...` bookmark, the same
+as every other layer mismatch.
+
+### Stakeholder approvals queue (2026-10-11)
+
+File: `src/app/dashboard/(workflow)/approvals/page.tsx`
+Service: `listEngagementsAwaitingApproval` (`workflow-service.ts`)
+
+| Property | Class |
+|---|---|
+| Table | the standard shadcn `Table` pattern, same header/cell classes as Reception's queue |
+| Waiting column | `text-muted-foreground`, rendered as "Today" / "N days ago" |
+| Row action | `Button size="sm"` → the engagement detail page |
+| Empty state | `EmptyState` with lucide `ClipboardCheckIcon` |
+
+**Pattern notes:**
+HCM / GMM / DMD now land here instead of Reception's queue (`dashboard/page.tsx` routes them;
+Receptionist still goes to `/dashboard/reception`, and stakeholders keep access to it). The
+queue lists engagements that are `AtReception`, have `approval_requested_at` set, and have no
+`stakeholder_approvals` row — any one approval is enough, so every outstanding engagement is
+shown to all three roles.
+
+The page is **two sections, both the stakeholder's own work**: "Awaiting Approval" with a
+`status-warning` count pill, and "Approved" with a `status-success` one listing who signed,
+their role (and "(delegated)" where that applies), when, and the stage the engagement has
+since reached. Approved is deliberately **everyone's**, not just the viewer's — any one
+approval is enough, so a stakeholder needs to see that a colleague already handled something.
+
+**Approval itself stays on the engagement page**, deliberately: the stakeholder gets the same
+read-only `ReceptionDetailsPreview` Reception sees (documents included, since they are signing
+for them) plus the existing `StakeholderPanel`, which already handles signature capture and
+delegation. Nothing about approval is duplicated here — the row is a link.
+
+**`StakeholderPanel` gained `returnHref`** (default `/dashboard/reception`). It used to
+hard-code a redirect to Reception's dashboard two seconds after approving, written when that
+was the only queue — a stakeholder ended up somewhere that isn't their work. The engagement
+page now passes `/dashboard/approvals` for a non-Receptionist. `applyStakeholderApprovalAction`
+revalidates both queues, so the approved row moves between the two sections immediately.
+
+**`approval_requested_at` (migration `0018`) is what makes this queue possible.** Requesting
+approval used to send notifications and write nothing to the record, so "waiting for sign-off"
+and "Reception is still preparing it" were indistinguishable. `submitForStakeholderApproval`
+now stamps it before the notifications go out, so the queue and the emails cannot disagree.
+
+A **delegated approver** holds no stakeholder role, so the page falls back to listing only
+engagements whose `delegated_approver_id` is them, and redirects to `/dashboard` when there
+are none — the grant is per engagement, not a standing role.
+
+### Preview vs edit mode — both Reception screens (2026-10-11)
+
+Files: `preview-edit-panel.tsx`, `reception-details-preview.tsx`,
+`registration-completion-form.tsx`, `reception/new/page.tsx`,
+`reception/[engagementId]/page.tsx`, `registration-service.ts`
+(`buildEngagementInput`), `actions/engagements.ts`
+(`createEngagementFromRequestAction`)
+
+| Property | Class |
+|---|---|
+| Mode bar | `flex items-center justify-between rounded-xl border border-border bg-card px-6 py-4` |
+| Mode toggle | shadcn `Button variant="outline" size="sm"` with a lucide `PencilIcon` / `EyeIcon` |
+| Preview section | standard `Card` per group, `grid grid-cols-3 gap-4` of label/value `Field`s |
+| Field | `text-xs font-medium text-muted-foreground` label over `text-sm text-foreground` value — identical to `ReceptionSummary`'s |
+| Unset boolean | value rendered `text-muted-foreground` via the `muted` prop, so "No" recedes |
+
+**Pattern notes:**
+Converting a submission no longer opens a wall of prefilled inputs. The default is a
+**read-only preview** of what the visitor sent, grouped exactly as they filled it in
+(Visitor / Company / Access / Site Support / Documents), followed by a **"Reception Completes"**
+card holding only what the visitor was never asked: the Administration four
+(`accommodationConfirmed`, `itineraryAttached`, `inflightUpdated`, `remarks`) and applicable
+documents — plus, for a **Local** submission only, `nationality` (required; `persons.nationality`
+is notNull), `ghanaVisaRequired` and `visaType`, which that form has no fields for. "Edit
+submission" swaps the whole thing for the full prefilled `ReceptionForm`, which is unchanged
+and still the only way to correct what the visitor typed.
+
+`PreviewEditPanel` is a **client component that only holds the mode flag** — the preview, the
+form and anything sitting under the preview (`belowPreview`) are passed in as nodes from the
+Server Component page, so nothing is duplicated and the heavy parts stay server-rendered. Its
+hint copy and edit-button label are props, which is what lets both Reception screens share it.
+Note the mode switch discards whatever was typed in the other mode; both are short enough that
+this is cheaper than syncing them.
+
+**The same pair now covers an existing Engagement** (`reception/[engagementId]/page.tsx`): it
+opens on `ReceptionDetailsPreview` of what Reception recorded — including an Administration
+section and the documents as page previews — with "Edit engagement" revealing the same
+`ReceptionForm` as before. When `formReadOnly` (the engagement has moved past Reception, or
+the viewer can't write) **no toggle renders at all**, just the preview, so a Guest or a later
+layer never sees an edit affordance it can't use.
+
+`ReceptionDetailsPreview` (renamed from `RegistrationSubmissionPreview`, which no longer
+described it) takes `registrationType`/`department` as **optional**: they drive the type badge
+and the hiding of fields a Local form never asks, and an Engagement has neither — it belongs to
+a Person — so the full field set renders there. `showAdministration` and `documentsTitle` are
+the other two switches between the two uses.
+
+The preview renders **the same parsed values the edit form is prefilled with**
+(`registrationRequestToFormValues`, called once in the page) rather than reading the jsonb
+itself — so the two views cannot disagree about what was submitted, and the lint rules against
+`Record<string, unknown>` props are satisfied for free.
+
+**The submit path never trusts the browser with the visitor's answers.**
+`createEngagementFromRequestAction(requestId, completion)` sends only Reception's additions;
+`buildEngagementInput` re-reads `form_data` server-side and merges. It also fills the two
+things a Local payload lacks structurally: `gmcLiaisonDept` from `invitations.department` via
+the request row, and the visa fields from the completion. The action refuses a request that
+already has an `engagement_id`, so the preview path cannot double-convert either.
+
+`VISA_TYPES` moved into `lib/domain/types.ts` as a runtime tuple with `VisaType` derived from
+it (same shape as `DOC_TYPES`), because both `reception-form.tsx` and the completion form now
+render the list — `VISA_TYPE_OPTIONS` is now just a spread of it.
+
+**Create Engagement prefills the form.** `new/page.tsx` takes `?requestId=`, loads the
+request and passes `registrationRequestToFormValues(request.formData)` as `ReceptionForm`'s
+`defaultValues`, with `allowLookup` **off** in that mode (the identity is already known) and
+the page title switching to "Create Engagement". `ReceptionForm` gained
+`registrationRequestId`, which it forwards to `submitReceptionAction`; the action calls
+`linkRequestToEngagement` after `createEngagement`.
+
+`registration_requests.engagement_id` (migration `0016`) is what distinguishes outstanding
+from converted. `linkRequestToEngagement` only updates rows where it `isNull`, and
+`new/page.tsx` redirects straight to the Engagement if the request already has one — so the
+same submission cannot produce two Engagements even if someone keeps the old URL. Status also
+moves to `"Converted"`.
+
+The prefill mapper lives in `lib/domain/` and **parses** the jsonb with zod rather than
+casting it: every field is `.optional().catch(undefined)` so a Local submission (no
+nationality, no visa) or a row predating a field still maps cleanly. It assigns only defined
+values through a typed `assign()` helper — spreading an object containing explicit
+`undefined` over react-hook-form's defaults would wipe those defaults rather than leave them.
+Note the vendored anti-slop plugin flags the `formData: unknown` parameter
+(`no-unknown-parameters`) while its own `no-unknown-type-aliases` rule forbids hiding it
+behind an alias; explicit `unknown` at a parsing boundary is the behaviour that rule asks
+for, so the one error is expected here.
+
+**Storage switched to UploadThing (2026-10-11):** `UploadSlot` no longer POSTs a
+`FormData` to `/api/documents` or `/api/register/documents` — it calls `useUploadThing(...)`
+from `lib/uploadthing/client.ts` and the browser streams the file straight to storage. The
+endpoint is chosen by which parent the slot has: `registrationDocument` when
+`invitationToken` is set, `engagementDocument` when `engagementId` is. The visible component
+is unchanged — same hidden `<input type="file">`, same shadcn `Button`, same
+`loading` state (now `isUploading` from the hook), same Required/Optional pill, same i18n.
+`uploaded.blobUrl` became `uploaded.fileUrl` in the filename link and the delete prompt.
+Reception's `PendingUploadSlot` flow is unchanged in the UI; the flush in `reception-form.tsx`
+now calls the typed `uploadFiles("engagementDocument", …)` helper in a try/catch instead of
+`fetch`. View and delete still go through the existing routes, which kept their GET/DELETE
+handlers (`/api/documents/route.ts` held only POST and was deleted outright).
+
+Error text now comes from UploadThing (`onUploadError`), so the dictionary gained its
+wordings ("Invalid file type", "File too large", "You can only upload 1 file") alongside the
+middleware's own messages, which are thrown as `UploadThingError` and reach the client
+verbatim. The toast keys `uploaded`/`removed` are separate dictionary entries because the
+document name is interpolated in front of them.
+
+**Upload errors stopped being a blanket 500 (2026-10-11):** `uploadDocument` throws
+`DocumentValidationError` (`lib/domain/document-error.ts`) for the two things the person can
+fix — over 10MB, and a MIME type outside PDF/JPEG/PNG/WEBP. `/api/register/documents` returns
+those as a 400 carrying the real message; everything else still answers a generic 500, since
+this route is public and unauthenticated. Found while diagnosing a report of "Internal server
+error" on upload: the actual cause was an unreachable storage account, but the same catch-all
+would also have told an iPhone visitor uploading a HEIC photo nothing useful. The staff route
+`/api/documents` still masks both cases — worth the same treatment when it is next touched.
+
+### Registration language toggle — English ⇄ 简体中文 (2026-10-11)
+
+Files: `src/lib/i18n/registration-dictionary.ts`,
+`src/components/workflow/registration-language-provider.tsx`,
+`registration-language-toggle.tsx`, `registration-headline.tsx`,
+`registration-invalid-link.tsx`
+
+| Property | Class |
+|---|---|
+| Toggle | shadcn `Button` `variant="outline" size="sm"` with a lucide `Languages` icon |
+| Toggle placement | `mb-6 flex justify-end` at the top of `/register`'s form pane |
+| Toggle label | the language it switches **to** — "中文" while English is showing |
+
+**Pattern notes:**
+Public `/register` only. The dictionary is keyed by the **English string the component already
+renders**, so `t("Full Name")` returns its own key in English mode — the staff-facing
+`ReceptionForm` on `/dashboard/reception` renders byte-identically and cannot regress from a
+missing key. A key with no Chinese entry falls back to English rather than showing a key name.
+No i18n library was added; `ZH_ENTRIES` is an inferred object literal validated with
+`satisfies Record<string, string>` and wrapped in a `ReadonlyMap` for lookup (an index
+signature or an `as` cast trips the vendored anti-slop rules).
+
+**Translate at the primitives, never the call sites.** `t()` lives inside each form's
+`TextField`/`SelectField`/`DateField`/`PhoneField`/`CheckboxField`/`ComboboxField`/
+`TextAreaField`/`YesNoField`/`PassportField` helper, so all ~72 `label="…"` props translate
+with no change at the ~72 call sites. `SelectField` translates the **display** text only —
+`<SelectItem value={option}>` still carries the English value, so `"Male"` and `"Work Visa"`
+reach the database unchanged. Add a new field and it is translated automatically; it just
+needs a dictionary entry.
+
+`components/ui/form.tsx`'s `FormMessage` calls `tValidation(error.message)`: in that component
+an error always beats `props.children`, so translating from outside is impossible. Zod messages
+stay English and act as keys. `"Required"` is both a zod message and the uploader's slot state
+and the two need different Chinese, so `translateValidationMessage` checks a `"<message>_validation"`
+key first. **This is the one shadcn-generated file carrying an i18n import** — keep it if `form`
+is ever re-generated, same as the `Button ref`/`loading` notes above. The provider lives in
+`components/workflow/` and imports nothing from `components/ui/`, so there is no cycle.
+
+**Server messages.** `ActionResult` gained optional `errorCode`/`missingDocTypes`; `error` is
+still the English sentence every staff call site renders, so nothing downstream changed.
+`RegistrationError` (`lib/domain/registration-error.ts`) carries the code out of
+`createRegistrationRequest`, and `tActionError(result)` resolves it. Static sentences are
+translated by looking the sentence itself up — the same keying as everything else — so only
+the parameterized "Upload these documents before submitting: …" case actually needs the code
+and its `missingDocTypes`. The `/api/register/documents` responses were left untouched for
+that reason: `t(result.error)` on the client already covers them, provided the route's wording
+and the dictionary key stay identical (note the route says "…or revoked" where the service says
+"…or has been revoked" — both are in the dictionary).
+
+**Hydration.** The provider renders English on first paint and applies the stored locale in a
+`useEffect`, because reading `localStorage` during render would disagree with the
+server-rendered HTML. The cost is one frame of English on reload for a returning visitor; the
+alternative is a hydration mismatch across the whole form. Every storage access is wrapped in
+try/catch (private windows throw). The toggle is client state, so switching language mid-form
+**keeps everything already typed** — this is why it is not a `?lang=` URL parameter.
+
+**Not translated, deliberately:** the ~195 `NATIONALITIES` and ~87 `GHANA_LOCATIONS` entries
+(searchable by typing, and a large data-entry job), the Department Head's invitation email, and
+`ReceptionForm`'s passport-lookup toasts (staff-only path — `allowLookup` is never set in
+public mode).
+
+**Public submit button reads "Submit" (2026-10-11):** both public forms. `ReceptionForm`'s
+label is still three-way — `publicToken ? "Submit" : engagementId ? "Save Changes" : "Create
+Engagement"` — so the staff labels are untouched.
+
+**Administration section is staff-only (2026-10-11):** the "Administration" `Card`
+(Accommodation Confirmed / Itinerary Attached / Inflight Updated / Remarks) is Reception's own
+bookkeeping, so it no longer renders on the public form. In `reception-form.tsx` the card is
+wrapped in `{!publicToken && (...)}` — the authenticated Reception page is unchanged. In
+`local-registration-form.tsx` the card was deleted outright, since that component is only ever
+public; its now-unused local `CheckboxField` helper and the `Checkbox` import went with it (the
+Local form uses `YesNoField` radios everywhere else, so that helper had no other caller — note
+this also retires the last copy of the `id={field.name}` label-click bug described below).
+
+The four field names stay in both schemas and both payloads, submitting as `false`/`""`. They
+are part of `ReceptionData`/`LocalRegistrationFormInput` and Reception fills them in for real
+when it creates the Engagement — dropping them from the payload would have changed the service
+contract for no gain. Side effect worth knowing: a public visitor no longer has a free-text
+"Remarks" box; "Reason for Request" in Access Details is the field they still have.
+
+**"Visa on Arrival" drops the compulsory visa upload (2026-10-11):** `valid_visa` is only
+required when the visitor already holds a visa. The rule lives in
+`getRequiredRegistrationDocTypes(registrationType, visaType?)` in `lib/domain/types.ts` — not
+in the form and not in the service — so the submit-button gate, the `DocumentSelector` rows,
+and the server-side check in `createRegistrationRequest` all read the same function and cannot
+drift. `getMissingRegistrationDocTypes` takes an optional `visaType` and delegates to it;
+`createRegistrationRequest` pulls that value out of the payload
+(`"receptionData" in formData ? formData.receptionData.visaType : undefined`), since a public
+submission is the only place the visitor's own answer exists. `ReceptionForm` watches
+`visaType` and recomputes `requiredDocTypes` on every change, so flipping the Select live
+moves the visa row between required and "(optional)". The row itself never disappears —
+`docTypes` still comes from `getRegistrationDocTypes("Foreign")` — it just stops blocking
+submit. A visa uploaded before the visitor switched to "Visa on Arrival" stays attached;
+nothing deletes it.
+
+**Visa Type + Access Level share a row (2026-10-11):** both `SelectField`s are wrapped in a
+`col-span-2 grid grid-cols-2 gap-x-8` cell inside the Site Support Requirements grid. They are
+adjacent in source but an odd number of preceding checkbox cells pushed them onto separate
+rows; the wrapper pins them together regardless of what is added above. Use this wrapper
+pattern rather than reordering fields when two inputs must stay paired in that grid.
+
+**Visa type "Other" → "Visa on Arrival" (2026-10-11):** the last `VISA_TYPE_OPTIONS` entry in
+`reception-form.tsx` (and the matching `z.enum` and `VisaType` union in `lib/domain/types.ts`)
+is now a real visa category instead of a catch-all. Three places to keep in step — the option
+list, the zod enum, and the domain type; there is no DB constraint, since `visaType` lives
+inside `engagements.reception_data` / `registration_requests.form_data` jsonb, so no migration
+was needed. Any pre-existing jsonb row still holding `"Other"` no longer matches `VisaType`.
+
+**`ACCESS_PURPOSE_LABELS` (2026-10-09):** `AccessPurpose`'s internal values (`Work`/`Visit`/
+`VisitMine`) never changed, only their visitor/staff-facing wording — `Visit` → "Familiarization
+Visit", `VisitMine` → "Require Mine Tour" (`Work` was "Coming to work", relabelled again on
+2026-10-11 to "Require mine site access" — `local-registration-form.tsx`'s own
+`optionLabels` copy still reads "Coming to work" and was again left out of scope). Added
+`ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string>` next to the type in
+`lib/domain/types.ts` as the single source for this wording, rather than letting each
+display site (the Foreign form's `Select`, the Reception queue table, Hospital's
+`ReceptionSummary`) carry its own copy — this was specifically requested to read
+consistently everywhere Reception/Hospital staff see it, not just on the public form. The
+`accessPurpose` form field's label also changed from "Access Purpose" to "Nature of Visit"
+in `reception-form.tsx`, the Reception queue's column header, and `ReceptionSummary`'s
+field label — but **not** in `local-registration-form.tsx`, which was explicitly out of
+scope for this change and still reads "Access Purpose".
+
+### `/register` split layout (2026-10-11)
+
+File: `src/app/register/page.tsx`
+Last updated: 2026-10-11
+
+| Property | Class |
+|---|---|
+| Outer | `flex h-screen overflow-hidden` — the page itself never scrolls |
+| Image pane (left) | `relative hidden h-screen w-1/2 shrink-0 overflow-hidden lg:block` |
+| Image | `/bg-auth.jpg`, `fill sizes="50vw" priority`, `object-cover brightness-50` — same treatment as `PublicShell` |
+| Image pane inner | `relative z-10 flex h-full flex-col justify-between p-12` — logo top, heading bottom |
+| Logo plate | `inline-flex self-start rounded-xl bg-card p-4`, logo 120×57 |
+| Hero heading | `max-w-md text-3xl font-semibold leading-tight text-primary-foreground` |
+| Form pane (right) | `ScrollArea` — `h-screen w-full min-w-0 bg-background lg:w-1/2`, inner `<main className="p-10">` |
+| Shadow | none — this system never uses `shadow-*` |
+
+**Pattern notes:**
+`/register` deliberately does **not** use `PublicShell` (centered `max-w-3xl` panel) — a
+multi-section registration form doesn't fit that shape, so this is the one public page with
+its own two-pane layout: a full-bleed image column carrying the GMC logo and the page
+heading, and the form column, the two panes splitting the viewport evenly. The layout lives
+inline in the page rather than in a new `components/layout/` shell because nothing else uses
+it; promote it to a shell component if a second page ever needs the same split.
+
+The page's only `<h1>` is the hero on the image — "Ghana Manganese Company Mine Site Access
+Registration". The form column has no header of its own (an earlier "Pre-Registration" title
+there was removed), so the first `Card` sits at the top of the pane. Text over the darkened
+photo uses `text-primary-foreground` (the system's only white token) — there is no dedicated
+"on-image" token, so reuse this one rather than inventing a class.
+
+The form column is a shadcn `ScrollArea` (`h-screen`) rather than the document scrollbar, so
+the image pane stays fixed with no `sticky`/`position` tricks and only the form scrolls.
+Consequences to keep in mind: the outer wrapper must stay `h-screen overflow-hidden`, and the
+logo plate needs `self-start` now that its parent is a `flex-col` with `justify-between`.
+
+**`fill` + pane height (2026-10-11):** both panes carry their own `h-screen` rather than
+`h-full` off the parent — a `next/image` `fill` collapses to nothing the moment its pane's
+height resolves to `auto`, which is exactly what was seen in the first in-browser check: the
+image pane rendered only as tall as the logo. The cause was `h-screen` being a utility this
+project had never used before (only `min-h-screen`, in `dashboard-shell.tsx`), so the running
+dev server's Tailwind CSS chunk had no `.h-screen` rule yet — a hard reload / dev-server
+restart generates it. When a layout suddenly ignores a size class, check that the class is
+new to the codebase before debugging the markup. `sizes="50vw"` on the `fill` image matches
+the pane so Next doesn't serve a full-viewport-width asset.
+Panes split `w-1/2` / `w-1/2` (first drafted 2/3 image + 1/3 form, widened to an even split
+the same day because the forms' fixed `grid-cols-2` field rows were too cramped at a third);
+the form pane needs `min-w-0` or those grid rows push the flex child wider than its half.
+Below `lg` the image pane is hidden and the form goes full width — academic in practice,
+since `DesktopOnlyGuard` blocks `max-lg` viewports app-wide.
+
+`reception-form.tsx` (Foreign path) and `local-registration-form.tsx` use non-responsive
+`grid grid-cols-2 gap-x-8` field rows, left untouched here — at half of a 1440px viewport
+each column lands around 290px, which the fields handle. Worth remembering before narrowing
+this pane again: `ReceptionForm` is shared with the authenticated Reception page, so changing
+that grid needs a container query or a prop, not an edit to the shared class list.
 
 ### Entry format
 

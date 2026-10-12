@@ -97,6 +97,12 @@
       "skillPath": "skills/review/SKILL.md",
       "computedHash": "1b0bfd542962466b53935c1a992542564d0216d508610645ee9a5432f937c112"
     },
+    "uploadthing-nextjs": {
+      "source": "flohhhhh/skills",
+      "sourceType": "github",
+      "skillPath": "uploadthing-nextjs/SKILL.md",
+      "computedHash": "1a9fc2ecbe644fa1dce141cee80977822eff99affea569a729a23eeb2463a43d"
+    },
     "zod": {
       "source": "pproenca/dot-skills",
       "sourceType": "github",

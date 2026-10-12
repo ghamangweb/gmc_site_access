@@ -29,13 +29,17 @@ export function accessRequestedTemplate(opts: {
   requesterName: string;
   requesterEmail: string;
   requestedRole: string;
+  department?: string;
 }): MessageTemplate {
   const requesterName = escapeHtml(opts.requesterName);
   const requesterEmail = escapeHtml(opts.requesterEmail);
   const requestedRole = escapeHtml(opts.requestedRole);
+  const departmentLine = opts.department
+    ? `<p>Department: ${escapeHtml(opts.department)}</p>`
+    : "";
   return {
     subject: "GMC Site Access — new access request",
-    html: `<p>${requesterName} (${requesterEmail}) has requested the role "${requestedRole}".</p><p><a href="${baseUrl()}/dashboard/system-admin/users">Review and provision this request</a>.</p>`,
+    html: `<p>${requesterName} (${requesterEmail}) has requested the role "${requestedRole}".</p>${departmentLine}<p><a href="${baseUrl()}/dashboard/system-admin/users">Review and provision this request</a>.</p>`,
   };
 }
 
@@ -43,13 +47,17 @@ export function accessApprovedTemplate(opts: {
   recipientName: string;
   systemRole: SystemRole;
   workflowRoles: WorkflowRole[];
+  department?: string;
 }): MessageTemplate {
   const recipientName = escapeHtml(opts.recipientName);
   const systemRole = escapeHtml(opts.systemRole);
   const workflowRoles = opts.workflowRoles.map(escapeHtml).join(", ") || "None";
+  const departmentLine = opts.department
+    ? `<p>Department: ${escapeHtml(opts.department)}</p>`
+    : "";
   return {
     subject: "GMC Site Access — access approved",
-    html: `<p>Hi ${recipientName}, your access has been approved.</p><p>System role: ${systemRole}</p><p>Workflow roles: ${workflowRoles}</p><p><a href="${baseUrl()}">Go to your dashboard</a> and set up your PIN to continue.</p>`,
+    html: `<p>Hi ${recipientName}, your access has been approved.</p><p>System role: ${systemRole}</p><p>Workflow roles: ${workflowRoles}</p>${departmentLine}<p><a href="${baseUrl()}">Go to your dashboard</a> and set up your PIN to continue.</p>`,
   };
 }
 
@@ -63,12 +71,40 @@ export function pinResetTemplate(opts: {
   };
 }
 
+export function departmentInvitationTemplate(opts: {
+  token: string;
+  department: string;
+}): MessageTemplate {
+  const department = escapeHtml(opts.department);
+  const link = `${baseUrl()}/register?token=${encodeURIComponent(opts.token)}`;
+  return {
+    subject: "GMC Site Access — pre-registration invitation",
+    html: `<p>You have been invited to pre-register for a site visit to Ghana Manganese Company (${department}).</p><p><a href="${link}">Start your pre-registration</a>.</p>`,
+  };
+}
+
+export function registrationSubmittedTemplate(opts: {
+  department: string;
+}): MessageTemplate {
+  const department = escapeHtml(opts.department);
+  return {
+    subject: "GMC Site Access — new pre-registration submission",
+    html: `<p>A visitor has submitted a pre-registration form for ${department}.</p><p><a href="${baseUrl()}/dashboard/department">Review it</a>.</p>`,
+  };
+}
+
 function engagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/reception/${engagementId}`;
 }
 
 function hospitalEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/hospital/${engagementId}`;
+}
+
+// Security's dashboard ships in Slice 5. Until then this deliberately points
+// at the dashboard root — a link to /dashboard/security/:id would 404 today.
+function securityQueueLink(): string {
+  return `${baseUrl()}/dashboard`;
 }
 
 export function stakeholderApprovalRequestedTemplate(opts: {
@@ -127,6 +163,18 @@ export function hospitalClearedTemplate(opts: {
   return {
     subject: "GMC Site Access — hospital clearance recorded",
     html: `<p>${personName} has been cleared by Hospital and routed to Training School.</p><p><a href="${hospitalEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
+  };
+}
+
+export function inductionCompletedTemplate(opts: {
+  personName: string;
+  engagementId: string;
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+
+  return {
+    subject: "GMC Site Access — induction completed",
+    html: `<p>${personName} has completed induction at Training School and the record has been forwarded to Security.</p><p><a href="${securityQueueLink()}">View the record</a>.</p>`,
   };
 }
 

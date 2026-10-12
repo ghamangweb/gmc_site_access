@@ -7,7 +7,7 @@
 | Framework        | Next.js (App Router)                     | UI + API routes + server logic                       |
 | Database         | PostgreSQL (Neon, serverless)            | Persons, engagements, workflow, audit, staff users   |
 | ORM              | Drizzle                                  | PostgreSQL access                                    |
-| File storage     | Azure Blob Storage                       | Document uploads                                     |
+| File storage     | UploadThing                              | Document uploads (direct browser → storage)          |
 | Background jobs  | Azure Functions                          | Visa expiry, hospital timeout, email worker          |
 | Email            | Storage Queue + Microsoft Graph API      | Async outbound notifications                         |
 | Authentication   | Entra ID + 4-digit PIN + role gates      | Staff access                                         |
@@ -61,7 +61,8 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   │   ├── layout.tsx                → shared shell: session + unread count → DashboardShell + auto breadcrumbs
     │   │   ├── page.tsx                  → role router (SystemAdmin → system-admin/users; others → placeholder)
     │   │   ├── (workflow)/               → route group — workflow-layer queues (no URL segment)
-    │   │   │   ├── department/           → Department Head queue — read-only + single Approve action
+    │   │   │   ├── approvals/            → HCM/GMM/DMD queue + /[engagementId] detail route (same EngagementDetail component as Reception's, different breadcrumb)
+    │   │   │   ├── department/           → Department Head invitation console: send invite, log sent invitations, revoke
     │   │   │   ├── reception/
     │   │   │   ├── hospital/
     │   │   │   ├── training/
@@ -70,25 +71,33 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   │   └── system-admin/             → System Admin pages (users, terminations); layout is guard-only
     │   └── api/
     │       ├── auth/[...nextauth]/       → NextAuth catch-all route
-    │       └── documents/                → multipart upload handler
+    │       ├── uploadthing/              → UploadThing file router (core.ts) + route handler — ALL uploads, both staff and public
+    │       ├── documents/[documentId]/   → staff view (signed URL) + delete; /download streams it back with an attachment disposition
+    │       └── register/documents/       → PUBLIC view + delete, authorized by invitation token only
     ├── actions/
     │   ├── auth.ts                       → requestAccess, verifyPin, setupPin, refreshSession
     │   ├── admin.ts                      → provisioning, PIN reset, termination approval
-    │   ├── registration.ts               → submitRegistrationRequest (public, no auth), approveRegistrationRequest (Department Head only)
+    │   ├── registration.ts               → issueInvitationAction/revokeInvitationAction (Department Head only), submitRegistrationRequestAction (public, no auth)
     │   ├── notifications.ts              → markNotificationRead, markAllNotificationsRead
     │   └── engagements.ts                → workflow mutations (Server Actions)
     ├── lib/
     │   ├── domain/
-    │   │   └── types.ts                  → SystemRole, WorkflowRole, and shared type aliases
+    │   │   ├── types.ts                  → SystemRole, WorkflowRole, and shared type aliases
+    │   │   └── registration-error.ts     → RegistrationError — carries a translatable code out of the registration service
+    │   ├── i18n/
+    │   │   └── registration-dictionary.ts → 简体中文 strings for the PUBLIC /register form only, keyed by the English string
+    │   ├── uploadthing/
+    │   │   ├── client.ts                 → typed useUploadThing / uploadFiles (browser)
+    │   │   └── api.ts                    → UTApi wrapper: signed view URLs + delete (server only)
     │   ├── services/
-    │   │   ├── registration-service.ts   → creates Registration Request, routes to Department Head, approval → hands off to Reception
+    │   │   ├── invitation-service.ts     → issue/revoke/consume invitation tokens, list by issuer
+    │   │   ├── registration-service.ts   → consumes an invitation token + creates its Registration Request; notifies the matching Department Head(s) — no separate approval step
     │   │   ├── workflow-service.ts       → transitions, guards, path routing
     │   │   ├── person-registry-service.ts → passport lookup
     │   │   ├── document-service.ts
     │   │   ├── notification-service.ts   → dashboard alerts (sync) + email enqueue
     │   │   └── termination-service.ts
     │   ├── azure/
-    │   │   ├── blob.ts
     │   │   ├── queue.ts                  → used in Slice 10 (async email)
     │   │   └── graph-mail.ts             → Microsoft Graph email (sync for local dev)
     │   ├── email/
@@ -99,27 +108,40 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   │   ├── entra.ts                  → NextAuth config
     │   │   ├── pin.ts                    → hash, verify, validate, lockout
     │   │   ├── session.ts                → SessionUser type + getSession helper
-    │   │   └── guards.ts                 → requireWriteAccess, requireSystemAdmin, requireDepartmentHead, etc.
+    │   │   └── guards.ts                 → requireWriteAccess, requireSystemAdmin, etc. — Department Head invitation actions use `requireWriteAccess("DepartmentHead")`, no dedicated `requireDepartmentHead` guard exists
     │   └── db/
     │       ├── client.ts
     │       ├── schema.ts                 → all Drizzle table definitions
-    │       └── seed.ts                   → first System Admin seed (local only)
+    │       ├── seed.ts                   → first System Admin seed (local only)
+    │       ├── seed-registrations.ts     → dummy submitted pre-registrations for Reception's queue (local only)
+    │       └── seed-approvals.ts         → converts seeded submissions into engagements awaiting stakeholder sign-off (local only)
     └── components/
         ├── ui/                           → shadcn/ui components
         ├── layout/                       → public shell, dashboard shell + top bar, breadcrumbs, page header
-        ├── registration/                 → public pre-registration form (Sections 1–4), no upload fields
-        └── workflow/                     → per-layer forms and queue components (department queue is read-only + Approve button)
+        └── workflow/                     → per-layer forms and queue components, including the public pre-registration
+                                             forms (`reception-form.tsx` reused for Foreign via its `publicToken` prop,
+                                             `local-registration-form.tsx` for Local) — no separate `components/registration/`
+                                             folder was created; the department queue is the invitation console (send/log/revoke),
+                                             not a Registration-Request-approval queue
 ```
 
 ---
 
 ## Dashboard Layout
-Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` — the single place that reads the session, queries the unread notification count, and renders `DashboardShell` (top bar + `max-w-5xl` content column) with auto-generated breadcrumb(`DashboardBreadcrumbs`, derived from URL segments via a label map). Child layouts and pages never render their own shell or breadcrumbs:
+Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` — the single place that reads the session, queries the unread notification count, and renders `DashboardShell` (top bar + `max-w-7xl` content column) with auto-generated breadcrumb(`DashboardBreadcrumbs`, derived from URL segments via a label map). Child layouts and pages never render their own shell or breadcrumbs:
 
 - `dashboard/system-admin/layout.tsx` — `requireSystemAdmin` guard only, passes children through
 - Pages render `PageHeader` (title / subtitle / actions) + content
 - `dashboard/(workflow)/` — route group holding the six workflow-layer queues (`department`, `reception`, `hospital`, `training`, `security`, `it`), kept apart from `system-admin/` to mirror the System Roles vs. Workflow Roles split (`docs/context/project-overview.md`). Route groups add no URL segment, so `/dashboard/department`, `/dashboard/reception`, etc. are unchanged; no group-level layout is needed since `dashboard/layout.tsx` already covers every child route
-- `dashboard/department/` renders the queue as read-only rows with a single **Approve** action per Registration Request — no edit form, no reject control, even for Admin. `/register` sits **outside** `/dashboard/*` and outside `(auth)/*` — it is not wrapped by the dashboard shell, has no session lookup, and is excluded from `src/proxy.ts` protection.
+- `dashboard/department/` (built 2026-10-09) is an invitation console, not a Registration
+  Request queue — per `project-overview.md`, the invitation itself is the approval, so there
+  is no "review and approve incoming requests" queue to build here at all. The page is an
+  email-input form (`InviteForm`, with a Local/Foreign registration-type picker) plus a table
+  of the signed-in Department Head's own sent `invitations`, each revocable. `/register` sits
+  **outside** `/dashboard/*` and outside `(auth)/*` — it is not wrapped by the dashboard shell,
+  has no session lookup, and is excluded from `src/proxy.ts` protection. It now resolves to a
+  real pre-registration form (`ReceptionForm` for Foreign, `LocalRegistrationForm` for Local),
+  gated by the invitation token.
 
 
 ---
@@ -131,8 +153,9 @@ Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` �
 |---|---|
 | `src/app/` | Pages and API routes only. No business logic. |
 | `src/app/register/` | Public, unauthenticated page only — no session/auth code, no direct DB access. |
+| `src/app/api/register/documents/` | The project's only unauthenticated write surface. Kept as its own file (rather than branching auth inside `api/documents/`) so the whole no-auth path is auditable in one place. Authorization is the invitation token: valid + unrevoked + unconsumed, and every operation is scoped to that invitation's own documents. Submitting consumes the token, which closes the window. |
 | `src/actions/` | Server Actions for form mutations only. No file uploads. |
-| `src/actions/registration.ts` | `submitRegistrationRequest` runs with no auth guard (public); `approveRegistrationRequest` requires `requireDepartmentHead` guard. |
+| `src/actions/registration.ts` | `submitRegistrationRequestAction` runs with no auth guard (public); `issueInvitationAction`/`revokeInvitationAction` require `requireWriteAccess("DepartmentHead")`. No `approveRegistrationRequest` action exists — the invitation is the approval. |
 | `src/lib/domain/` | Shared types and role/state string unions. No React, no Azure SDK, no Drizzle. |
 | `src/lib/services/` | Business logic — workflow transitions, flagging, notifications, registration routing. |
 | `src/lib/azure/` | Thin Azure SDK clients only (Blob, Queue, Graph). |
@@ -147,46 +170,45 @@ Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` �
 
 ## Data Flow
 
+### Department Head sends an invitation (Server Action, staff auth)
+
+```text
+src/app/dashboard/(workflow)/department/invite-form.tsx
+        ↓
+src/actions/registration.ts (issueInvitationAction — requireWriteAccess("DepartmentHead"))
+        ↓
+src/lib/services/invitation-service.ts (issueInvitation)
+        ↓
+PostgreSQL (invitations table)
+        ↓
+src/lib/email/send.ts → Graph API (departmentInvitationTemplate, link carries the raw token)
+```
+
 ### Public registration submission (Server Action, no auth)
 
 ```text
-src/components/registration/
+src/components/workflow/reception-form.tsx (Foreign) or local-registration-form.tsx (Local)
         ↓
-src/actions/registration.ts (submitRegistrationRequest — no guard)
+src/actions/registration.ts (submitRegistrationRequestAction — no guard)
         ↓
-src/lib/services/registration-service.ts
+src/lib/services/registration-service.ts (createRegistrationRequest)
         ↓
-PostgreSQL (registration_requests table)
+src/lib/services/invitation-service.ts (consumeInvitation — atomic, inside the same tx)
         ↓
-src/lib/services/notification-service.ts   → notifications table (routed to matching Department Head(s))
-src/lib/email/send.ts                      → Graph API
+PostgreSQL (invitations.consumed_at set + registration_requests row inserted, same transaction)
+        ↓
+notifications table (routed to matching Department Head(s) by department)
+src/lib/email/send.ts → Graph API (registrationSubmittedTemplate)
 ```
 
-### Department approval (Server Action, staff auth)
-
-```text
-src/components/workflow/ (department queue — read-only rows + Approve button)
-        ↓
-src/actions/registration.ts (approveRegistrationRequest)
-        ↓
-src/lib/auth/guards.ts (requireDepartmentHead)
-        ↓
-src/lib/services/registration-service.ts
-        ↓
-PostgreSQL (registration_requests.status → 'Approved')
-        ↓
-src/lib/services/notification-service.ts   → notifies Reception
-src/lib/email/send.ts
-```
-
-`approveRegistrationRequest` must guard the transition the same way
-`applyStakeholderApproval`/`recordHospitalClearance` do: pre-check
-`status === "PendingDepartmentApproval"`, re-check inside a transaction, and
-only set `approved_by`/`approved_at` and enqueue the Reception notification
-on the transition that actually wins. Repeated calls (retry) or concurrent
-calls (two staff holding `DepartmentHead` for the same department) must no-op
-rather than re-transition an already-approved row or send a second
-notification.
+**There is no separate Department-approval step after submission** — per
+`project-overview.md`, the invitation itself is the approval. `createRegistrationRequest`
+inserts the row with `status: "Approved"`, `approved_by`/`approved_at` set directly from the
+invitation, in the same insert. No `approveRegistrationRequest` action or `requireDepartmentHead`
+guard exists or is planned — don't add one. The idempotency guarantee this project's other
+approval-style transitions get from a pre-check + transactional re-check comes here instead
+from `consumeInvitation`'s atomic `UPDATE ... WHERE revoked_at IS NULL AND consumed_at IS NULL`:
+a reused or concurrently-raced token simply can't produce a second row, by construction.
 
 ### Dashboard reads (Server Components)
 
@@ -281,30 +303,59 @@ Microsoft Graph API
 |---|---|---|
 | id | uuid | PK |
 | entra_object_id | text | Unique |
-| email | text | |
-| display_name | text | |
+| email | text | Written from the Entra `email` claim on first sign-in, then refreshed on every sign-in when the claim differs |
+| display_name | text | Entra `name` claim (falls back to `email`), refreshed on every sign-in when it differs — this is the name shown as GMC Liaison Person on a pre-registration form |
 | system_role | text | User \| Guest \| Admin \| SystemAdmin |
 | workflow_roles | text[] | Receptionist, Hospital, DepartmentHead, etc. |
-| department | text | Nullable — GMC Liaison Department this user heads; only set when `workflow_roles` includes `DepartmentHead`. Constrained to the canonical `GmcLiaisonDepartment` list (values TBD) shared with `registration_requests.department` — not arbitrary text |
+| department | text | Nullable — GMC Liaison Department this user heads; only set when `workflow_roles` includes `DepartmentHead`. Constrained to the canonical `GmcLiaisonDepartment` list (`src/lib/domain/types.ts`'s `GMC_LIAISON_DEPARTMENTS`) shared with `registration_requests.department` — not arbitrary text |
 | pin_hash | text | Never plaintext |
 | pin_failed_attempts | int | |
 | pin_locked_until | timestamptz | Null when not locked |
 | provisioned_at | timestamptz | When System Admin granted access |
 | created_at | timestamptz | |
 
-### `registration_requests` *(new)*
+### `invitations` *(built 2026-10-09)*
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| department | text | Selected GMC Liaison Department — routes notification to matching `staff_users.department` where `DepartmentHead` in `workflow_roles`. Constrained to the same canonical `GmcLiaisonDepartment` list as `staff_users.department` (list TBD); stored as `text` per this project's existing text+TS-union convention — no DB enum/FK |
-| form_data | jsonb | Sections 1–4 data — mirrors the relevant subset of `docs/form-fields.schema.json` |
-| status | text | `PendingDepartmentApproval` \| `Approved` |
-| approved_by | uuid | Nullable FK → staff_users |
-| approved_at | timestamptz | Nullable |
+| department | text | Stamped from the issuing `staff_users.department` at send time — never chosen in the UI |
+| registration_type | text | `Local` \| `Foreign` — chosen by the Department Head when sending; determines which pre-registration form renders at `/register` for this token |
+| email | text | Visitor's email, as entered by the Department Head |
+| token_hash | text | Unique — SHA-256 hash of the raw token; the raw token appears only in the emailed link, never persisted |
+| issued_by | uuid | FK → staff_users (the Department Head) |
+| issued_at | timestamptz | |
+| revoked_at | timestamptz | Nullable — status is derived (`revoked_at` set → Revoked, else Active), same convention as `workflow_cycles.archived_at` |
+| consumed_at | timestamptz | Nullable — set atomically on a successful pre-registration submission; a link with this set (or `revoked_at` set) can never be submitted again |
+
+Issued via `src/lib/services/invitation-service.ts`, surfaced at `/dashboard/department`
+(`src/app/dashboard/(workflow)/department/`). The emailed link
+(`{AUTH_URL}/register?token=...`) resolves to `src/app/register/page.tsx`, which validates
+the token and renders either `ReceptionForm` (Foreign — passport/nationality/visa fields)
+or `LocalRegistrationForm` (Local — Ghana Card number instead of passport, no nationality/
+visa fields) via `registration_type`. `persons.passport_no` is reused as a generic ID-number
+column for Local visitors (holds the Ghana Card number) rather than adding a second identity
+column — `registration_type` on the resulting `registration_requests` row is what disambiguates
+which kind of ID it holds.
+
+### `registration_requests` *(built 2026-10-09)*
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| invitation_id | uuid | Unique FK → `invitations` — enforces "one invitation link can back at most one request" at the DB level |
+| department | text | Copied from the invitation at submission time — routes the notification to matching `staff_users.department` where `DepartmentHead` in `workflow_roles` |
+| registration_type | text | `Local` \| `Foreign` — copied from the invitation at submission time |
+| form_data | jsonb | Shaped like `ReceptionFormInput` (Foreign) or `LocalRegistrationFormInput` (Local) — see `registration-service.ts`. No document columns: visitor uploads live in `documents` keyed by `invitation_id`, reachable from here via `invitation_id` |
+| status | text | Always inserted as `Approved` — there is no observable `PendingDepartmentApproval` row; the invitation itself was the approval, so `approved_by`/`approved_at` are set in the same insert |
+| approved_by | uuid | FK → staff_users — the invitation's `issued_by` |
+| engagement_id | uuid | Nullable FK → engagements — set when Reception converts the submission; null means still outstanding. This is what stops one submission becoming two Engagements |
+| approved_at | timestamptz | |
 | created_at | timestamptz | |
 
-No document columns — public form accepts data entry only, no uploads.
+Created via `src/lib/services/registration-service.ts`'s `createRegistrationRequest`, inside
+a transaction with `invitations.consumed_at` being set — a reused, revoked, or already-consumed
+token makes the whole submission fail before any row is written.
 
 ### `persons`
 
@@ -342,12 +393,24 @@ No document columns — public form accepts data entry only, no uploads.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| engagement_id | uuid | FK |
-| workflow_cycle_id | uuid | Nullable |
+| engagement_id | uuid | Nullable FK → engagements — a staff upload against a real Engagement |
+| invitation_id | uuid | Nullable FK → invitations — a visitor's pre-registration upload, made before any Engagement exists |
+| workflow_cycle_id | uuid | Nullable — only set for engagement-parented uploads |
 | doc_type | text | passport_biodata, hospital_fitness_form, etc. |
 | blob_url | text | |
-| uploaded_by | uuid | FK → staff_users |
+| file_key | text | UploadThing file key — what delete and signed-URL generation address |
+| file_url | text | UploadThing file URL (`ufsUrl`); not publicly readable, every view goes through a 15-minute signed URL |
+| file_name | text | Nullable — the original filename, captured at upload. Names the download and is what the UI shows |
+| content_type | text | Nullable — the uploaded MIME type. Decides whether a preview renders as an image or a PDF frame |
+| uploaded_by | uuid | Nullable FK → staff_users — **null means the visitor uploaded it themselves** |
 | uploaded_at | timestamptz | |
+
+**Exactly one parent**, enforced by the `documents_single_parent_check` CHECK
+(`engagement_id` xor `invitation_id`). This replaced an earlier plan for a separate
+`registration_documents` table: one table means Reception's hand-off is a pointer update
+(`SET engagement_id = ?, invitation_id = NULL`) with no blob copying, and the missing-docs
+guard, SAS viewing and delete all stay in one place instead of every downstream consumer
+(Reception detail, Security's cross-layer audit view) having to query and merge two sources.
 
 ### `stakeholder_approvals`
 
@@ -379,6 +442,20 @@ No document columns — public form accepts data entry only, no uploads.
 | clearance_status | text | Fit \| Unfit \| FitWithConditions |
 | doctor_comments | text | Mandatory |
 | clearance_date | timestamptz | |
+
+### `induction_records`
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workflow_cycle_id | uuid | FK — cycle-scoped, not engagement-scoped, so a record that returns to Hospital (Slice 9's 3-month rule) keeps its earlier induction history |
+| general_site_induction | boolean | |
+| other_inductions | boolean | |
+| trainer_comments | text | Mandatory |
+| completed_at | timestamptz | |
+
+Added 2026-10-12 with Slice 4. The build plan said "no new tables", but `workflow_transitions`
+carries only a `comments` field — nowhere for the outcome, so this mirrors `hospital_clearances`.
 
 ### `workflow_transitions`
 
@@ -425,9 +502,16 @@ No document columns — public form accepts data entry only, no uploads.
 
 | Path | Contents |
 |---|---|
-| `documents/engagements/{engagementId}/{docType}/{filename}` | All layer uploads |
+| `documents/{documentId}/{docType}/{filename}` | All uploads, staff and visitor alike |
 
-Access: private containers; upload via `app/api/documents/`; view via short-lived SAS URLs. No blob paths exist for `registration_requests` — the public form never uploads files.
+Keyed by the document row's own id, not its parent: a visitor's pre-registration upload is
+re-pointed from its invitation onto a real Engagement at Reception hand-off, and a
+parent-keyed path would have to be moved (copy + delete) every time that happens. This path
+never changes for the life of the file.
+
+Access: private containers; view via short-lived SAS URLs. Staff upload via
+`app/api/documents/` (session-guarded); visitors upload via
+`app/api/register/documents/` (public, invitation-token-authorized).
 
 ---
 
@@ -435,9 +519,16 @@ Access: private containers; upload via `app/api/documents/`; view via short-live
 
 - Provider: Microsoft Entra ID (org MFA) + 4-digit app PIN (hashed in `staff_users`)
 - Sign-in flow: Entra → provisioned check → PIN confirmed → dashboard
+- Entra owns `display_name`/`email`: the `jwt` callback (`src/lib/auth/entra.ts`) inserts the
+  `staff_users` row on first sign-in and, on later sign-ins, updates those two columns when
+  the claim has changed. Empty claims are ignored rather than written over stored values,
+  and the update is wrapped in try/catch — a failed refresh logs `[auth/entra]` and lets the
+  stale row sign in. Nothing else about the row (role, workflow roles, department, PIN) is
+  ever touched by sign-in; those stay System-Admin-owned
 - Unprovisioned users (`system_role = User`): `/unauthorized` — role selector + access request CTA
 - Proxy: `src/proxy.ts` — single Next.js proxy pipeline; reads JWT only (no DB calls per request); **excludes `/register`**, which has zero auth
 - Protected routes: `/dashboard/*` (including `/dashboard/department`)
+- `LAYER_ROLES.reception` is Receptionist-only (2026-10-12) — stakeholders have `/dashboard/approvals`, which is intentionally not in `LAYER_ROLES` so a delegated approver (who holds no workflow role) can still reach the engagement granted to them
 - PIN lockout: 3 failed attempts → 15-minute lock
 - PIN rules: no all-zeros, no repeating digits, no ascending/descending sequences
 - First login: PIN setup screen before dashboard
@@ -504,21 +595,44 @@ Rules the AI agent must never violate:
   through Delegated Approval (Slice 2's one-off, audited, revocable grant) — never by
   permanently assigning someone a second workflow role
 - `/register` is never wrapped by `src/proxy.ts` and never reads session/JWT state
-- `registration_requests` has exactly one write path after creation — `approveRegistrationRequest`,
-  guarded by `requireDepartmentHead` and scoped to the approver's own `department`. No reject/edit
-  action exists anywhere in the codebase for this table.
-- `approveRegistrationRequest` is idempotent: repeated or concurrent calls (including from multiple
-  staff holding `DepartmentHead` for the same department) must never double-transition a
-  `registration_requests` row or send a duplicate Reception notification — guarded the same way as
-  `applyStakeholderApproval`/`recordHospitalClearance` (pre-check + transactional re-check)
-- A `registration_requests` row is never promoted to an `engagements` row automatically — Reception's
-  manual passport lookup and Engagement creation always happen explicitly, even when an approved
-  Registration Request exists
-- `engagements.registration_request_id` is unique — a Registration Request backs at most one
-  Engagement, enforced by a DB-level unique constraint the same way `stakeholder_approvals.engagement_id`
-  guards against double-approval; Reception's engagement-creation flow must not let an already-linked
-  Registration Request be consumed a second time
+- `registration_requests` has exactly one write path, ever — `createRegistrationRequest`
+  (`registration-service.ts`), reached only through `submitRegistrationRequestAction`. There is
+  no `approveRegistrationRequest` action, no `requireDepartmentHead` guard, and none should be
+  added — per `project-overview.md` the invitation is the approval, so there is nothing left to
+  separately approve or reject after submission.
+- Idempotency for that one write path comes from `invitations.consumed_at` + `revoked_at`, checked
+  and set atomically inside the same transaction that inserts the `registration_requests` row
+  (`consumeInvitation`'s `UPDATE ... WHERE revoked_at IS NULL AND consumed_at IS NULL`) — a reused
+  or concurrently-raced token can produce at most one row, by construction, the same guarantee
+  this project's other approval-style transitions get from a pre-check + transactional re-check
+  (`applyStakeholderApproval`/`recordHospitalClearance`)
+- A `registration_requests` row is never promoted to an `engagements` row automatically — this
+  hand-off (Reception picking up an approved request, doing the manual passport/Ghana-Card lookup,
+  and creating the real Person/Engagement) is still unbuilt. `engagements` has no
+  `registration_request_id` column yet; when that hand-off is built, it must enforce "at most one
+  Engagement per Registration Request" the same way `stakeholder_approvals.engagement_id` already
+  guards against double-approval elsewhere in this schema
 - `registration_requests.department` and `staff_users.department` share one canonical
-  `GmcLiaisonDepartment` list (the list itself is defined separately, not in this document) — every
-  value in that list must have a seeded/provisioned Department Head before the feature ships; no
-  runtime "no Department Head found" rejection path is required
+  `GmcLiaisonDepartment` list — defined as a TS string-literal union in `src/lib/domain/types.ts`
+  (`GMC_LIAISON_DEPARTMENTS`): Mining, Mine Maintenance (EME), Carbonate Plant, Assay Lab,
+  Information Technology, Human Capital, Social Responsibility & External Relations. `staff_users`
+  gained a nullable `department` column and `notifications` a nullable `requestedDepartment`
+  column (added for the System Admin provisioning flow — see `progress-tracker.md`'s Slice 1
+  entry) ahead of `registration_requests` itself, which doesn't exist yet. Every value in this
+  list must have a seeded/provisioned Department Head before the Department-Head-invitation
+  feature ships; no runtime "no Department Head found" rejection path is required
+- A `documents` row has exactly one parent — `engagement_id` xor `invitation_id`, enforced by
+  a DB CHECK. Never write both or neither. `uploaded_by` is null precisely when the visitor
+  uploaded it themselves; staff uploads always set it
+- Blob paths are keyed by the document's own id, never by its parent — so re-pointing a
+  visitor's upload onto an Engagement at Reception hand-off is a pure DB update with no blob
+  copy. Don't reintroduce a parent id into the path
+- Required pre-registration documents are enforced server-side in `createRegistrationRequest`
+  (via `getMissingRegistrationDocTypes`) **before** the token is consumed, so a submission
+  blocked on a missing document leaves the invitation link still usable. The forms' disabled
+  submit button is a convenience mirror of that check, never the enforcement
+- `invitations.token_hash` stores only a SHA-256 hash — the raw token exists only in the
+  emailed link, never persisted. `revokeInvitation` scopes its `UPDATE` to `issued_by =
+  <the calling Department Head's own staff_user id>`, so one Department Head can never see
+  or revoke another's invitations, even by guessing an id — mirrors `stakeholder_approvals`'
+  caller-scoping discipline elsewhere in this codebase

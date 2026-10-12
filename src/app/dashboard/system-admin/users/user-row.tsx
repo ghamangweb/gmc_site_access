@@ -23,8 +23,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TableCell, TableRow } from "@/components/ui/table";
-import type { SystemRole, WorkflowRole } from "@/lib/domain/types";
+import {
+  GMC_LIAISON_DEPARTMENTS,
+  type GmcLiaisonDepartment,
+  type SystemRole,
+  type WorkflowRole,
+} from "@/lib/domain/types";
 
 const SYSTEM_ROLES: SystemRole[] = ["Guest", "Admin", "SystemAdmin"];
 const WORKFLOW_ROLES: WorkflowRole[] = [
@@ -36,6 +48,7 @@ const WORKFLOW_ROLES: WorkflowRole[] = [
   "TrainingStaff",
   "SecurityStaff",
   "ITStaff",
+  "DepartmentHead",
 ];
 const NO_WORKFLOW_ROLE = "none";
 
@@ -45,6 +58,7 @@ type StaffUserRow = {
   email: string;
   systemRole: string;
   workflowRoles: string[];
+  department: string | null;
   provisionedAt: Date | null;
 };
 
@@ -70,10 +84,12 @@ export function UserRow({
   user,
   isPending,
   requestedRole,
+  requestedDepartment,
 }: {
   user: StaffUserRow;
   isPending: boolean;
   requestedRole: string | null;
+  requestedDepartment: string | null;
 }) {
   const [provisionOpen, setProvisionOpen] = useState(false);
   const [systemRole, setSystemRole] = useState<SystemRole>(
@@ -81,6 +97,9 @@ export function UserRow({
   );
   const [workflowRole, setWorkflowRole] = useState<string>(
     (user.workflowRoles[0] as WorkflowRole | undefined) ?? NO_WORKFLOW_ROLE,
+  );
+  const [department, setDepartment] = useState<GmcLiaisonDepartment | "">(
+    (user.department as GmcLiaisonDepartment | null) ?? "",
   );
   const [isSubmitting, startTransition] = useTransition();
 
@@ -97,12 +116,16 @@ export function UserRow({
       : workflowRole !== NO_WORKFLOW_ROLE
         ? [workflowRole as WorkflowRole]
         : [];
+    const finalDepartment: GmcLiaisonDepartment | null = requestedRole
+      ? (requestedDepartment as GmcLiaisonDepartment | null)
+      : department || null;
 
     startTransition(async () => {
       const result = await provisionUserAction(
         user.id,
         finalSystemRole,
         finalWorkflowRoles,
+        finalDepartment,
       );
       if (result.success) {
         setProvisionOpen(false);
@@ -188,7 +211,11 @@ export function UserRow({
                 <DialogTitle>Provision {user.displayName}</DialogTitle>
                 <DialogDescription>
                   {user.displayName} requested the role &ldquo;{requestedRole}
-                  &rdquo;. Confirm to grant dashboard access.
+                  &rdquo;
+                  {requestedRole === "DepartmentHead" && requestedDepartment
+                    ? ` for the ${requestedDepartment} department`
+                    : ""}
+                  . Confirm to grant dashboard access.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -262,6 +289,31 @@ export function UserRow({
                     )}
                   </RadioGroup>
                 </div>
+
+                {workflowRole === "DepartmentHead" && (
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Department
+                    </Label>
+                    <Select
+                      value={department}
+                      onValueChange={(value) =>
+                        setDepartment(value as GmcLiaisonDepartment)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GMC_LIAISON_DEPARTMENTS.map((dept) => (
+                          <SelectItem key={dept} value={dept}>
+                            {dept}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <DialogFooter>
@@ -273,7 +325,11 @@ export function UserRow({
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleProvision} loading={isSubmitting}>
+                <Button
+                  onClick={handleProvision}
+                  loading={isSubmitting}
+                  disabled={workflowRole === "DepartmentHead" && !department}
+                >
                   Save
                 </Button>
               </DialogFooter>

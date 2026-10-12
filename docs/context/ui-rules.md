@@ -40,7 +40,7 @@ Single-column layout: one top bar, one scrollable content column beneath it. No 
 
 - Top bar: sticky at `top-0`, same `bg-background` as the page — never a separate surface
   color, no bottom border; it blends into the page
-- Content area: `mx-auto w-full max-w-5xl`, page padding `p-6`
+- Content area: `mx-auto w-full max-w-7xl`, page padding `p-6`
 - Every dashboard page — for every role/layer — lives inside this same constrained column
 - The top bar inner row and the content column must always share the same max width
 - The shared `src/app/dashboard/layout.tsx` owns the shell and breadcrumbs for every
@@ -57,7 +57,7 @@ sticky top-0 z-10 w-full bg-background
 Inner row (constrains bar contents to match the content column):
 
 ```
-mx-auto flex h-20 w-full max-w-5xl items-center justify-between px-6
+mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6
 ```
 
 | Element | Position | Notes |
@@ -87,7 +87,7 @@ pages never render their own breadcrumb.
 
 ## Dashboard Header
 
-Not a fixed bar — part of normal page flow at the top of the `max-w-5xl` content column,
+Not a fixed bar — part of normal page flow at the top of the `max-w-7xl` content column,
 below the auto breadcrumb. Always rendered via the `PageHeader` component
 (`src/components/layout/page-header.tsx`) — never rebuilt inline.
 

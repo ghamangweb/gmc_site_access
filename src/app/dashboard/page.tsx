@@ -13,15 +13,28 @@ export default async function DashboardPage() {
   if (session.systemRole === "SystemAdmin") {
     redirect("/dashboard/system-admin/users");
   }
+  // Stakeholders land on their own queue — approving is their job; they keep
+  // access to Reception's queue, it just isn't the first thing they see.
   if (
-    (["Receptionist", "HCM", "GMM", "DMD"] as const).some((role) =>
+    (["HCM", "GMM", "DMD"] as const).some((role) =>
       session.workflowRoles.includes(role),
     )
   ) {
+    redirect("/dashboard/approvals");
+  }
+
+  if (session.workflowRoles.includes("Receptionist")) {
     redirect("/dashboard/reception");
   }
   if (session.workflowRoles.includes("HospitalStaff")) {
     redirect("/dashboard/hospital");
+  }
+
+  if (session.workflowRoles.includes("TrainingStaff")) {
+    redirect("/dashboard/training");
+  }
+  if (session.workflowRoles.includes("DepartmentHead")) {
+    redirect("/dashboard/department");
   }
 
   return (

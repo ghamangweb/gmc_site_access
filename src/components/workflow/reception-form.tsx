@@ -20,6 +20,7 @@ import {
   submitReceptionAction,
   updateReceptionDataAction,
 } from "@/actions/engagements";
+import { submitRegistrationRequestAction } from "@/actions/registration";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,7 +36,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -47,9 +47,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { CancelEngagementButton } from "@/components/workflow/cancel-engagement-button";
 import { DocumentSelector } from "@/components/workflow/document-selector";
 import { PhoneInput } from "@/components/workflow/phone-input";
+import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
+import { GHANA_LOCATIONS } from "@/lib/domain/ghana-locations";
 import { NATIONALITIES } from "@/lib/domain/nationalities";
-import type { DocType } from "@/lib/domain/types";
+import {
+  ACCESS_PURPOSE_LABELS,
+  DOCUMENT_LABELS,
+  type DocType,
+  getRegistrationDocTypes,
+  getRequiredRegistrationDocTypes,
+  VISA_TYPES,
+} from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
+import { uploadFiles } from "@/lib/uploadthing/client";
 import { toUpperCase } from "@/lib/utils";
 
 const ACCESS_LEVEL_OPTIONS = [
@@ -61,14 +71,8 @@ const ACCESS_LEVEL_OPTIONS = [
   "Executive / Emergency Access",
 ];
 
-const VISA_TYPE_OPTIONS = [
-  "Tourist Visa",
-  "Business Visa",
-  "Work Visa",
-  "Transit Visa",
-  "Diplomatic Visa",
-  "Other",
-];
+// Single source — see VISA_TYPES in lib/domain/types.ts
+const VISA_TYPE_OPTIONS: string[] = [...VISA_TYPES];
 
 type Casing = "title" | "sentence" | "none";
 
@@ -98,65 +102,84 @@ const phoneFieldSchema = z.string().superRefine((value, ctx) => {
   }
 });
 
-const receptionFormSchema = z.object({
-  passportNo: z.string().min(1, "Required"),
-  fullName: z.string().min(1, "Required"),
-  dateOfBirth: z.string().min(1, "Required"),
-  gender: z.string().min(1, "Required"),
-  nationality: z.string().min(1, "Required"),
-  email: z.union([z.literal(""), z.email("Enter a valid email")]),
-  phone: phoneFieldSchema,
-  telephoneOnSite: phoneFieldSchema,
-  emergencyContactName: z.string().min(1, "Required"),
-  emergencyContactPhone: phoneFieldSchema,
-  employmentStatus: z.string().min(1, "Required"),
-  accessPurpose: z.enum(["Work", "Visit", "VisitMine"]),
-  arrivalDate: z.string().min(1, "Required"),
-  departureDate: z.string().min(1, "Required"),
-  companyName: z.string().min(1, "Required"),
-  contactNameMonthly: z.string().min(1, "Required"),
-  contactEmail: z.union([z.literal(""), z.email("Enter a valid email")]),
-  companyEmergencyName: z.string().min(1, "Required"),
-  companyEmergencyTel: phoneFieldSchema,
-  gmcLiaisonPerson: z.string().min(1, "Required"),
-  gmcLiaisonDept: z.string().min(1, "Required"),
-  reasonForRequest: z.string().min(1, "Required"),
-  airportPickup: z.boolean(),
-  transportTo: z.boolean(),
-  transportFrom: z.boolean(),
-  accommodationRequired: z.boolean(),
-  permanentAccessBadge: z.boolean(),
-  ghanaVisaRequired: z.boolean(),
-  generalSiteInduction: z.boolean(),
-  otherInductions: z.boolean(),
-  bringingEquipment: z.boolean(),
-  ppeRequired: z.boolean(),
-  itAccessRequired: z.boolean(),
-  visaType: z.enum([
-    "Tourist Visa",
-    "Business Visa",
-    "Work Visa",
-    "Transit Visa",
-    "Diplomatic Visa",
-    "Other",
-  ]),
-  accessLevel: z.string().min(1, "Required"),
-  accommodationConfirmed: z.boolean(),
-  itineraryAttached: z.boolean(),
-  inflightUpdated: z.boolean(),
-  remarks: z.string(),
-  applicableDocuments: z.array(
-    z.enum([
-      "passport_biodata",
-      "valid_visa",
-      "mincom_letter",
-      "work_residence_permit",
-      "ghana_card",
-      "assignment_letter",
-      "insurance_proof",
+const receptionFormSchema = z
+  .object({
+    passportNo: z.string().min(1, "Required"),
+    fullName: z.string().min(1, "Required"),
+    dateOfBirth: z.string().min(1, "Required"),
+    gender: z.string().min(1, "Required"),
+    nationality: z.string().min(1, "Required"),
+    email: z.union([z.literal(""), z.email("Enter a valid email")]),
+    phone: phoneFieldSchema,
+    telephoneOnSite: phoneFieldSchema,
+    emergencyContactName: z.string().min(1, "Required"),
+    emergencyContactPhone: phoneFieldSchema,
+    employmentStatus: z.string().min(1, "Required"),
+    accessPurpose: z.enum(["Work", "Visit", "VisitMine"]),
+    arrivalDate: z.string().min(1, "Required"),
+    departureDate: z.string().min(1, "Required"),
+    companyName: z.string().min(1, "Required"),
+    contactNameMonthly: z.string().min(1, "Required"),
+    contactEmail: z.union([z.literal(""), z.email("Enter a valid email")]),
+    companyEmergencyName: z.string().min(1, "Required"),
+    companyEmergencyTel: phoneFieldSchema,
+    gmcLiaisonPerson: z.string().min(1, "Required"),
+    gmcLiaisonDept: z.string().min(1, "Required"),
+    reasonForRequest: z.string().min(1, "Required"),
+    airportPickup: z.boolean(),
+    pickupDate: z.string(),
+    transportTo: z.boolean(),
+    transportFrom: z.boolean(),
+    accommodationRequired: z.boolean(),
+    accommodationLocation: z.string(),
+    permanentAccessBadge: z.boolean(),
+    ghanaVisaRequired: z.boolean(),
+    generalSiteInduction: z.boolean(),
+    otherInductions: z.boolean(),
+    bringingEquipment: z.boolean(),
+    ppeRequired: z.boolean(),
+    itAccessRequired: z.boolean(),
+    visaType: z.enum([
+      "Tourist Visa",
+      "Business Visa",
+      "Work Visa",
+      "Transit Visa",
+      "Diplomatic Visa",
+      "Visa on Arrival",
     ]),
-  ),
-});
+    accessLevel: z.string().min(1, "Required"),
+    accommodationConfirmed: z.boolean(),
+    itineraryAttached: z.boolean(),
+    inflightUpdated: z.boolean(),
+    remarks: z.string(),
+    applicableDocuments: z.array(
+      z.enum([
+        "passport_biodata",
+        "valid_visa",
+        "mincom_letter",
+        "work_residence_permit",
+        "ghana_card",
+        "assignment_letter",
+        "insurance_proof",
+      ]),
+    ),
+  })
+  .superRefine((values, ctx) => {
+    if (values.airportPickup && !values.pickupDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["pickupDate"],
+        message: "Required when airport pickup is needed",
+      });
+    }
+    if (values.accommodationRequired && !values.accommodationLocation) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accommodationLocation"],
+        message: "Required when accommodation is needed",
+      });
+    }
+  });
 
 export type ReceptionFormValues = z.infer<typeof receptionFormSchema>;
 
@@ -166,6 +189,14 @@ type ReceptionFormProps = {
   uploadedDocuments?: Document[];
   readOnly?: boolean;
   allowLookup?: boolean;
+  /** Public, unauthenticated pre-registration mode — gated by an invitation
+   * token instead of staff auth. Switches document uploads to the
+   * token-authorized route (attaching to the invitation, not an engagement)
+   * and posts to a different, guard-free Server Action. */
+  publicToken?: string;
+  /** Set when this form was opened from a visitor's submission — creating the
+   * Engagement then marks that submission converted and links the two. */
+  registrationRequestId?: string;
 };
 
 const DEFAULT_VALUES: ReceptionFormValues = {
@@ -192,9 +223,11 @@ const DEFAULT_VALUES: ReceptionFormValues = {
   gmcLiaisonDept: "",
   reasonForRequest: "",
   airportPickup: false,
+  pickupDate: "",
   transportTo: false,
   transportFrom: false,
   accommodationRequired: false,
+  accommodationLocation: "",
   permanentAccessBadge: false,
   ghanaVisaRequired: false,
   generalSiteInduction: false,
@@ -217,6 +250,8 @@ export function ReceptionForm({
   uploadedDocuments = [],
   readOnly = false,
   allowLookup = false,
+  publicToken,
+  registrationRequestId,
 }: ReceptionFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -231,6 +266,7 @@ export function ReceptionForm({
     id: string;
     fullName: string;
   } | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   const form = useForm<ReceptionFormValues>({
     resolver: zodResolver(receptionFormSchema),
@@ -242,6 +278,39 @@ export function ReceptionForm({
   useEffect(() => {
     setActiveEngagementId(null);
   }, [watchedPassportNo]);
+
+  const airportPickup = form.watch("airportPickup");
+  const accommodationRequired = form.watch("accommodationRequired");
+
+  const visaType = form.watch("visaType");
+
+  // "Visa on Arrival" drops `valid_visa` from the compulsory set — the rule
+  // lives in `getRequiredRegistrationDocTypes` so this and the server-side
+  // check in `createRegistrationRequest` can never disagree.
+  const requiredDocTypes = getRequiredRegistrationDocTypes("Foreign", visaType);
+
+  // Public pre-registration can't be submitted until the compulsory documents
+  // are up. `createRegistrationRequest` enforces this server-side too — this
+  // is purely so the visitor sees it before clicking.
+  const missingRequiredDocs = publicToken
+    ? requiredDocTypes.filter(
+        (docType) => !uploadedDocuments.some((doc) => doc.docType === docType),
+      )
+    : [];
+
+  // Unchecking a requirement drops the value it revealed, so an unchecked box
+  // can never submit a stale pickup date or accommodation location.
+  useEffect(() => {
+    if (!airportPickup) {
+      form.setValue("pickupDate", "");
+    }
+  }, [airportPickup, form]);
+
+  useEffect(() => {
+    if (!accommodationRequired) {
+      form.setValue("accommodationLocation", "");
+    }
+  }, [accommodationRequired, form]);
 
   async function handleLookup() {
     const passportNo = form.getValues("passportNo");
@@ -300,9 +369,13 @@ export function ReceptionForm({
           gmcLiaisonDept: rest.gmcLiaisonDept,
           reasonForRequest: rest.reasonForRequest,
           airportPickup: rest.airportPickup,
+          pickupDate: rest.airportPickup ? rest.pickupDate : undefined,
           transportTo: rest.transportTo,
           transportFrom: rest.transportFrom,
           accommodationRequired: rest.accommodationRequired,
+          accommodationLocation: rest.accommodationRequired
+            ? rest.accommodationLocation
+            : undefined,
           permanentAccessBadge: rest.permanentAccessBadge,
           ghanaVisaRequired: rest.ghanaVisaRequired,
           generalSiteInduction: rest.generalSiteInduction,
@@ -320,6 +393,22 @@ export function ReceptionForm({
         },
       };
 
+      if (publicToken) {
+        const result = await submitRegistrationRequestAction(
+          publicToken,
+          payload,
+        );
+        if (!result.success) {
+          toast.error(tActionError(result));
+          return;
+        }
+        if (result.warning) {
+          toast.warning(t(result.warning));
+        }
+        setSubmitted(true);
+        return;
+      }
+
       if (engagementId) {
         const result = await updateReceptionDataAction(engagementId, payload);
         if (result.success) {
@@ -334,7 +423,10 @@ export function ReceptionForm({
         return;
       }
 
-      const result = await submitReceptionAction(payload);
+      const result = await submitReceptionAction(
+        payload,
+        registrationRequestId,
+      );
       if (!result.success) {
         toast.error(result.error);
         return;
@@ -352,18 +444,14 @@ export function ReceptionForm({
     const failed: string[] = [];
 
     for (const [docType, file] of entries) {
-      const formData = new FormData();
-      formData.set("engagementId", newEngagementId);
-      formData.set("docType", docType);
-      formData.set("file", file);
-
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      }).catch(() => null);
-      const body = response ? await response.json().catch(() => null) : null;
-
-      if (!body?.success) {
+      try {
+        await uploadFiles("engagementDocument", {
+          files: [file],
+          input: { engagementId: newEngagementId, docType },
+        });
+      } catch {
+        // Held in memory until the Engagement existed, so a failure here
+        // only costs the attachment — the Engagement itself is already saved.
         failed.push(docType);
       }
     }
@@ -376,6 +464,25 @@ export function ReceptionForm({
   }
 
   const disabled = readOnly || isPending;
+
+  // In public mode both liaison values come from the invitation itself — the
+  // visitor is told who invited them, they don't get to nominate someone else.
+  const liaisonDisabled = disabled || !!publicToken;
+
+  const { t, tActionError } = useRegistrationLanguage();
+
+  if (submitted) {
+    return (
+      <Card className="flex flex-col items-center gap-4 p-10 text-center">
+        <h2 className="text-lg font-semibold text-foreground">
+          {t("Thank you — your pre-registration has been submitted")}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {t("GMC staff will be in touch with next steps.")}
+        </p>
+      </Card>
+    );
+  }
 
   if (created) {
     return (
@@ -406,7 +513,7 @@ export function ReceptionForm({
       >
         <Card className="flex flex-col gap-4 p-6">
           <h2 className="text-lg font-semibold text-foreground">
-            Visitor Details
+            {t("Visitor Details")}
           </h2>
           {activeEngagementId && (
             <Alert variant="destructive">
@@ -506,13 +613,9 @@ export function ReceptionForm({
             <SelectField
               control={form.control}
               name="accessPurpose"
-              label="Access Purpose"
+              label="Nature of Visit"
               options={["Work", "Visit", "VisitMine"]}
-              optionLabels={{
-                Work: "Coming to work",
-                Visit: "Coming to visit (no mine site access)",
-                VisitMine: "Coming to visit + mine site access",
-              }}
+              optionLabels={ACCESS_PURPOSE_LABELS}
               disabled={disabled}
             />
           </div>
@@ -520,7 +623,7 @@ export function ReceptionForm({
 
         <Card className="flex flex-col gap-4 p-6">
           <h2 className="text-lg font-semibold text-foreground">
-            Company Details
+            {t("Company Details")}
           </h2>
           <div className="grid grid-cols-2 gap-x-8 gap-y-4">
             <div className="col-span-2">
@@ -566,7 +669,7 @@ export function ReceptionForm({
 
         <Card className="flex flex-col gap-4 p-6">
           <h2 className="text-lg font-semibold text-foreground">
-            Access Details
+            {t("Access Details")}
           </h2>
           <div className="grid grid-cols-2 gap-x-8 gap-y-4">
             <TextField
@@ -574,31 +677,31 @@ export function ReceptionForm({
               name="gmcLiaisonPerson"
               label="GMC Liaison Person"
               casing="title"
-              disabled={disabled}
+              disabled={liaisonDisabled}
             />
             <TextField
               control={form.control}
               name="gmcLiaisonDept"
               label="GMC Liaison Department"
-              disabled={disabled}
+              disabled={liaisonDisabled}
             />
             <DateField
               control={form.control}
               name="arrivalDate"
-              label="Date of Arrival"
+              label="Date of Arrival on Site"
               disabled={disabled}
             />
             <DateField
               control={form.control}
               name="departureDate"
-              label="Date of Departure"
+              label="Date of Departure from Site"
               disabled={disabled}
             />
             <div className="col-span-2">
               <TextAreaField
                 control={form.control}
                 name="reasonForRequest"
-                label="Reason for Request"
+                label="Purpose of Visit"
                 disabled={disabled}
               />
             </div>
@@ -607,153 +710,208 @@ export function ReceptionForm({
 
         <Card className="flex flex-col gap-4 p-6">
           <h2 className="text-lg font-semibold text-foreground">
-            Site Support Requirements
+            {t("Site Support Requirements")}
           </h2>
           <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-            <YesNoField
-              control={form.control}
-              name="airportPickup"
-              label="Airport Pickup / Protocol Required"
-              disabled={disabled}
-            />
-            <YesNoField
-              control={form.control}
-              name="accommodationRequired"
-              label="Accommodation Required"
-              disabled={disabled}
-            />
-            <YesNoField
+            <div className="flex flex-col gap-3">
+              <CheckboxField
+                control={form.control}
+                name="airportPickup"
+                label="Airport Pickup / Protocol Required"
+                disabled={disabled}
+              />
+              {airportPickup && (
+                <DateField
+                  control={form.control}
+                  name="pickupDate"
+                  label="Pickup Date"
+                  disabled={disabled}
+                />
+              )}
+            </div>
+            <div className="flex flex-col gap-3">
+              <CheckboxField
+                control={form.control}
+                name="accommodationRequired"
+                label="Accommodation Required"
+                disabled={disabled}
+              />
+              {accommodationRequired && (
+                <ComboboxField
+                  control={form.control}
+                  name="accommodationLocation"
+                  label="Accommodation Location"
+                  options={GHANA_LOCATIONS}
+                  placeholder="Select a location"
+                  searchPlaceholder="Search locations in Ghana..."
+                  disabled={disabled}
+                />
+              )}
+            </div>
+            <CheckboxField
               control={form.control}
               name="permanentAccessBadge"
               label="Permanent Access Badge"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="ghanaVisaRequired"
               label="Ghana Visa Required"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="generalSiteInduction"
               label="General Site Induction"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="bringingEquipment"
               label="Bringing Equipment on Site"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="ppeRequired"
               label="PPE Required"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="itAccessRequired"
               label="IT Access Required"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="transportTo"
               label="Transport Required To"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="transportFrom"
               label="Transport Required From"
               disabled={disabled}
             />
-            <YesNoField
+            <CheckboxField
               control={form.control}
               name="otherInductions"
               label="Other Inductions / Training"
               disabled={disabled}
             />
-            <SelectField
-              control={form.control}
-              name="visaType"
-              label="Visa Type"
-              options={VISA_TYPE_OPTIONS}
-              disabled={disabled}
-            />
-            <SelectField
-              control={form.control}
-              name="accessLevel"
-              label="Access Level"
-              options={ACCESS_LEVEL_OPTIONS}
-              disabled={disabled}
-            />
+            <div className="col-span-2 grid grid-cols-2 gap-x-8">
+              <SelectField
+                control={form.control}
+                name="visaType"
+                label="Visa Type"
+                options={VISA_TYPE_OPTIONS}
+                disabled={disabled}
+              />
+              <SelectField
+                control={form.control}
+                name="accessLevel"
+                label="Access Level"
+                options={ACCESS_LEVEL_OPTIONS}
+                disabled={disabled}
+              />
+            </div>
           </div>
         </Card>
 
         <Card className="flex flex-col gap-4 p-6">
           <h2 className="text-lg font-semibold text-foreground">
-            Applicable Document Uploads
-          </h2>
-          <Controller
-            control={form.control}
-            name="applicableDocuments"
-            render={({ field }) => (
-              <DocumentSelector
-                engagementId={engagementId}
-                value={field.value}
-                onChange={field.onChange}
-                uploadedDocuments={uploadedDocuments}
-                pendingFiles={pendingFiles}
-                onPendingFilesChange={setPendingFiles}
-                disabled={disabled}
-              />
+            {t(
+              publicToken ? "Document Uploads" : "Applicable Document Uploads",
             )}
-          />
+          </h2>
+          {publicToken ? (
+            <DocumentSelector
+              invitationToken={publicToken}
+              mode="required"
+              docTypes={getRegistrationDocTypes("Foreign")}
+              requiredDocTypes={requiredDocTypes}
+              uploadedDocuments={uploadedDocuments}
+              disabled={disabled}
+            />
+          ) : (
+            <Controller
+              control={form.control}
+              name="applicableDocuments"
+              render={({ field }) => (
+                <DocumentSelector
+                  engagementId={engagementId}
+                  value={field.value}
+                  onChange={field.onChange}
+                  uploadedDocuments={uploadedDocuments}
+                  pendingFiles={pendingFiles}
+                  onPendingFilesChange={setPendingFiles}
+                  disabled={disabled}
+                />
+              )}
+            />
+          )}
         </Card>
 
-        <Card className="flex flex-col gap-4 p-6">
-          <h2 className="text-lg font-semibold text-foreground">
-            Administration
-          </h2>
-          <CheckboxField
-            control={form.control}
-            name="accommodationConfirmed"
-            label="Accommodation Confirmed"
-            disabled={disabled}
-          />
-          <CheckboxField
-            control={form.control}
-            name="itineraryAttached"
-            label="Itinerary Attached"
-            disabled={disabled}
-          />
-          <CheckboxField
-            control={form.control}
-            name="inflightUpdated"
-            label="Inflight Updated"
-            disabled={disabled}
-          />
-          <TextAreaField
-            control={form.control}
-            name="remarks"
-            label="Remarks / Other Information"
-            required={false}
-            disabled={disabled}
-          />
-        </Card>
+        {/* Reception's own section — never shown to a public visitor. */}
+        {!publicToken && (
+          <Card className="flex flex-col gap-4 p-6">
+            <h2 className="text-lg font-semibold text-foreground">
+              {t("Administration")}
+            </h2>
+            <CheckboxField
+              control={form.control}
+              name="accommodationConfirmed"
+              label="Accommodation Confirmed"
+              disabled={disabled}
+            />
+            <CheckboxField
+              control={form.control}
+              name="itineraryAttached"
+              label="Itinerary Attached"
+              disabled={disabled}
+            />
+            <CheckboxField
+              control={form.control}
+              name="inflightUpdated"
+              label="Inflight Updated"
+              disabled={disabled}
+            />
+            <TextAreaField
+              control={form.control}
+              name="remarks"
+              label="Remarks / Other Information"
+              required={false}
+              disabled={disabled}
+            />
+          </Card>
+        )}
 
         {!readOnly && (
-          <Button
-            type="submit"
-            loading={isPending}
-            disabled={!!activeEngagementId}
-            className="w-fit"
-          >
-            {engagementId ? "Save Changes" : "Create Engagement"}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              type="submit"
+              loading={isPending}
+              disabled={!!activeEngagementId || missingRequiredDocs.length > 0}
+              className="w-fit"
+            >
+              {publicToken
+                ? t("Submit")
+                : engagementId
+                  ? "Save Changes"
+                  : "Create Engagement"}
+            </Button>
+            {missingRequiredDocs.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("Upload these documents to continue:")}{" "}
+                {missingRequiredDocs
+                  .map((docType) => t(DOCUMENT_LABELS[docType]))
+                  .join(", ")}
+              </p>
+            )}
+          </div>
         )}
       </form>
     </Form>
@@ -777,6 +935,8 @@ function TextField<TName extends FieldPath<ReceptionFormValues>>({
   disabled,
   required = true,
 }: FieldProps<TName> & { type?: string; casing?: Casing }) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
@@ -784,7 +944,7 @@ function TextField<TName extends FieldPath<ReceptionFormValues>>({
       render={({ field }) => (
         <FormItem>
           <FormLabel>
-            {label}
+            {t(label)}
             {required && " *"}
           </FormLabel>
           <FormControl>
@@ -818,13 +978,15 @@ function PassportField({
   isLookingUp: boolean;
   onLookup: () => void;
 }) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
       name="passportNo"
       render={({ field }) => (
         <FormItem>
-          <FormLabel>Passport No. *</FormLabel>
+          <FormLabel>{t("Passport No.")} *</FormLabel>
           <FormControl>
             <div className="flex h-11 items-stretch rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
               <input
@@ -841,7 +1003,7 @@ function PassportField({
                   type="button"
                   onClick={onLookup}
                   disabled={disabled || isLookingUp}
-                  aria-label="Look up passport"
+                  aria-label={t("Look up passport")}
                   className="flex items-center justify-center rounded-r-md border-l border-input px-3 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLookingUp ? (
@@ -867,6 +1029,8 @@ function TextAreaField<TName extends FieldPath<ReceptionFormValues>>({
   disabled,
   required = true,
 }: FieldProps<TName>) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
@@ -874,7 +1038,7 @@ function TextAreaField<TName extends FieldPath<ReceptionFormValues>>({
       render={({ field }) => (
         <FormItem>
           <FormLabel>
-            {label}
+            {t(label)}
             {required && " *"}
           </FormLabel>
           <FormControl>
@@ -899,6 +1063,8 @@ function DateField<TName extends FieldPath<ReceptionFormValues>>({
   required = true,
   captionLayout,
 }: FieldProps<TName> & { captionLayout?: "label" | "dropdown" }) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
@@ -906,7 +1072,7 @@ function DateField<TName extends FieldPath<ReceptionFormValues>>({
       render={({ field }) => (
         <FormItem>
           <FormLabel>
-            {label}
+            {t(label)}
             {required && " *"}
           </FormLabel>
           <FormControl>
@@ -931,6 +1097,8 @@ function PhoneField<TName extends FieldPath<ReceptionFormValues>>({
   disabled,
   required = true,
 }: FieldProps<TName>) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
@@ -938,7 +1106,7 @@ function PhoneField<TName extends FieldPath<ReceptionFormValues>>({
       render={({ field }) => (
         <FormItem>
           <FormLabel>
-            {label}
+            {t(label)}
             {required && " *"}
           </FormLabel>
           <FormControl>
@@ -967,13 +1135,15 @@ function SelectField<TName extends FieldPath<ReceptionFormValues>>({
   options: string[];
   optionLabels?: Record<string, string>;
 }) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label} *</FormLabel>
+          <FormLabel>{t(label)} *</FormLabel>
           <Select
             value={field.value as string}
             onValueChange={field.onChange}
@@ -987,7 +1157,7 @@ function SelectField<TName extends FieldPath<ReceptionFormValues>>({
             <SelectContent>
               {options.map((option) => (
                 <SelectItem key={option} value={option}>
-                  {optionLabels?.[option] ?? option}
+                  {t(optionLabels?.[option] ?? option)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1012,63 +1182,25 @@ function ComboboxField<TName extends FieldPath<ReceptionFormValues>>({
   placeholder?: string;
   searchPlaceholder?: string;
 }) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label} *</FormLabel>
+          <FormLabel>{t(label)} *</FormLabel>
           <FormControl>
             <Combobox
               value={field.value as string}
               onChange={field.onChange}
               options={options}
-              placeholder={placeholder}
-              searchPlaceholder={searchPlaceholder}
+              placeholder={placeholder && t(placeholder)}
+              searchPlaceholder={searchPlaceholder && t(searchPlaceholder)}
+              emptyText={t("No results found.")}
               disabled={disabled}
             />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function YesNoField<TName extends FieldPath<ReceptionFormValues>>({
-  control,
-  name,
-  label,
-  disabled,
-}: FieldProps<TName>) {
-  return (
-    <FormField
-      control={control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label} *</FormLabel>
-          <FormControl>
-            <RadioGroup
-              value={field.value ? "yes" : "no"}
-              onValueChange={(v) => field.onChange(v === "yes")}
-              disabled={disabled}
-              className="flex flex-row gap-4"
-            >
-              <label
-                htmlFor={`${name}-yes`}
-                className="flex items-center gap-2 text-sm"
-              >
-                <RadioGroupItem value="yes" id={`${name}-yes`} /> Yes
-              </label>
-              <label
-                htmlFor={`${name}-no`}
-                className="flex items-center gap-2 text-sm"
-              >
-                <RadioGroupItem value="no" id={`${name}-no`} /> No
-              </label>
-            </RadioGroup>
           </FormControl>
           <FormMessage />
         </FormItem>
@@ -1083,6 +1215,8 @@ function CheckboxField<TName extends FieldPath<ReceptionFormValues>>({
   label,
   disabled,
 }: FieldProps<TName>) {
+  const { t } = useRegistrationLanguage();
+
   return (
     <FormField
       control={control}
@@ -1094,10 +1228,11 @@ function CheckboxField<TName extends FieldPath<ReceptionFormValues>>({
               checked={field.value as boolean}
               onCheckedChange={field.onChange}
               disabled={disabled}
-              id={field.name}
             />
           </FormControl>
-          <FormLabel className="normal-case tracking-normal">{label}</FormLabel>
+          <FormLabel className="normal-case tracking-normal">
+            {t(label)}
+          </FormLabel>
         </FormItem>
       )}
     />

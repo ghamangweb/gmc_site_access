@@ -2,24 +2,15 @@
 
 import { EyeIcon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { DocType } from "@/lib/domain/types";
+import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
+import { DOCUMENT_LABELS, type DocType } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
-
-const DOCUMENT_LABELS: Record<DocType, string> = {
-  passport_biodata: "Passport biodata page",
-  valid_visa: "Valid visa",
-  mincom_letter: "MINCOM letter of approval",
-  work_residence_permit: "Work or residence permit",
-  ghana_card: "Ghana Card",
-  assignment_letter: "Letter of assignment / contract",
-  insurance_proof: "Proof of medical/travel insurance",
-  hospital_fitness_form: "Fitness form",
-};
+import { useUploadThing } from "@/lib/uploadthing/client";
 
 const RECEPTION_DOCUMENT_TYPES: DocType[] = [
   "passport_biodata",
@@ -42,8 +33,13 @@ function fileNameFromUrl(blobUrl: string): string {
 
 type DocumentSelectorProps = {
   engagementId?: string;
+  /** Public pre-registration mode — uploads go to the token-authorized
+   * `/api/register/documents` and attach to the invitation instead of an
+   * engagement. Mutually exclusive with `engagementId`. */
+  invitationToken?: string;
   mode?: "select" | "required";
   docTypes?: DocType[];
+  requiredDocTypes?: DocType[];
   value?: DocType[];
   onChange?: (value: DocType[]) => void;
   uploadedDocuments: Document[];
@@ -54,8 +50,10 @@ type DocumentSelectorProps = {
 
 export function DocumentSelector({
   engagementId,
+  invitationToken,
   mode = "select",
   docTypes = RECEPTION_DOCUMENT_TYPES,
+  requiredDocTypes,
   value = [],
   onChange,
   uploadedDocuments,
@@ -63,6 +61,8 @@ export function DocumentSelector({
   onPendingFilesChange,
   disabled,
 }: DocumentSelectorProps) {
+  const { t } = useRegistrationLanguage();
+
   function toggle(docType: DocType, checked: boolean) {
     onChange?.(
       checked ? [...value, docType] : value.filter((t) => t !== docType),
@@ -78,10 +78,17 @@ export function DocumentSelector({
   return (
     <div className="flex flex-col gap-3">
       {docTypes.map((docType) => {
-        const isApplicable = mode === "required" || value.includes(docType);
         const uploaded = uploadedDocuments.find(
           (doc) => doc.docType === docType,
         );
+
+        // A file that exists is always shown. Previously a document the
+        // visitor had already uploaded stayed invisible until Reception
+        // happened to tick its "applicable" box, which read as the upload
+        // having been lost.
+        const isApplicable =
+          mode === "required" || value.includes(docType) || !!uploaded;
+
         return (
           <div
             key={docType}
@@ -89,7 +96,12 @@ export function DocumentSelector({
           >
             {mode === "required" ? (
               <span className="text-sm text-foreground">
-                {DOCUMENT_LABELS[docType]}
+                {t(DOCUMENT_LABELS[docType])}
+                {requiredDocTypes && !requiredDocTypes.includes(docType) && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {t("(optional)")}
+                  </span>
+                )}
               </span>
             ) : (
               <label
@@ -108,11 +120,18 @@ export function DocumentSelector({
               </label>
             )}
             {isApplicable &&
-              (engagementId ? (
+              // An already-uploaded file is served by `UploadSlot` whichever
+              // parent it hangs off: view and delete address it by document
+              // id, so they work before an Engagement exists too.
+              (uploaded || engagementId || invitationToken ? (
                 <UploadSlot
                   engagementId={engagementId}
+                  invitationToken={invitationToken}
                   docType={docType}
                   uploaded={uploaded}
+                  optional={
+                    !!requiredDocTypes && !requiredDocTypes.includes(docType)
+                  }
                   disabled={disabled}
                 />
               ) : (
@@ -143,6 +162,7 @@ function PendingUploadSlot({
   onRemove: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useRegistrationLanguage();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -179,7 +199,7 @@ function PendingUploadSlot({
           onClick={() => previewUrl && window.open(previewUrl, "_blank")}
         >
           <EyeIcon />
-          <span className="sr-only">View</span>
+          <span className="sr-only">{t("View")}</span>
         </Button>
         {!disabled && (
           <Button
@@ -190,7 +210,7 @@ function PendingUploadSlot({
             onClick={onRemove}
           >
             <Trash2Icon />
-            <span className="sr-only">Remove</span>
+            <span className="sr-only">{t("Remove")}</span>
           </Button>
         )}
       </div>
@@ -213,69 +233,77 @@ function PendingUploadSlot({
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
-        Choose file
+        {t("Choose file")}
       </Button>
-      <span className="text-xs text-muted-foreground">Required</span>
+      <span className="text-xs text-muted-foreground">{t("Required")}</span>
     </div>
   );
 }
 
 function UploadSlot({
   engagementId,
+  invitationToken,
   docType,
   uploaded,
+  optional,
   disabled,
 }: {
-  engagementId: string;
+  engagementId?: string;
+  invitationToken?: string;
   docType: DocType;
   uploaded: Document | undefined;
+  optional?: boolean;
   disabled?: boolean;
 }) {
+  const { t } = useRegistrationLanguage();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
+
+  function clearInput() {
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
+  // The endpoint decides which authorization the upload is checked against:
+  // an invitation token for a public visitor, the staff session otherwise.
+  // Bytes go straight from the browser to UploadThing — they never pass
+  // through this app's server.
+  const { startUpload, isUploading } = useUploadThing(
+    invitationToken ? "registrationDocument" : "engagementDocument",
+    {
+      onClientUploadComplete: () => {
+        toast.success(`${t(DOCUMENT_LABELS[docType])} ${t("uploaded")}`);
+        clearInput();
+        router.refresh();
+      },
+      onUploadError: (error) => {
+        toast.error(t(error.message) || t("Upload failed"));
+        clearInput();
+      },
+    },
+  );
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("engagementId", engagementId);
-      formData.set("docType", docType);
-      formData.set("file", file);
+    const input = invitationToken
+      ? { token: invitationToken, docType }
+      : { engagementId: engagementId ?? "", docType };
 
-      try {
-        const response = await fetch("/api/documents", {
-          method: "POST",
-          body: formData,
-        });
-        const result = await response.json();
-
-        if (result.success) {
-          toast.success(`${DOCUMENT_LABELS[docType]} uploaded`);
-          router.refresh();
-        } else {
-          toast.error(result.error ?? "Upload failed");
-        }
-      } catch {
-        toast.error("Upload failed");
-      } finally {
-        if (inputRef.current) {
-          inputRef.current.value = "";
-        }
-      }
-    });
+    void startUpload([file], input);
   }
 
   async function handleView() {
     if (!uploaded) return;
-    const response = await fetch(`/api/documents/${uploaded.id}`).catch(
-      () => null,
-    );
+    const url = invitationToken
+      ? `/api/register/documents?token=${encodeURIComponent(invitationToken)}&documentId=${uploaded.id}`
+      : `/api/documents/${uploaded.id}`;
+    const response = await fetch(url).catch(() => null);
     if (!response?.ok) {
-      toast.error("Couldn't load the document");
+      toast.error(t("Couldn't load the document"));
       return;
     }
     const { data } = await response.json();
@@ -285,25 +313,28 @@ function UploadSlot({
   function handleDelete() {
     if (!uploaded) return;
     const confirmed = window.confirm(
-      `Remove ${fileNameFromUrl(uploaded.blobUrl)}? You'll need to upload it again if it's still required.`,
+      `Remove ${fileNameFromUrl(uploaded.fileUrl)}? You'll need to upload it again if it's still required.`,
     );
     if (!confirmed) return;
 
     setIsDeleting(true);
-    fetch(`/api/documents/${uploaded.id}`, { method: "DELETE" })
+    const url = invitationToken
+      ? `/api/register/documents?token=${encodeURIComponent(invitationToken)}&documentId=${uploaded.id}`
+      : `/api/documents/${uploaded.id}`;
+    fetch(url, { method: "DELETE" })
       .then((response) => response.json())
       .then((result) => {
         setIsDeleting(false);
         if (result.success) {
-          toast.success(`${DOCUMENT_LABELS[docType]} removed`);
+          toast.success(`${t(DOCUMENT_LABELS[docType])} ${t("removed")}`);
           router.refresh();
         } else {
-          toast.error(result.error ?? "Failed to remove document");
+          toast.error(t(result.error ?? "Failed to remove document"));
         }
       })
       .catch(() => {
         setIsDeleting(false);
-        toast.error("Failed to remove document");
+        toast.error(t("Failed to remove document"));
       });
   }
 
@@ -315,7 +346,7 @@ function UploadSlot({
           onClick={handleView}
           className="max-w-40 truncate text-sm text-primary underline hover:text-primary/80"
         >
-          {fileNameFromUrl(uploaded.blobUrl)}
+          {fileNameFromUrl(uploaded.fileUrl)}
         </button>
         <Button
           type="button"
@@ -325,7 +356,7 @@ function UploadSlot({
           onClick={handleView}
         >
           <EyeIcon />
-          <span className="sr-only">View</span>
+          <span className="sr-only">{t("View")}</span>
         </Button>
         {!disabled && (
           <Button
@@ -337,7 +368,7 @@ function UploadSlot({
             onClick={handleDelete}
           >
             <Trash2Icon />
-            <span className="sr-only">Remove</span>
+            <span className="sr-only">{t("Remove")}</span>
           </Button>
         )}
       </div>
@@ -357,13 +388,15 @@ function UploadSlot({
         type="button"
         variant="outline"
         size="sm"
-        loading={isPending}
+        loading={isUploading}
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
-        Upload file
+        {t("Upload file")}
       </Button>
-      <span className="text-xs text-muted-foreground">Required</span>
+      <span className="text-xs text-muted-foreground">
+        {t(optional ? "Optional" : "Required")}
+      </span>
     </div>
   );
 }

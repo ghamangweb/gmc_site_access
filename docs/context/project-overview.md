@@ -83,7 +83,10 @@ At this stage:
 - No visitor account is created.
 - No Person record is created.
 - No Engagement is created.
-- No documents are uploaded.
+- Documents **are** uploaded (revised 2026-10-09 — the visitor supplies their own
+  compulsory documents at this stage rather than Reception chasing them later). They attach
+  to the invitation, not to a Person or Engagement, and Reception takes ownership of them
+  when it creates the Engagement.
 
 The submitted request is recorded against the invitation that admitted it, and is available to Reception as reference data.
 
@@ -350,11 +353,13 @@ The following rules define the expected behaviour of the system:
 - Audit logging.
 - Guest read-only access.
 - Foreign visitor and expatriate registration.
+- Local visitor registration (2026-10-09 — moved in scope; invitations carry a Local/Foreign
+  registration type chosen by the Department Head, routing to a different pre-registration
+  form at `/register`).
 
 
 ## Features Out of Scope
 
-- Local visitor registration.
 - Native mobile application.
 - SMS notifications.
 - Push notifications.

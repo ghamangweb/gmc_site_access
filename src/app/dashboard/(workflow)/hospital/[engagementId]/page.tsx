@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { HospitalForm } from "@/components/workflow/hospital-form";
-import { ReceptionSummary } from "@/components/workflow/reception-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import type { HospitalClearanceStatus } from "@/lib/domain/types";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
@@ -27,7 +26,7 @@ export default async function HospitalDetailPage({
   if (!detail) {
     notFound();
   }
-  const { engagement, person, approvals } = detail;
+  const { engagement, person } = detail;
   const documents = await getDocumentsForEngagement(engagementId);
   const latestClearance = await getLatestHospitalClearance(engagementId);
 
@@ -37,33 +36,15 @@ export default async function HospitalDetailPage({
   const readOnly =
     engagement.workflowState !== "AtHospital" || !isHospitalStaff;
 
-  const approval = approvals[0]
-    ? {
-        approverName: approvals[0].approverName,
-        approverRole: approvals[0].approverRole,
-        approvedAt: approvals[0].approvedAt,
-      }
-    : undefined;
-
   return (
     <div>
-      <PageHeader title={person.fullName} />
+      {/* Identity only: Hospital records a clearance, it doesn't review the
+          engagement. The full record lives with Reception. */}
+      <PageHeader
+        title={person.fullName}
+        subtitle={`Passport ${person.passportNo}`}
+      />
       <div className="flex flex-col gap-6">
-        <ReceptionSummary
-          person={{
-            fullName: person.fullName,
-            passportNo: person.passportNo,
-            dateOfBirth: person.dateOfBirth,
-            gender: person.gender,
-            nationality: person.nationality,
-            emergencyContactName: person.emergencyContactName,
-            emergencyContactPhone: person.emergencyContactPhone,
-          }}
-          accessPurpose={engagement.accessPurpose}
-          arrivalDate={engagement.arrivalDate}
-          departureDate={engagement.departureDate}
-          approval={approval}
-        />
         <HospitalForm
           engagementId={engagementId}
           uploadedDocuments={documents}

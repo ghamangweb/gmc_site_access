@@ -11,10 +11,11 @@ import {
   verifyPin,
 } from "@/lib/auth/pin";
 import { getSession } from "@/lib/auth/session";
-import type {
-  ActionResult,
-  SystemRole,
-  WorkflowRole,
+import {
+  type ActionResult,
+  GMC_LIAISON_DEPARTMENTS,
+  type SystemRole,
+  type WorkflowRole,
 } from "@/lib/domain/types";
 import { sendEmail } from "@/lib/email/send";
 import { accessRequestedTemplate } from "@/lib/email/templates";
@@ -41,6 +42,20 @@ export async function requestAccessAction(
       return { success: false, error: "Select a role to request" };
     }
 
+    let requestedDepartment: string | undefined;
+    if (requestedRole === "DepartmentHead") {
+      const department = formData.get("requestedDepartment");
+      if (
+        typeof department !== "string" ||
+        !GMC_LIAISON_DEPARTMENTS.includes(
+          department as (typeof GMC_LIAISON_DEPARTMENTS)[number],
+        )
+      ) {
+        return { success: false, error: "Select a department" };
+      }
+      requestedDepartment = department;
+    }
+
     const requester = await getStaffUserById(session.staffUserId);
     if (!requester) {
       return { success: false, error: "Account not found" };
@@ -51,7 +66,11 @@ export async function requestAccessAction(
       return { success: false, error: "Your request is already pending" };
     }
 
-    const { admins } = await requestAccess(requester, requestedRole);
+    const { admins } = await requestAccess(
+      requester,
+      requestedRole,
+      requestedDepartment,
+    );
 
     let allEmailsSent = true;
     for (const admin of admins) {
@@ -61,6 +80,7 @@ export async function requestAccessAction(
           requesterName: requester.displayName,
           requesterEmail: requester.email,
           requestedRole,
+          department: requestedDepartment,
         }),
       });
       if (!emailSent) {

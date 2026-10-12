@@ -8,6 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { GMC_LIAISON_DEPARTMENTS } from "@/lib/domain/types";
 
 const ROLE_OPTIONS = [
   "Guest",
@@ -19,11 +27,14 @@ const ROLE_OPTIONS = [
   "TrainingStaff",
   "SecurityStaff",
   "ITStaff",
+  "DepartmentHead",
 ];
 
 export function RequestAccessForm() {
   const [submitted, setSubmitted] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [requestedRole, setRequestedRole] = useState(ROLE_OPTIONS[0]);
+  const [requestedDepartment, setRequestedDepartment] = useState("");
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
@@ -56,7 +67,8 @@ export function RequestAccessForm() {
         <Label id="requested-role-label">Role</Label>
         <RadioGroup
           name="requestedRole"
-          defaultValue={ROLE_OPTIONS[0]}
+          value={requestedRole}
+          onValueChange={setRequestedRole}
           aria-labelledby="requested-role-label"
           className="flex max-w-md flex-row flex-wrap justify-center gap-2"
         >
@@ -77,6 +89,31 @@ export function RequestAccessForm() {
           ))}
         </RadioGroup>
       </div>
+      {requestedRole === "DepartmentHead" && (
+        <div className="flex w-full max-w-xs flex-col items-center gap-3">
+          <Label id="requested-department-label">Department</Label>
+          <Select
+            name="requestedDepartment"
+            value={requestedDepartment}
+            onValueChange={setRequestedDepartment}
+            required
+          >
+            <SelectTrigger
+              className="w-full"
+              aria-labelledby="requested-department-label"
+            >
+              <SelectValue placeholder="Select a department" />
+            </SelectTrigger>
+            <SelectContent>
+              {GMC_LIAISON_DEPARTMENTS.map((dept) => (
+                <SelectItem key={dept} value={dept}>
+                  {dept}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <Button
         type="submit"
         loading={isPending}

@@ -30,7 +30,7 @@ export function DashboardShell({
         unreadCount={unreadCount}
         notifications={notifications}
       />
-      <main className="mx-auto w-full max-w-5xl p-6">{children}</main>
+      <main className="mx-auto w-full max-w-7xl p-6">{children}</main>
     </div>
   );
 }

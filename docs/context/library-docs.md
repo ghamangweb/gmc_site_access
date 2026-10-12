@@ -49,9 +49,53 @@ needed for this single call. Requires `Mail.Send` **Application** permission
 (admin-consented) on the App Registration, separate from the delegated `User.Read`
 permission used for sign-in.
 
-## Azure Blob Storage (`@azure/storage-blob`)
+## UploadThing (`uploadthing` v7 + `@uploadthing/react`)
 
-`src/lib/azure/blob.ts` uses **shared-key auth** via
+Replaced Azure Blob Storage for document uploads on 2026-10-11; `src/lib/azure/blob.ts` is
+gone and `documents.blob_url` became `file_key` + `file_url`. No file from before that date
+was migrated — the migration empties the table, by agreement.
+
+**v7, not v6.** The env var is a single `UPLOADTHING_TOKEN` (the `UPLOADTHING_SECRET` +
+`UPLOADTHING_APP_ID` pair in older guides is v6 and does not work here). On the file object
+use `file.ufsUrl`, not `file.url` — the latter is deprecated and removed in v9.
+
+**Uploads never touch this app's server.** The browser presigns against
+`/api/uploadthing` and streams the bytes straight to storage. Authorization therefore lives
+in each file route's `.middleware()` in `src/app/api/uploadthing/core.ts`, not in a route
+handler:
+- `registrationDocument` — public. Authorizes on the invitation token exactly as the old
+  POST did: valid/unrevoked/unconsumed token, doc type allowed for that registration type,
+  and no duplicate of the same type already attached.
+- `engagementDocument` — staff. Derives the required workflow role from the doc type via
+  `getDocTypeOwnerRole` and calls `requireWriteAccess`.
+
+Throw `UploadThingError` from middleware to reject — its message is what reaches the client's
+`onUploadError`, and the public form translates it. The DB row is written in
+`onUploadComplete` via `recordUploadedDocument`, which is the only place that knows the
+upload actually succeeded.
+
+**Size and type limits live in the route config**, not in service code: PDF/JPEG/PNG/WEBP at
+`maxFileSize: "16MB"`, `maxFileCount: 1`. UploadThing only accepts power-of-two sizes, so the
+old hand-rolled 10MB ceiling became 16MB — there is no `"10MB"`.
+
+**Private by default.** Documents are passports and visas, so nothing is served from a public
+URL: `getSignedFileUrl` (`lib/uploadthing/api.ts`) wraps `UTApi.generateSignedURL` with a
+15-minute expiry, matching the old SAS window. Use `generateSignedURL`, not `getSignedURL` —
+the latter makes a redundant API round trip and is deprecated in v8.
+
+**Client helpers are generated, never imported raw:** `lib/uploadthing/client.ts` exports
+`useUploadThing` (slot uploads) and `uploadFiles` (the loop that flushes Reception's pending
+files once an Engagement exists) from `generateReactHelpers<GmcFileRouter>()`, so an unknown
+endpoint or a wrong input shape is a compile error.
+
+## Azure Blob Storage (`@azure/storage-blob`) — REMOVED 2026-10-11
+
+Kept for history only. `src/lib/azure/blob.ts` is deleted and the package is no longer used
+for documents; `src/lib/azure/` still holds `graph-mail.ts` and `queue.ts`. The account this
+described was also unreachable (`getaddrinfo ENOTFOUND`) because `AccountName` had been set
+to the container name — that failure is what prompted the switch.
+
+~~`src/lib/azure/blob.ts` uses **shared-key auth** via
 `AZURE_STORAGE_CONNECTION_STRING` (`BlobServiceClient.fromConnectionString`) —
 not the AAD/`ClientSecretCredential` approach used for Graph mail. This was a
 deliberate switch (2026-07-09) from an earlier AAD-based design once local dev

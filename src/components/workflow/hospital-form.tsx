@@ -20,8 +20,17 @@ import type { Document } from "@/lib/services/document-service";
 
 const STATUS_LABELS: Record<HospitalClearanceStatus, string> = {
   Fit: "Fit",
-  FitWithConditions: "Fit With Conditions",
+  FitWithConditions: "Fit with Conditions",
   Unfit: "Unfit",
+};
+
+// What each outcome does to the engagement, per project-overview.md. Spelled
+// out because the three are not interchangeable: one advances the visitor,
+// one advances them and warns Reception, one holds them here.
+const STATUS_CONSEQUENCES: Record<HospitalClearanceStatus, string> = {
+  Fit: "Proceeds to Training School.",
+  FitWithConditions: "Proceeds to Training School, and Reception is notified.",
+  Unfit: "Stays at the Hospital stage, and Reception is notified.",
 };
 
 type LatestClearance = {
@@ -124,6 +133,11 @@ export function HospitalForm({
               )}
             </SelectContent>
           </Select>
+          {status !== "" && (
+            <p className="text-xs text-muted-foreground">
+              {STATUS_CONSEQUENCES[status]}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">

@@ -6,6 +6,7 @@ import { requireSystemAdmin } from "@/lib/auth/guards";
 import { resetPin } from "@/lib/auth/pin";
 import type {
   ActionResult,
+  GmcLiaisonDepartment,
   SystemRole,
   WorkflowRole,
 } from "@/lib/domain/types";
@@ -25,14 +26,23 @@ export async function provisionUserAction(
   staffUserId: string,
   systemRole: SystemRole,
   workflowRoles: WorkflowRole[],
+  department?: GmcLiaisonDepartment | null,
 ): Promise<ActionResult> {
   try {
     await requireSystemAdmin();
+
+    if (workflowRoles.includes("DepartmentHead") && !department) {
+      return {
+        success: false,
+        error: "Select a department for this Department Head",
+      };
+    }
 
     const user = await provisionStaffUser(
       staffUserId,
       systemRole,
       workflowRoles,
+      department,
     );
     if (!user) {
       return { success: false, error: "User not found" };
@@ -44,6 +54,7 @@ export async function provisionUserAction(
         recipientName: user.displayName,
         systemRole,
         workflowRoles,
+        department: user.department ?? undefined,
       }),
     });
 
