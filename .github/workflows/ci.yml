@@ -13,25 +13,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      # This project is on Bun: bun.lock is the committed lockfile and there is
+      # no pnpm-lock.yaml, so `pnpm install --frozen-lockfile` had nothing to
+      # install from. Pinned rather than `latest` so CI and local agree.
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 11
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
+          bun-version: 1.4.0
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Lint and format check
-        run: pnpm run lint
+        run: bun run lint
 
       - name: Type check
-        run: pnpm exec tsc --noEmit
+        run: bunx tsc --noEmit
 
       - name: Build
-        run: pnpm run build
+        # Placeholders, not secrets. The real values live in .env.development,
+        # which is dotenvx-encrypted and whose key (.env.keys) is never
+        # committed — so CI cannot decrypt it. The build only needs these to
+        # exist: Drizzle's client, UTApi and the Azure credential are all
+        # constructed at module scope, and every route is server-rendered on
+        # demand, so nothing here is ever dialled during `next build`.
+        # dotenvx does not overwrite variables already set in the environment,
+        # so these win over the undecryptable file.
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          AUTH_SECRET: ci-placeholder-secret
+          AUTH_URL: http://localhost:3000
+          AUTH_MICROSOFT_ENTRA_ID_ID: ci-placeholder
+          AUTH_MICROSOFT_ENTRA_ID_SECRET: ci-placeholder
+          AUTH_MICROSOFT_ENTRA_ID_ISSUER: https://login.microsoftonline.com/ci-placeholder/v2.0
+          AZURE_TENANT_ID: ci-placeholder
+          AZURE_CLIENT_ID: ci-placeholder
+          AZURE_CLIENT_SECRET: ci-placeholder
+          GRAPH_SENDER_EMAIL: ci@example.com
+          UPLOADTHING_TOKEN: ci-placeholder
+        run: bun run build
