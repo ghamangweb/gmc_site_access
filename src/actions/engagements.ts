@@ -9,11 +9,18 @@ import {
   delegatedApprovalRequestedTemplate,
   hospitalClearedTemplate,
   hospitalUnfitTemplate,
+  inductionCompletedTemplate,
   stakeholderApprovalReceivedTemplate,
   stakeholderApprovalRequestedTemplate,
   terminationRequestedTemplate,
 } from "@/lib/email/templates";
 import { findPersonByPassport } from "@/lib/services/person-registry-service";
+import {
+  buildEngagementInput,
+  getRegistrationRequest,
+  linkRequestToEngagement,
+  type RegistrationCompletion,
+} from "@/lib/services/registration-service";
 import {
   applyStakeholderApproval,
   cancelEngagement,
@@ -22,6 +29,7 @@ import {
   getEngagementDetail,
   type ReceptionFormInput,
   recordHospitalClearance,
+  recordInductionCompletion,
   requestDelegatedApproval,
   requestTermination,
   submitForStakeholderApproval,
@@ -73,6 +81,7 @@ export async function lookupPersonByPassportAction(
 
 export async function submitReceptionAction(
   payload: ReceptionFormInput,
+  registrationRequestId?: string,
 ): Promise<
   | { success: true; engagementId: string; warning?: string }
   | { success: false; error: string }
@@ -80,6 +89,57 @@ export async function submitReceptionAction(
   try {
     const session = await requireWriteAccess("Receptionist");
     const engagement = await createEngagement(payload, session.staffUserId);
+
+    // Marks the visitor's submission as converted. Scoped to still-unlinked
+    // rows in the service, so a second submit can't repoint it.
+    if (registrationRequestId) {
+      await linkRequestToEngagement(registrationRequestId, engagement.id);
+    }
+
+    revalidatePath("/dashboard/reception");
+    return { success: true, engagementId: engagement.id };
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to create engagement",
+    };
+  }
+}
+
+// The preview path: Reception confirms a submission and supplies only what
+// the visitor was never asked. The visitor's own answers are read from the
+// stored row inside `buildEngagementInput`, never sent from the browser.
+export async function createEngagementFromRequestAction(
+  registrationRequestId: string,
+  completion: RegistrationCompletion,
+): Promise<
+  | { success: true; engagementId: string; warning?: string }
+  | { success: false; error: string }
+> {
+  try {
+    const session = await requireWriteAccess("Receptionist");
+
+    const request = await getRegistrationRequest(registrationRequestId);
+    if (!request) {
+      return { success: false, error: "Submission not found" };
+    }
+
+    if (request.engagementId) {
+      return {
+        success: false,
+        error: "This submission has already been turned into an engagement",
+      };
+    }
+
+    const engagement = await createEngagement(
+      buildEngagementInput(request, completion),
+      session.staffUserId,
+    );
+
+    await linkRequestToEngagement(registrationRequestId, engagement.id);
+
     revalidatePath("/dashboard/reception");
     return { success: true, engagementId: engagement.id };
   } catch (error) {
@@ -117,6 +177,7 @@ export async function cancelEngagementAction(
     const session = await requireWriteAccess("Receptionist");
     await cancelEngagement(engagementId, session.staffUserId);
     revalidatePath("/dashboard/reception");
+    revalidatePath("/dashboard/approvals");
     revalidatePath(`/dashboard/reception/${engagementId}`);
     return { success: true };
   } catch (error) {
@@ -317,6 +378,63 @@ export async function submitHospitalClearanceAction(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to record clearance",
+    };
+  }
+}
+
+export async function submitTrainingCompletionAction(
+  engagementId: string,
+  input: {
+    generalSiteInduction: boolean;
+    otherInductions: boolean;
+    trainerComments: string;
+  },
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("TrainingStaff");
+
+    const { recipients } = await recordInductionCompletion(
+      engagementId,
+      input,
+      session.staffUserId,
+    );
+
+    const detail = await getEngagementDetail(engagementId);
+
+    let allSent = true;
+
+    if (detail) {
+      for (const recipient of recipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...inductionCompletedTemplate({
+            personName: detail.person.fullName,
+            engagementId,
+          }),
+        });
+
+        if (!sent) {
+          allSent = false;
+        }
+      }
+    }
+
+    revalidatePath("/dashboard/training");
+    revalidatePath(`/dashboard/training/${engagementId}`);
+
+    return allSent
+      ? { success: true }
+      : {
+          success: true,
+          warning: "Induction recorded, but Security may not have been emailed",
+        };
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to record induction",
     };
   }
 }

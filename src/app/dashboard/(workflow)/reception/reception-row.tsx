@@ -26,7 +26,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import type { WorkflowState } from "@/lib/domain/types";
+import {
+  ACCESS_PURPOSE_LABELS,
+  type AccessPurpose,
+  WORKFLOW_STATE_LABELS,
+  type WorkflowState,
+} from "@/lib/domain/types";
 
 export const WORKFLOW_STATE_BADGE: Record<WorkflowState, string> = {
   Draft: "bg-status-neutral-bg text-status-neutral-fg",
@@ -93,10 +98,12 @@ export function ReceptionRow({
           </Link>
         </TableCell>
         <TableCell>{passportNo}</TableCell>
-        <TableCell>{accessPurpose}</TableCell>
+        <TableCell>
+          {ACCESS_PURPOSE_LABELS[accessPurpose as AccessPurpose]}
+        </TableCell>
         <TableCell>
           <Badge className={WORKFLOW_STATE_BADGE[workflowState]}>
-            {workflowState}
+            {WORKFLOW_STATE_LABELS[workflowState]}
           </Badge>
         </TableCell>
         {canManage && (

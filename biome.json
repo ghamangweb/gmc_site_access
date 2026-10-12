@@ -7,7 +7,16 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!node_modules", "!.next", "!dist", "!build", "!.agents"]
+    "includes": [
+      "**",
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!build",
+      "!.agents",
+      "!.claude",
+      "!tools/oxlint/anti-slop"
+    ]
   },
   "formatter": {
     "enabled": true,

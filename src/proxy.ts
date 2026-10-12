@@ -4,7 +4,10 @@ import { auth } from "@/lib/auth/entra";
 import type { WorkflowRole } from "@/lib/domain/types";
 
 const LAYER_ROLES: Record<string, WorkflowRole[]> = {
-  reception: ["Receptionist", "HCM", "GMM", "DMD"],
+  reception: ["Receptionist"],
+  // No entry for `approvals`: a delegated approver holds no workflow role at
+  // all, so the page itself does the checking (stakeholder role, or the grant
+  // on that engagement).
   hospital: ["HospitalStaff"],
   training: ["TrainingStaff"],
   security: ["SecurityStaff"],

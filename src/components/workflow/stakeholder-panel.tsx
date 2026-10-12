@@ -34,10 +34,14 @@ type StakeholderPanelProps = {
   approvals: StakeholderApproval[];
   approveAs: ApproverRole | null;
   canRequestApproval: boolean;
+  /** Where to send the approver once they've signed. A stakeholder belongs
+   * back in their own queue, not in Reception's. */
+  returnHref?: string;
 };
 
 export function StakeholderPanel({
   engagementId,
+  returnHref = "/dashboard/reception",
   approvals,
   approveAs,
   canRequestApproval,
@@ -91,7 +95,7 @@ export function StakeholderPanel({
           toast.success("Stakeholder approval requested");
         }
         redirectTimeoutRef.current = setTimeout(
-          () => router.push("/dashboard/reception"),
+          () => router.push(returnHref),
           2000,
         );
       } else {

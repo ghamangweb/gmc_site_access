@@ -1,17 +1,23 @@
 import {
   and,
   arrayOverlaps,
+  count,
   desc,
   eq,
+  ilike,
   inArray,
+  isNotNull,
   isNull,
   notInArray,
+  or,
+  type SQL,
 } from "drizzle-orm";
 import type { SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import {
   engagements,
   hospitalClearances,
+  inductionRecords,
   notifications,
   persons,
   staffUsers,
@@ -20,13 +26,21 @@ import {
   workflowCycles,
   workflowTransitions,
 } from "@/lib/db/schema";
-import type {
-  AccessPurpose,
-  ApproverRole,
-  HospitalClearanceStatus,
-  ReceptionData,
-  WorkflowRole,
-  WorkflowState,
+import {
+  DEFAULT_PAGE_SIZE,
+  type Page,
+  type PageRequest,
+  pageOffset,
+} from "@/lib/domain/pagination";
+import {
+  type AccessPurpose,
+  type ApproverRole,
+  DOCUMENT_LABELS,
+  type DocType,
+  type HospitalClearanceStatus,
+  type ReceptionData,
+  type WorkflowRole,
+  type WorkflowState,
 } from "@/lib/domain/types";
 import type { StaffUser } from "@/lib/services/auth-service";
 import {
@@ -134,9 +148,66 @@ export async function getActiveWorkflowCycle(
   return cycle;
 }
 
-export async function listEngagementsWithPerson(): Promise<
-  { engagement: Engagement; person: typeof persons.$inferSelect }[]
-> {
+export type EngagementRow = {
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+};
+
+// Name or passport, case-insensitive and partial — the two things a
+// Receptionist has in front of them when someone is standing at the desk.
+// Matching happens in Postgres: these queues are expected to run to thousands
+// of rows, and fetching all of them to filter in JS would not survive that.
+function personSearchFilter(search: string | undefined): SQL | undefined {
+  if (!search) {
+    return undefined;
+  }
+
+  const pattern = `%${search}%`;
+
+  return or(
+    ilike(persons.fullName, pattern),
+    ilike(persons.passportNo, pattern),
+  );
+}
+
+export async function listEngagementsWithPerson(
+  request: PageRequest & { workflowState?: WorkflowState } = {},
+): Promise<Page<EngagementRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+
+  const filters = [
+    personSearchFilter(request.search),
+    request.workflowState
+      ? eq(engagements.workflowState, request.workflowState)
+      : undefined,
+  ].filter((filter): filter is SQL => filter !== undefined);
+
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({ engagement: engagements, person: persons })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      .orderBy(desc(engagements.createdAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+// The delegation screen needs every engagement for a picker, not a page of
+// them. Kept separate so the paged queue above can't be accidentally used
+// where a complete list is meant.
+export async function listAllEngagementsWithPerson(): Promise<EngagementRow[]> {
   return db
     .select({ engagement: engagements, person: persons })
     .from(engagements)
@@ -147,18 +218,44 @@ export async function listEngagementsWithPerson(): Promise<
 export async function listEngagementsForLayer(
   workflowState: WorkflowState,
   accessPurposes?: AccessPurpose[],
-): Promise<{ engagement: Engagement; person: typeof persons.$inferSelect }[]> {
+  request: PageRequest = {},
+): Promise<Page<EngagementRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+
   const conditions = [eq(engagements.workflowState, workflowState)];
+
   if (accessPurposes && accessPurposes.length > 0) {
     conditions.push(inArray(engagements.accessPurpose, accessPurposes));
   }
 
-  return db
-    .select({ engagement: engagements, person: persons })
-    .from(engagements)
-    .innerJoin(persons, eq(engagements.personId, persons.id))
-    .where(and(...conditions))
-    .orderBy(engagements.createdAt);
+  const search = personSearchFilter(request.search);
+
+  if (search) {
+    conditions.push(search);
+  }
+
+  const where = and(...conditions);
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({ engagement: engagements, person: persons })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      // Oldest first: a layer queue is worked front to back, unlike the
+      // Reception list where the newest record is the interesting one.
+      .orderBy(engagements.createdAt)
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
 export async function getEngagementDetail(engagementId: string): Promise<
@@ -389,6 +486,13 @@ export async function submitForStakeholderApproval(
     );
   }
 
+  // Stamped before the notifications go out, so the stakeholder queue and the
+  // emails can never disagree about what was sent.
+  await db
+    .update(engagements)
+    .set({ approvalRequestedAt: new Date() })
+    .where(eq(engagements.id, engagementId));
+
   const recipients = await getStaffByWorkflowRoles(["HCM", "GMM", "DMD"]);
   await notifyStaff(
     recipients,
@@ -397,6 +501,105 @@ export async function submitForStakeholderApproval(
   );
 
   return { recipients };
+}
+
+// Engagements Reception has sent for sign-off and nobody has signed yet. A
+// delegated approver sees only the engagement they were granted; HCM, GMM and
+// DMD see every outstanding one, since any single approval is enough.
+export async function listEngagementsAwaitingApproval(
+  delegatedApproverId?: string,
+  request: PageRequest = {},
+): Promise<Page<EngagementRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+
+  const approved = db
+    .select({ engagementId: stakeholderApprovals.engagementId })
+    .from(stakeholderApprovals);
+
+  const conditions = [
+    eq(engagements.workflowState, "AtReception"),
+    isNotNull(engagements.approvalRequestedAt),
+    notInArray(engagements.id, approved),
+  ];
+
+  if (delegatedApproverId) {
+    conditions.push(eq(engagements.delegatedApproverId, delegatedApproverId));
+  }
+
+  const search = personSearchFilter(request.search);
+
+  if (search) {
+    conditions.push(search);
+  }
+
+  const where = and(...conditions);
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({ engagement: engagements, person: persons })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      // Longest-waiting first: the queue is a to-do list.
+      .orderBy(engagements.approvalRequestedAt)
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+// The other half of a stakeholder's dashboard: what has already been signed
+// off. Any one approval is enough, so this is deliberately everyone's, not
+// just the viewer's — a stakeholder needs to see that a colleague handled it.
+export type ApprovalRow = {
+  approval: StakeholderApproval;
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+};
+
+export async function listRecentStakeholderApprovals(
+  request: PageRequest = {},
+): Promise<Page<ApprovalRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = personSearchFilter(request.search);
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        approval: stakeholderApprovals,
+        engagement: engagements,
+        person: persons,
+      })
+      .from(stakeholderApprovals)
+      .innerJoin(
+        engagements,
+        eq(stakeholderApprovals.engagementId, engagements.id),
+      )
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      .orderBy(desc(stakeholderApprovals.approvedAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(stakeholderApprovals)
+      .innerJoin(
+        engagements,
+        eq(stakeholderApprovals.engagementId, engagements.id),
+      )
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
 export async function applyStakeholderApproval(
@@ -761,4 +964,206 @@ export async function recordHospitalClearance(
   });
 
   return { engagement: updated, recipients, outcome };
+}
+
+export type InductionRecord = typeof inductionRecords.$inferSelect;
+
+// A work-path visitor's medical is only good for three months, and Training
+// is where that matters: the induction they are about to sign off is what
+// sends them to Security. Visit+mine records never went through Hospital, so
+// they have no clearance to age and are always clear here.
+const CLEARANCE_VALID_DAYS = 90;
+const CLEARANCE_WARNING_DAYS = 30;
+
+export type ClearanceAge =
+  | { applicable: false }
+  | {
+      applicable: true;
+      clearanceDate: Date;
+      expiresAt: Date;
+      daysRemaining: number;
+      expired: boolean;
+      expiringSoon: boolean;
+    };
+
+export async function checkHospitalClearanceAge(
+  engagementId: string,
+): Promise<ClearanceAge> {
+  const engagement = await getEngagementById(engagementId);
+
+  if (!engagement || engagement.accessPurpose !== "Work") {
+    return { applicable: false };
+  }
+
+  const clearance = await getLatestHospitalClearance(engagementId);
+
+  if (!clearance) {
+    return { applicable: false };
+  }
+
+  const expiresAt = new Date(clearance.clearanceDate);
+  expiresAt.setDate(expiresAt.getDate() + CLEARANCE_VALID_DAYS);
+
+  const daysRemaining = Math.ceil(
+    (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+  );
+
+  return {
+    applicable: true,
+    clearanceDate: clearance.clearanceDate,
+    expiresAt,
+    daysRemaining,
+    expired: daysRemaining <= 0,
+    expiringSoon: daysRemaining > 0 && daysRemaining <= CLEARANCE_WARNING_DAYS,
+  };
+}
+
+export async function getLatestInductionRecord(
+  engagementId: string,
+): Promise<InductionRecord | undefined> {
+  const [cycle] = await db
+    .select()
+    .from(workflowCycles)
+    .where(
+      and(
+        eq(workflowCycles.engagementId, engagementId),
+        isNull(workflowCycles.archivedAt),
+      ),
+    )
+    .orderBy(desc(workflowCycles.cycleNumber))
+    .limit(1);
+
+  if (!cycle) {
+    return undefined;
+  }
+
+  const [record] = await db
+    .select()
+    .from(inductionRecords)
+    .where(eq(inductionRecords.workflowCycleId, cycle.id))
+    .orderBy(desc(inductionRecords.completedAt))
+    .limit(1);
+
+  return record;
+}
+
+const REQUIRED_INDUCTION_DOCS: DocType[] = [
+  "induction_declaration_form",
+  "induction_registration_form",
+];
+
+export async function recordInductionCompletion(
+  engagementId: string,
+  input: {
+    generalSiteInduction: boolean;
+    otherInductions: boolean;
+    trainerComments: string;
+  },
+  performedBy: string,
+): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
+  const preCheck = await getEngagementById(engagementId);
+
+  if (!preCheck) {
+    throw new Error("Engagement not found");
+  }
+
+  if (preCheck.workflowState !== "AtTraining") {
+    throw new Error("Engagement is not awaiting induction");
+  }
+
+  const uploaded = await getDocumentsForEngagement(engagementId);
+  const missing = REQUIRED_INDUCTION_DOCS.filter(
+    (docType) => !uploaded.some((doc) => doc.docType === docType),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Upload both induction forms before signing off: ${missing
+        .map((docType) => DOCUMENT_LABELS[docType])
+        .join(", ")}`,
+    );
+  }
+
+  // The medical has to still be valid at sign-off, not merely at the moment
+  // Hospital cleared them — otherwise a record can sit here for months and
+  // reach Security on an expired clearance.
+  const clearance = await checkHospitalClearanceAge(engagementId);
+
+  if (clearance.applicable && clearance.expired) {
+    throw new Error(
+      "Hospital clearance has expired — this record must return to the Hospital stage before induction can be signed off",
+    );
+  }
+
+  const recipients = await getStaffByWorkflowRoles(["SecurityStaff"]);
+
+  const updated = await db.transaction(async (tx) => {
+    // Same row lock as Hospital's: the pre-check is a fast path, this is the
+    // guard against two sign-offs racing each other.
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement) {
+      throw new Error("Engagement not found");
+    }
+
+    if (engagement.workflowState !== "AtTraining") {
+      throw new Error("Engagement is not awaiting induction");
+    }
+
+    const [cycle] = await tx
+      .select()
+      .from(workflowCycles)
+      .where(
+        and(
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      )
+      .orderBy(desc(workflowCycles.cycleNumber))
+      .limit(1);
+
+    if (!cycle) {
+      throw new Error("No active workflow cycle for this engagement");
+    }
+
+    await tx.insert(inductionRecords).values({
+      workflowCycleId: cycle.id,
+      generalSiteInduction: input.generalSiteInduction,
+      otherInductions: input.otherInductions,
+      trainerComments: input.trainerComments,
+    });
+
+    const [updatedEngagement] = await tx
+      .update(engagements)
+      .set({ workflowState: "AtSecurity" })
+      .where(eq(engagements.id, engagementId))
+      .returning();
+
+    await tx.insert(workflowTransitions).values({
+      engagementId,
+      workflowCycleId: cycle.id,
+      fromState: "AtTraining",
+      toState: "AtSecurity",
+      performedBy,
+      comments: "Induction completed",
+    });
+
+    if (recipients.length > 0) {
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: "Induction completed — record forwarded to Security.",
+        })),
+      );
+    }
+
+    return updatedEngagement;
+  });
+
+  return { engagement: updated, recipients };
 }

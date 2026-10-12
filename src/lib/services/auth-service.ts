@@ -2,7 +2,11 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { notifications, staffUsers } from "@/lib/db/schema";
-import type { SystemRole, WorkflowRole } from "@/lib/domain/types";
+import type {
+  GmcLiaisonDepartment,
+  SystemRole,
+  WorkflowRole,
+} from "@/lib/domain/types";
 
 export type StaffUser = typeof staffUsers.$inferSelect;
 type NotificationRow = typeof notifications.$inferSelect;
@@ -35,6 +39,7 @@ export async function findPendingAccessRequest(
 export async function requestAccess(
   requester: StaffUser,
   requestedRole: string,
+  requestedDepartment?: string,
 ): Promise<{ admins: StaffUser[] }> {
   const admins = await db
     .select()
@@ -42,12 +47,16 @@ export async function requestAccess(
     .where(eq(staffUsers.systemRole, "SystemAdmin"));
 
   if (admins.length > 0) {
-    const message = `Access request from ${requester.displayName} (${requester.email}) for role ${requestedRole}`;
+    const roleDescription = requestedDepartment
+      ? `${requestedRole} (${requestedDepartment})`
+      : requestedRole;
+    const message = `Access request from ${requester.displayName} (${requester.email}) for role ${roleDescription}`;
     await db.insert(notifications).values(
       admins.map((admin) => ({
         recipientStaffUserId: admin.id,
         requesterStaffUserId: requester.id,
         requestedRole,
+        requestedDepartment,
         message,
       })),
     );
@@ -60,10 +69,18 @@ export async function provisionStaffUser(
   staffUserId: string,
   systemRole: SystemRole,
   workflowRoles: WorkflowRole[],
+  department?: GmcLiaisonDepartment | null,
 ): Promise<StaffUser | undefined> {
   const [user] = await db
     .update(staffUsers)
-    .set({ systemRole, workflowRoles, provisionedAt: new Date() })
+    .set({
+      systemRole,
+      workflowRoles,
+      department: workflowRoles.includes("DepartmentHead")
+        ? (department ?? null)
+        : null,
+      provisionedAt: new Date(),
+    })
     .where(eq(staffUsers.id, staffUserId))
     .returning();
   return user;

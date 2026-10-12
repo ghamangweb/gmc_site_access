@@ -13,12 +13,12 @@ import {
 } from "@/components/ui/table";
 import {
   getStaffByWorkflowRoles,
-  listEngagementsWithPerson,
+  listAllEngagementsWithPerson,
 } from "@/lib/services/workflow-service";
 
 export default async function DelegationsPage() {
   const [rows, receptionists] = await Promise.all([
-    listEngagementsWithPerson(),
+    listAllEngagementsWithPerson(),
     getStaffByWorkflowRoles(["Receptionist"]),
   ]);
 

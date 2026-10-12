@@ -98,7 +98,7 @@ export function DashboardTopbar({
 
   return (
     <header className="sticky top-0 z-10 w-full bg-background">
-      <div className="mx-auto flex h-20 w-full max-w-5xl items-center justify-between px-6">
+      <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6">
         <Link href={homeHref} className="flex items-center">
           <Image
             src="/logo_whitebg.png"

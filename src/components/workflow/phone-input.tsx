@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
 import { COUNTRY_CALLING_CODES } from "@/lib/domain/countries";
 
 type PhoneInputProps = {
@@ -41,6 +42,7 @@ export function PhoneInput({
   disabled,
   ref,
 }: PhoneInputProps) {
+  const { t } = useRegistrationLanguage();
   const [open, setOpen] = useState(false);
   const { code, number } = useMemo(() => splitValue(value), [value]);
 
@@ -99,7 +101,7 @@ export function PhoneInput({
         onChange={(e) => updateNumber(e.target.value.replace(/[^\d\s-]/g, ""))}
         disabled={disabled}
         type="tel"
-        placeholder="Phone number"
+        placeholder={t("Phone number")}
         className="flex-1 rounded-r-md bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
       />
     </div>

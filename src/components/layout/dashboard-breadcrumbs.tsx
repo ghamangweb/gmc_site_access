@@ -19,8 +19,11 @@ const SEGMENT_LABELS: Record<string, string> = {
   users: "Users",
   delegations: "Delegations",
   reception: "Reception",
+  approvals: "Approvals",
   new: "New",
   hospital: "Hospital",
+  training: "Training School",
+  department: "Department",
 };
 
 const UUID_PATTERN =

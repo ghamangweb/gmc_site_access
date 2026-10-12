@@ -19,6 +19,7 @@ export const staffUsers = pgTable("staff_users", {
   displayName: text().notNull(),
   systemRole: text().notNull(),
   workflowRoles: text().array().notNull().default([]),
+  department: text(),
   pinHash: text(),
   pinFailedAttempts: integer().notNull().default(0),
   pinLockedUntil: timestamp({ withTimezone: true }),
@@ -54,6 +55,11 @@ export const engagements = pgTable(
     isVisaFlagged: boolean().notNull().default(false),
     receptionData: jsonb().notNull(),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    // Stamped when Reception sends the engagement for sign-off. Before this
+    // existed the request left no trace on the record at all — only
+    // notifications — so a stakeholder queue had no way to tell "waiting for
+    // me" from "Reception is still preparing it".
+    approvalRequestedAt: timestamp({ withTimezone: true }),
     delegatedApproverId: uuid().references(() => staffUsers.id),
     delegationGrantedBy: uuid().references(() => staffUsers.id),
     delegationGrantedAt: timestamp({ withTimezone: true }),
@@ -79,19 +85,38 @@ export const workflowCycles = pgTable("workflow_cycles", {
   archivedAt: timestamp({ withTimezone: true }),
 });
 
-export const documents = pgTable("documents", {
-  id: uuid().defaultRandom().primaryKey(),
-  engagementId: uuid()
-    .notNull()
-    .references(() => engagements.id),
-  workflowCycleId: uuid().references(() => workflowCycles.id),
-  docType: text().notNull(),
-  blobUrl: text().notNull(),
-  uploadedBy: uuid()
-    .notNull()
-    .references(() => staffUsers.id),
-  uploadedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
-});
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    // Exactly one parent is set (see the check below). `engagementId` is a
+    // staff upload against a real Engagement; `invitationId` is a visitor
+    // upload made during pre-registration, before any Engagement exists.
+    // Reception's hand-off re-points the row rather than copying the blob.
+    engagementId: uuid().references(() => engagements.id),
+    invitationId: uuid().references(() => invitations.id),
+    workflowCycleId: uuid().references(() => workflowCycles.id),
+    docType: text().notNull(),
+    // UploadThing file key — what deletes and signed-URL generation address.
+    // The URL alone is not enough: it is derived from the key, not vice versa.
+    fileKey: text().notNull(),
+    fileUrl: text().notNull(),
+    // Captured at upload. Needed to decide whether a preview renders as an
+    // image or a PDF frame, and to give a download a real filename — the
+    // UploadThing key carries neither.
+    fileName: text(),
+    contentType: text(),
+    // Null when the visitor uploaded it themselves (no staff user involved)
+    uploadedBy: uuid().references(() => staffUsers.id),
+    uploadedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      "documents_single_parent_check",
+      sql`(${table.engagementId} is not null)::int + (${table.invitationId} is not null)::int = 1`,
+    ),
+  ],
+);
 
 export const stakeholderApprovals = pgTable("stakeholder_approvals", {
   id: uuid().defaultRandom().primaryKey(),
@@ -110,6 +135,21 @@ export const stakeholderApprovals = pgTable("stakeholder_approvals", {
   delegatedBy: uuid().references(() => staffUsers.id),
   delegatedAt: timestamp({ withTimezone: true }),
   delegationReason: text(),
+});
+
+// Mirrors `hospital_clearances`: one row per induction sign-off, hung off the
+// workflow cycle rather than the engagement, so a record that cycles back to
+// Hospital (Slice 9's 3-month rule) keeps its earlier induction history
+// instead of overwriting it.
+export const inductionRecords = pgTable("induction_records", {
+  id: uuid().defaultRandom().primaryKey(),
+  workflowCycleId: uuid()
+    .notNull()
+    .references(() => workflowCycles.id),
+  generalSiteInduction: boolean().notNull().default(false),
+  otherInductions: boolean().notNull().default(false),
+  trainerComments: text().notNull(),
+  completedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
 export const workflowTransitions = pgTable("workflow_transitions", {
@@ -162,6 +202,43 @@ export const terminationRequests = pgTable("termination_requests", {
   decidedAt: timestamp({ withTimezone: true }),
 });
 
+export const invitations = pgTable("invitations", {
+  id: uuid().defaultRandom().primaryKey(),
+  department: text().notNull(),
+  // "Local" | "Foreign" — determines which pre-registration form renders at
+  // /register for this token (see RegistrationType in lib/domain/types.ts)
+  registrationType: text().notNull(),
+  email: text().notNull(),
+  tokenHash: text().notNull().unique(),
+  issuedBy: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  issuedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp({ withTimezone: true }),
+  consumedAt: timestamp({ withTimezone: true }),
+});
+
+export const registrationRequests = pgTable("registration_requests", {
+  id: uuid().defaultRandom().primaryKey(),
+  invitationId: uuid()
+    .notNull()
+    .unique()
+    .references(() => invitations.id),
+  department: text().notNull(),
+  registrationType: text().notNull(),
+  formData: jsonb().notNull(),
+  // Set when Reception turns this submission into an Engagement. Null means
+  // still outstanding — this is what keeps a submission from being converted
+  // twice, and what the Reception queue reads to show Converted vs a button.
+  engagementId: uuid().references(() => engagements.id),
+  status: text().notNull().default("Approved"),
+  approvedBy: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  approvedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
+
 export const notifications = pgTable("notifications", {
   id: uuid().defaultRandom().primaryKey(),
   recipientStaffUserId: uuid()
@@ -169,7 +246,9 @@ export const notifications = pgTable("notifications", {
     .references(() => staffUsers.id),
   requesterStaffUserId: uuid().references(() => staffUsers.id),
   requestedRole: text(),
+  requestedDepartment: text(),
   engagementId: uuid().references(() => engagements.id),
+  registrationRequestId: uuid().references(() => registrationRequests.id),
   message: text().notNull(),
   readAt: timestamp({ withTimezone: true }),
   createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),

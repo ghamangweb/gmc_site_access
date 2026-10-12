@@ -13,6 +13,7 @@ import {
   useFormState,
 } from "react-hook-form";
 import { Label } from "@/components/ui/label";
+import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
 import { cn } from "@/lib/utils";
 
 const Form = FormProvider;
@@ -134,7 +135,13 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
 
 function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error?.message ?? "") : props.children;
+  // Zod messages are authored in English and used as dictionary keys. Outside
+  // the public registration form there is no provider, so this is the
+  // identity function and the message renders exactly as written.
+  const { tValidation } = useRegistrationLanguage();
+  const body = error
+    ? tValidation(String(error?.message ?? ""))
+    : props.children;
 
   if (!body) {
     return null;

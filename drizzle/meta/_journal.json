@@ -64,6 +64,83 @@
       "when": 1784646036485,
       "tag": "0008_true_dragon_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791558647719,
+      "tag": "0009_demonic_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791559859546,
+      "tag": "0010_pale_spencer_smythe",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791564820606,
+      "tag": "0011_windy_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791567091077,
+      "tag": "0012_parallel_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791573723297,
+      "tag": "0013_bent_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791738533941,
+      "tag": "0014_foamy_nemesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791738554591,
+      "tag": "0015_colossal_archangel",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791741289130,
+      "tag": "0016_fair_ma_gnuci",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791760776132,
+      "tag": "0017_spooky_darkstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791761781008,
+      "tag": "0018_careful_tigra",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791789647982,
+      "tag": "0019_curly_pestilence",
+      "breakpoints": true
     }
   ]
 }

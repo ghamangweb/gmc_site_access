@@ -11,21 +11,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 Read in this exact order before any implementation:
 
-1. context/project-overview.md
-2. context/architecture.md
-3. context/ui-tokens.md
-4. context/ui-rules.md
-5. context/ui-registry.md
-6. context/code-standards.md
-7. context/library-docs.md
-8. context/build-plan.md
-9. context/progress-tracker.md
+1. docs/context/project-overview.md
+2. docs/context/architecture.md
+3. docs/context/ui-tokens.md
+4. docs/context/ui-rules.md
+5. docs/context/ui-registry.md
+6. docs/context/code-standards.md
+7. docs/context/library-docs.md
+8. docs/context/build-plan.md
+9. docs/context/progress-tracker.md
 
 ## Rules That Never Change
 - Never use hardcoded hex values or raw Tailwind color classes
 - Update `progress-tracker.md` and `ui-registry.md` after every slice.
 - Before any third party library — load its installed skill first,
-  then read `context/library-docs.md` for project-specific rules
+  then read `docs/context/library-docs.md` for project-specific rules
 - If the same problem persists after one corrective prompt —
   stop immediately and run /recover
 
