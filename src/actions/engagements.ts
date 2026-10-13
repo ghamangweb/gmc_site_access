@@ -282,6 +282,11 @@ export async function applyStakeholderApprovalAction(
       }
     }
 
+    // Both routes onto the record, and both queues it moves between: the
+    // approver lands on /dashboard/approvals immediately after this returns.
+    revalidatePath("/dashboard/approvals");
+    revalidatePath(`/dashboard/approvals/${engagementId}`);
+    revalidatePath("/dashboard/reception");
     revalidatePath(`/dashboard/reception/${engagementId}`);
     return allSent
       ? { success: true }

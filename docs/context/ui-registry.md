@@ -1062,6 +1062,12 @@ heading. `RegistrationRequestRow` is a **Server Component**, unlike `ReceptionRo
 dialog or client state, only a link. Rows are not clickable; the action column is the only
 target, since a submission has no detail page of its own.
 
+**The row action is "Review", not "Create Engagement" (2026-10-13).** The link opens the
+visitor's submission for checking — `new/page.tsx` already says "Review what the visitor
+submitted, correct anything that needs it, then create the engagement" — and the create button
+is at the end of that screen. The queue row now names what it does, matching Approvals'
+"Review & Approve". An already-converted row still reads "View Engagement".
+
 **An uploaded file is never hidden behind its checkbox (2026-10-11):** `DocumentSelector`'s
 `mode="select"` (Reception's "Applicable Document Uploads") only rendered a slot when the
 Receptionist had ticked that doc type, so a document the visitor had already supplied showed
@@ -1350,6 +1356,85 @@ caller. Its `Field` styling lives on in `ReceptionDetailsPreview`.
 outcome now states its consequence under the select — Fit proceeds to Training School, Fit with
 Conditions proceeds *and* notifies Reception, Unfit holds at Hospital and notifies Reception.
 The three are not interchangeable and the form shouldn't make them look it.
+
+### QueueViewTabs + every layer's worked-on tab (2026-10-13)
+
+Files: `components/layout/queue-view-tabs.tsx` (new), `dashboard/(workflow)/hospital/page.tsx`,
+`training/page.tsx`, `security/page.tsx`, `it/page.tsx`, `approvals/page.tsx`,
+`reception/page.tsx`, `hospital-form.tsx`, `training-form.tsx`, `it-form.tsx`,
+`workflow-service.ts` (`countEngagementsForLayer`, `countEngagementsAwaitingApproval`,
+`listRecentHospitalClearances`, `listRecentInductions`, `listRecentSecurityForwards`,
+`listRecentProvisionings`), `lib/utils.ts` (`formatQueueDate`),
+`lib/domain/types.ts` (`HOSPITAL_CLEARANCE_LABELS`)
+
+| Property | Class |
+|---|---|
+| Tab strip | `flex items-center gap-1 rounded-lg border border-border p-1` |
+| Active tab | `Button size="sm" variant="default"` |
+| Inactive tab | `Button size="sm" variant="ghost"` |
+| Tab count | `<span className="text-xs opacity-70">`, hidden at zero |
+| Worked-on date column | `text-muted-foreground`, `formatQueueDate` → "03 Nov 2026" |
+| Row action (worked-on) | `Button variant="ghost" size="sm"` → the record page |
+| Outcome badge (Hospital) | Fit → success, Fit with Conditions → warning, Unfit → danger |
+
+**Pattern notes:**
+Reception's segmented view switch is now `QueueViewTabs`, and **every workflow layer uses it**:
+one table at a time, chosen by a `view` search param, with the awaiting tab as the default.
+Reception was refactored onto the shared component so there is one implementation, not six
+copies of the markup.
+
+| Layer | Awaiting tab | Worked-on tab | Source of the worked-on rows |
+|---|---|---|---|
+| Reception | Submitted Registrations | Engagements | `listRegistrationRequests` / `listEngagementsWithPerson` |
+| Approvals | Awaiting Approval | Approved | `listRecentStakeholderApprovals` |
+| Hospital | Awaiting Clearance | Recorded Clearances | `hospital_clearances` |
+| Training | Awaiting Induction | Recorded Inductions | `induction_records` |
+| Security | Awaiting Review | Forwarded to IT | `workflow_transitions` (`AtSecurity → AwaitingProvisioning`) |
+| IT | Awaiting Setup | Access Activated | `access_provisionings` |
+
+**Security is the one layer with no record table of its own** — forwarding *is* its output — so
+`listRecentSecurityForwards` lists the transition it performed, joined to `staff_users` for a
+"Forwarded By" column. Hospital, Training and IT rows are **per record, not per engagement**:
+those tables are cycle-scoped, so a visitor who re-runs a cycle (lapsed medical) keeps both
+decisions in the history.
+
+**One search/page pair per page, not two.** With tabs only one table is on screen, so `q` and
+`page` are shared and the inactive query is never run (`activeView === … ? await … : undefined`,
+Reception's existing shape). This replaced an earlier two-stacked-sections version of the
+Hospital page that needed `cq`/`cpage` alongside `q`/`page`. The **count on the awaiting tab is
+its own query** (`countEngagementsForLayer`, `countEngagementsAwaitingApproval`) because the
+pill must show outstanding work while the worked-on tab is the one rendered.
+
+**Every layer form now redirects to its own queue after a successful submit** —
+`HospitalForm`, `TrainingForm`, `ItForm` push to `/dashboard/{layer}`, matching
+`ForwardToITButton` and `StakeholderPanel.returnHref`, which already did. They used to clear
+their fields and leave the user on a record they had finished with, which read as nothing
+having happened; the record now reappears under that layer's worked-on tab. `/dashboard`
+routes each role to the same queue, so the layer's home route and its queue are one screen.
+**Reception is deliberately the exception**: `RegistrationCompletionForm` still pushes to the
+new engagement, because Reception's next step (request approval) is on that record.
+
+**The 403 a stakeholder saw the moment they approved (2026-10-13).** `StakeholderPanel`
+gained `returnHref` when the Approvals queue shipped, but `handleApprove` kept a hard-coded
+`router.push("/dashboard/reception")` — only `handleRequestApproval` was switched over. A
+stakeholder holds no Receptionist role, so `proxy.ts`'s `LAYER_ROLES.reception` answered with a
+bare `Forbidden` two seconds after a successful sign-off. Both handlers now use `returnHref`.
+`applyStakeholderApprovalAction` also only revalidated the Reception record path, so the queue
+they land on could still show the row as awaiting; it now revalidates both queues and both
+record routes.
+
+**A delegated approver's Approved tab is their own.** `listRecentStakeholderApprovals` takes an
+optional `approverStaffUserId`: stakeholders keep seeing every sign-off (any one approval is
+enough, so a colleague's is relevant to them), a delegate sees only what they signed. The
+page's redirect guard correspondingly allows a delegate with nothing pending but something
+signed to stay — otherwise approving their one delegated engagement bounced them to
+`/dashboard`, which has no screen for a role-less delegate.
+
+`formatQueueDate` in `lib/utils.ts` is the single `en-GB` "03 Nov 2026" formatter every queue
+table uses; `HOSPITAL_CLEARANCE_LABELS` in `lib/domain/types.ts` is the single label map for
+clearance outcomes (it replaced identical local maps in `hospital-form.tsx` and
+`prior-layers-summary.tsx`). Badge **class** maps stay local to the UI file that renders them —
+`lib/domain/` holds labels and enums, never Tailwind.
 
 ### Stakeholders never touch Reception's routes (2026-10-12)
 

@@ -269,6 +269,27 @@ export async function listEngagementsForLayer(
   return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
+// The pill on a layer's "awaiting" tab has to show outstanding work even
+// while the other tab is the one being rendered, so the count is its own
+// query rather than a by-product of listing the rows.
+export async function countEngagementsForLayer(
+  workflowState: WorkflowState,
+  accessPurposes?: AccessPurpose[],
+): Promise<number> {
+  const conditions = [eq(engagements.workflowState, workflowState)];
+
+  if (accessPurposes && accessPurposes.length > 0) {
+    conditions.push(inArray(engagements.accessPurpose, accessPurposes));
+  }
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(engagements)
+    .where(and(...conditions));
+
+  return row?.value ?? 0;
+}
+
 export async function getEngagementDetail(engagementId: string): Promise<
   | {
       engagement: Engagement;
@@ -569,6 +590,34 @@ export async function listEngagementsAwaitingApproval(
 // The other half of a stakeholder's dashboard: what has already been signed
 // off. Any one approval is enough, so this is deliberately everyone's, not
 // just the viewer's — a stakeholder needs to see that a colleague handled it.
+// Outstanding sign-offs, for the tab pill — the same filter as
+// `listEngagementsAwaitingApproval` but without the search, so the pill
+// counts the work rather than what is on screen.
+export async function countEngagementsAwaitingApproval(
+  delegatedApproverId?: string,
+): Promise<number> {
+  const approved = db
+    .select({ engagementId: stakeholderApprovals.engagementId })
+    .from(stakeholderApprovals);
+
+  const conditions = [
+    eq(engagements.workflowState, "AtReception"),
+    isNotNull(engagements.approvalRequestedAt),
+    notInArray(engagements.id, approved),
+  ];
+
+  if (delegatedApproverId) {
+    conditions.push(eq(engagements.delegatedApproverId, delegatedApproverId));
+  }
+
+  const [row] = await db
+    .select({ value: count() })
+    .from(engagements)
+    .where(and(...conditions));
+
+  return row?.value ?? 0;
+}
+
 export type ApprovalRow = {
   approval: StakeholderApproval;
   engagement: Engagement;
@@ -577,10 +626,21 @@ export type ApprovalRow = {
 
 export async function listRecentStakeholderApprovals(
   request: PageRequest = {},
+  /** Set for a delegated approver: their grant was per engagement, so they
+   * see what they signed rather than every stakeholder's sign-offs. */
+  approverStaffUserId?: string,
 ): Promise<Page<ApprovalRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
-  const where = personSearchFilter(request.search);
+
+  const filters = [
+    personSearchFilter(request.search),
+    approverStaffUserId
+      ? eq(stakeholderApprovals.approverStaffUserId, approverStaffUserId)
+      : undefined,
+  ].filter((filter): filter is SQL => filter !== undefined);
+
+  const where = filters.length > 0 ? and(...filters) : undefined;
 
   const [rows, [totals]] = await Promise.all([
     db
@@ -611,6 +671,72 @@ export async function listRecentStakeholderApprovals(
   ]);
 
   return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+// The other half of Hospital's dashboard: what has already been recorded.
+// Rows are per clearance rather than per engagement — a record that times out
+// at Training comes back for a second medical, and both decisions are history
+// the Hospital needs to see.
+export type HospitalClearanceRow = {
+  clearance: HospitalClearance;
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+};
+
+export async function listRecentHospitalClearances(
+  request: PageRequest = {},
+): Promise<Page<HospitalClearanceRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = personSearchFilter(request.search);
+
+  // A clearance hangs off the workflow cycle, not the engagement, so the
+  // engagement and person both come through that join.
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        clearance: hospitalClearances,
+        engagement: engagements,
+        person: persons,
+      })
+      .from(hospitalClearances)
+      .innerJoin(
+        workflowCycles,
+        eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      .orderBy(desc(hospitalClearances.clearanceDate))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(hospitalClearances)
+      .innerJoin(
+        workflowCycles,
+        eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+// Whether a delegated approver has anything to show on the Approved tab.
+// Without this the page cannot tell "delegate with nothing left to do" from
+// "delegate who has never been granted anything".
+export async function countStakeholderApprovalsBy(
+  approverStaffUserId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(stakeholderApprovals)
+    .where(eq(stakeholderApprovals.approverStaffUserId, approverStaffUserId));
+
+  return row?.value ?? 0;
 }
 
 export async function applyStakeholderApproval(
@@ -1068,6 +1194,55 @@ const REQUIRED_INDUCTION_DOCS: DocType[] = [
   "induction_registration_form",
 ];
 
+// Training's worked-on tab. Per induction record rather than per engagement:
+// a work-path record whose medical lapses returns to Hospital and inducts
+// again, and both sign-offs are history.
+export type InductionRow = {
+  induction: InductionRecord;
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+};
+
+export async function listRecentInductions(
+  request: PageRequest = {},
+): Promise<Page<InductionRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = personSearchFilter(request.search);
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        induction: inductionRecords,
+        engagement: engagements,
+        person: persons,
+      })
+      .from(inductionRecords)
+      .innerJoin(
+        workflowCycles,
+        eq(inductionRecords.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      .orderBy(desc(inductionRecords.completedAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(inductionRecords)
+      .innerJoin(
+        workflowCycles,
+        eq(inductionRecords.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
 export async function recordInductionCompletion(
   engagementId: string,
   input: {
@@ -1189,6 +1364,68 @@ export type AccessProvisioning = typeof accessProvisionings.$inferSelect;
 // Security's only action: it audits what the earlier layers recorded and
 // hands the record to IT. Nothing is captured here, so there is no Security
 // table — the transition row is the record that it happened.
+// Security's worked-on tab. Unlike Hospital, Training and IT, Security
+// produces no record of its own — forwarding *is* its output — so the
+// workflow transition it performed is what gets listed.
+export type SecurityForwardRow = {
+  forwardedAt: Date;
+  forwardedByName: string;
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+};
+
+export async function listRecentSecurityForwards(
+  request: PageRequest = {},
+): Promise<Page<SecurityForwardRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+
+  const conditions = [
+    eq(workflowTransitions.fromState, "AtSecurity"),
+    eq(workflowTransitions.toState, "AwaitingProvisioning"),
+  ];
+
+  const search = personSearchFilter(request.search);
+
+  if (search) {
+    conditions.push(search);
+  }
+
+  const where = and(...conditions);
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        forwardedAt: workflowTransitions.performedAt,
+        forwardedByName: staffUsers.displayName,
+        engagement: engagements,
+        person: persons,
+      })
+      .from(workflowTransitions)
+      .innerJoin(
+        engagements,
+        eq(workflowTransitions.engagementId, engagements.id),
+      )
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .innerJoin(staffUsers, eq(workflowTransitions.performedBy, staffUsers.id))
+      .where(where)
+      .orderBy(desc(workflowTransitions.performedAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(workflowTransitions)
+      .innerJoin(
+        engagements,
+        eq(workflowTransitions.engagementId, engagements.id),
+      )
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
 export async function forwardToIT(
   engagementId: string,
   performedBy: string,
@@ -1297,6 +1534,54 @@ const REQUIRED_IT_DOCS: DocType[] = ["biometric_image", "passport_photo"];
 // The last step: access becomes live. Both the workflow and the access state
 // move here — they are separate columns because a Completed engagement can
 // later have its access terminated without the workflow being rewritten.
+// IT's worked-on tab: access that has actually been switched on, with the
+// card it was issued against.
+export type ProvisioningRow = {
+  provisioning: AccessProvisioning;
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+};
+
+export async function listRecentProvisionings(
+  request: PageRequest = {},
+): Promise<Page<ProvisioningRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = personSearchFilter(request.search);
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        provisioning: accessProvisionings,
+        engagement: engagements,
+        person: persons,
+      })
+      .from(accessProvisionings)
+      .innerJoin(
+        workflowCycles,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      .orderBy(desc(accessProvisionings.activatedAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(accessProvisionings)
+      .innerJoin(
+        workflowCycles,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
 export async function activateAccess(
   engagementId: string,
   input: {

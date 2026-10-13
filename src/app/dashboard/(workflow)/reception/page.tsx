@@ -7,6 +7,7 @@ import { RegistrationRequestRow } from "@/app/dashboard/(workflow)/reception/reg
 import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
+import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -117,15 +118,14 @@ export default async function ReceptionQueuePage({
   const views = [
     {
       label: "Submitted Registrations",
-      value: "submissions" as const,
+      value: "submissions",
       href: "/dashboard/reception",
       count: outstandingCount,
     },
     {
       label: "Engagements",
-      value: "engagements" as const,
+      value: "engagements",
       href: "/dashboard/reception?view=engagements",
-      count: undefined,
     },
   ];
 
@@ -144,23 +144,7 @@ export default async function ReceptionQueuePage({
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-          {views.map((item) => (
-            <Button
-              key={item.value}
-              asChild
-              size="sm"
-              variant={activeView === item.value ? "default" : "ghost"}
-            >
-              <Link href={item.href}>
-                {item.label}
-                {item.count !== undefined && item.count > 0 && (
-                  <span className="text-xs opacity-70">{item.count}</span>
-                )}
-              </Link>
-            </Button>
-          ))}
-        </div>
+        <QueueViewTabs views={views} activeView={activeView} />
         <QueueSearch
           searchParam="q"
           pageParam="page"

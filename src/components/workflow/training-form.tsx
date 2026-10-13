@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -39,6 +40,7 @@ export function TrainingForm({
   latestInduction?: LatestInduction;
   readOnly: boolean;
 }) {
+  const router = useRouter();
   const [generalSiteInduction, setGeneralSiteInduction] = useState(true);
   const [otherInductions, setOtherInductions] = useState(false);
   const [comments, setComments] = useState("");
@@ -75,6 +77,10 @@ export function TrainingForm({
       }
 
       setComments("");
+
+      // The layer's queue is where the next piece of work is — not the record
+      // that was just signed off.
+      router.push("/dashboard/training");
     });
   }
 
