@@ -206,7 +206,7 @@ export default async function ReceptionQueuePage({
                 description={
                   activeFilter
                     ? "Switch the filter to All to see every submission."
-                    : "Pre-registrations submitted from invitation links will show up here."
+                    : "Registrations submitted from invitation links will show up here."
                 }
               />
             ) : (

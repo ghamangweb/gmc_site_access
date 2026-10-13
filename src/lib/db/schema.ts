@@ -24,6 +24,13 @@ export const staffUsers = pgTable("staff_users", {
   pinFailedAttempts: integer().notNull().default(0),
   pinLockedUntil: timestamp({ withTimezone: true }),
   provisionedAt: timestamp({ withTimezone: true }),
+  // Soft delete. Twelve tables reference this row — who approved, who issued,
+  // who performed each transition — so a real DELETE would either fail on a
+  // foreign key or destroy the audit trail the system is required to keep.
+  // A deactivated user cannot sign in and is excluded from every recipient
+  // and approver lookup, while everything they did stays attributable.
+  deactivatedAt: timestamp({ withTimezone: true }),
+  deactivatedBy: uuid(),
   createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -91,7 +98,7 @@ export const documents = pgTable(
     id: uuid().defaultRandom().primaryKey(),
     // Exactly one parent is set (see the check below). `engagementId` is a
     // staff upload against a real Engagement; `invitationId` is a visitor
-    // upload made during pre-registration, before any Engagement exists.
+    // upload made during registration, before any Engagement exists.
     // Reception's hand-off re-points the row rather than copying the blob.
     engagementId: uuid().references(() => engagements.id),
     invitationId: uuid().references(() => invitations.id),
@@ -152,6 +159,24 @@ export const inductionRecords = pgTable("induction_records", {
   completedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
+// What IT issued. Cycle-scoped for consistency with `hospital_clearances` and
+// `induction_records`, so a record that ever re-runs a cycle keeps its history
+// rather than overwriting it.
+export const accessProvisionings = pgTable("access_provisionings", {
+  id: uuid().defaultRandom().primaryKey(),
+  workflowCycleId: uuid()
+    .notNull()
+    .references(() => workflowCycles.id),
+  idType: text().notNull(),
+  biometricCaptured: boolean().notNull().default(false),
+  accessCardNumber: text().notNull(),
+  // Business rule: never later than the departure date. The "or earliest visa
+  // /permit expiry" half of that rule cannot be enforced yet — those dates are
+  // not stored anywhere until Slice 8 adds them.
+  accessCardExpiry: date().notNull(),
+  activatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
+
 export const workflowTransitions = pgTable("workflow_transitions", {
   id: uuid().defaultRandom().primaryKey(),
   engagementId: uuid()
@@ -205,7 +230,7 @@ export const terminationRequests = pgTable("termination_requests", {
 export const invitations = pgTable("invitations", {
   id: uuid().defaultRandom().primaryKey(),
   department: text().notNull(),
-  // "Local" | "Foreign" — determines which pre-registration form renders at
+  // "Local" | "Foreign" — determines which registration form renders at
   // /register for this token (see RegistrationType in lib/domain/types.ts)
   registrationType: text().notNull(),
   email: text().notNull(),

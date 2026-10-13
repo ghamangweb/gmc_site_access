@@ -81,7 +81,12 @@ export type LocalRegistrationFormInput = {
 export async function createRegistrationRequest(
   token: string,
   formData: ReceptionFormInput | LocalRegistrationFormInput,
-): Promise<{ request: RegistrationRequest; departmentHeads: StaffUser[] }> {
+): Promise<{
+  request: RegistrationRequest;
+  departmentHeads: StaffUser[];
+  receptionists: StaffUser[];
+  visitorName: string;
+}> {
   const invitation = await validateInvitationToken(token);
 
   if (!invitation) {
@@ -158,25 +163,63 @@ export async function createRegistrationRequest(
     return { request, department: consumed.department };
   });
 
-  const departmentHeads = await db
-    .select()
-    .from(staffUsers)
-    .where(arrayOverlaps(staffUsers.workflowRoles, ["DepartmentHead"]));
-  const matchingHeads = departmentHeads.filter(
+  const [allHeads, receptionists] = await Promise.all([
+    db
+      .select()
+      .from(staffUsers)
+      .where(
+        and(
+          arrayOverlaps(staffUsers.workflowRoles, ["DepartmentHead"]),
+          isNull(staffUsers.deactivatedAt),
+        ),
+      ),
+    db
+      .select()
+      .from(staffUsers)
+      .where(
+        and(
+          arrayOverlaps(staffUsers.workflowRoles, ["Receptionist"]),
+          isNull(staffUsers.deactivatedAt),
+        ),
+      ),
+  ]);
+
+  // Only the head of the department the invitation was issued for.
+  const matchingHeads = allHeads.filter(
     (head) => head.department === department,
   );
+
+  // Reception is notified too: the submission lands in their queue and they
+  // are the ones who turn it into an Engagement. Notifying only the
+  // Department Head meant nobody told the person who acts on it next.
+  const visitorName = summariseRequest(request).fullName;
 
   if (matchingHeads.length > 0) {
     await db.insert(notifications).values(
       matchingHeads.map((head) => ({
         recipientStaffUserId: head.id,
         registrationRequestId: request.id,
-        message: `A new pre-registration submission has arrived for ${department}.`,
+        message: `${visitorName} submitted a registration for ${department}.`,
       })),
     );
   }
 
-  return { request, departmentHeads: matchingHeads };
+  if (receptionists.length > 0) {
+    await db.insert(notifications).values(
+      receptionists.map((receptionist) => ({
+        recipientStaffUserId: receptionist.id,
+        registrationRequestId: request.id,
+        message: `${visitorName} submitted a registration for ${department} — ready to become an engagement.`,
+      })),
+    );
+  }
+
+  return {
+    request,
+    departmentHeads: matchingHeads,
+    receptionists,
+    visitorName,
+  };
 }
 
 export type RegistrationRequestSummary = {

@@ -34,6 +34,27 @@ tables, etc.).
 
 ---
 
+## Responsiveness
+
+**The dashboard is desktop-only; `/register` is not.** `DesktopOnlyGuard` is mounted by the
+dashboard layout and the `(auth)` layout — **not** the root layout, which is where it used to
+live (2026-10-12). The public registration form is the one page a visitor opens on their own
+phone, so it must work at any width; every staff screen still shows the "Desktop Required"
+overlay below `lg`.
+
+Consequences for anything rendered on the public path:
+- Field grids are `grid-cols-1 … sm:grid-cols-2`, never a bare `grid-cols-2`. `ReceptionForm`
+  is shared with Reception's desktop page, so the two-column layout has to survive at `sm` up.
+- A full-width cell is `sm:col-span-2`, not `col-span-2` — the latter forces two columns back
+  on a phone.
+- The image pane is `hidden lg:block`; below `lg` the form takes the full width, the page uses
+  the document scrollbar instead of the `ScrollArea`'s fixed viewport (`lg:h-screen`), and
+  padding steps down `px-5 py-8 → sm:px-8 → lg:p-10`.
+- No fixed pixel widths on the public path.
+
+The root layout sets `viewport` explicitly and deliberately does **not** set `maximumScale` —
+capping zoom breaks the form for anyone who needs to enlarge it.
+
 ## Layout
 
 Single-column layout: one top bar, one scrollable content column beneath it. No sidebar.

@@ -36,6 +36,15 @@ export async function findPendingAccessRequest(
   return existing;
 }
 
+export async function isStaffUserActive(staffUserId: string): Promise<boolean> {
+  const [user] = await db
+    .select({ deactivatedAt: staffUsers.deactivatedAt })
+    .from(staffUsers)
+    .where(eq(staffUsers.id, staffUserId));
+
+  return !!user && user.deactivatedAt === null;
+}
+
 export async function requestAccess(
   requester: StaffUser,
   requestedRole: string,
@@ -44,7 +53,12 @@ export async function requestAccess(
   const admins = await db
     .select()
     .from(staffUsers)
-    .where(eq(staffUsers.systemRole, "SystemAdmin"));
+    .where(
+      and(
+        eq(staffUsers.systemRole, "SystemAdmin"),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    );
 
   if (admins.length > 0) {
     const roleDescription = requestedDepartment
@@ -99,4 +113,67 @@ export async function listStaffUsersWithPendingRequests(): Promise<{
     .from(notifications)
     .where(isNull(notifications.readAt));
   return { users, pendingRequests };
+}
+
+// Back to an unprovisioned account: they can still sign in with Entra but
+// reach nothing, exactly like someone who has just been granted a Microsoft
+// account. Deliberately separate from `provisionStaffUser` so revoking
+// access is an explicit act rather than an ordinary role edit.
+export async function revokeStaffAccess(
+  staffUserId: string,
+): Promise<StaffUser | undefined> {
+  const [user] = await db
+    .update(staffUsers)
+    .set({
+      systemRole: "User",
+      workflowRoles: [],
+      department: null,
+      provisionedAt: null,
+    })
+    .where(eq(staffUsers.id, staffUserId))
+    .returning();
+
+  return user;
+}
+
+// Soft delete. The row stays so the twelve tables that reference it keep
+// their attribution; the user simply cannot sign in and is excluded from
+// every recipient and approver lookup.
+export async function deactivateStaffUser(
+  staffUserId: string,
+  deactivatedBy: string,
+): Promise<StaffUser | undefined> {
+  const [user] = await db
+    .update(staffUsers)
+    .set({
+      deactivatedAt: new Date(),
+      deactivatedBy,
+      // A deactivated account must not come back with its old powers if it is
+      // ever reactivated, and must stop counting as an approver immediately.
+      systemRole: "User",
+      workflowRoles: [],
+      department: null,
+      provisionedAt: null,
+      // Any live session is useless without a PIN, and the PIN should not
+      // survive the person leaving.
+      pinHash: null,
+    })
+    .where(eq(staffUsers.id, staffUserId))
+    .returning();
+
+  return user;
+}
+
+export async function reactivateStaffUser(
+  staffUserId: string,
+): Promise<StaffUser | undefined> {
+  // Comes back unprovisioned: a System Admin re-grants roles deliberately
+  // rather than having them silently restored.
+  const [user] = await db
+    .update(staffUsers)
+    .set({ deactivatedAt: null, deactivatedBy: null })
+    .where(eq(staffUsers.id, staffUserId))
+    .returning();
+
+  return user;
 }

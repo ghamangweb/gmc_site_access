@@ -8,11 +8,13 @@ import {
   registrationRequests,
   staffUsers,
 } from "@/lib/db/schema";
-import { REGISTRATION_DOCUMENT_TYPES, type VisaType } from "@/lib/domain/types";
-import type { LocalRegistrationFormInput } from "@/lib/services/registration-service";
+import {
+  getRequiredRegistrationDocTypes,
+  type VisaType,
+} from "@/lib/domain/types";
 import type { ReceptionFormInput } from "@/lib/services/workflow-service";
 
-// Dummy pre-registration submissions for local development, so Reception's
+// Dummy registration submissions for local development, so Reception's
 // "Submitted Registrations" queue has something to act on without having to
 // walk an invitation link end to end. Never run this against production.
 //
@@ -22,13 +24,13 @@ import type { ReceptionFormInput } from "@/lib/services/workflow-service";
 
 const SEED_EMAIL_DOMAIN = "@seed.gmc.local";
 
-// Typed against the real payloads the two public forms submit, so a seeded
+// Typed against the real payload the public foreign form submits, so a seeded
 // row can never drift into a shape Reception's prefill cannot read.
 type SeedSubmission = {
   email: string;
   department: string;
-  registrationType: "Foreign" | "Local";
-  formData: ReceptionFormInput | LocalRegistrationFormInput;
+  registrationType: "Foreign";
+  formData: ReceptionFormInput;
 };
 
 function foreignSubmission(input: {
@@ -40,12 +42,19 @@ function foreignSubmission(input: {
   gender: string;
   nationality: string;
   phone: string;
+  employmentStatus: string;
   companyName: string;
   liaisonPerson: string;
   accessPurpose: "Work" | "Visit" | "VisitMine";
   arrivalDate: string;
   departureDate: string;
   visaType: VisaType;
+  accessLevel: string;
+  airportPickup: boolean;
+  // Left out when no accommodation was requested — the location and the flag
+  // always move together, the way the form submits them.
+  accommodationLocation?: string;
+  itAccessRequired: boolean;
   reasonForRequest: string;
 }): SeedSubmission {
   return {
@@ -68,7 +77,7 @@ function foreignSubmission(input: {
       arrivalDate: input.arrivalDate,
       departureDate: input.departureDate,
       receptionData: {
-        employmentStatus: "Contractor",
+        employmentStatus: input.employmentStatus,
         telephoneOnSite: "+233 244000222",
         companyName: input.companyName,
         contactNameMonthly: "Monthly Reporting Contact",
@@ -78,89 +87,28 @@ function foreignSubmission(input: {
         gmcLiaisonPerson: input.liaisonPerson,
         gmcLiaisonDept: input.department,
         reasonForRequest: input.reasonForRequest,
-        airportPickup: true,
-        pickupDate: input.arrivalDate,
+        airportPickup: input.airportPickup,
+        pickupDate: input.airportPickup ? input.arrivalDate : undefined,
         transportTo: true,
         transportFrom: false,
-        accommodationRequired: true,
-        accommodationLocation: "Tarkwa",
+        accommodationRequired: Boolean(input.accommodationLocation),
+        accommodationLocation: input.accommodationLocation,
         permanentAccessBadge: false,
         ghanaVisaRequired: true,
         generalSiteInduction: true,
         otherInductions: false,
         bringingEquipment: true,
         ppeRequired: true,
-        itAccessRequired: false,
+        itAccessRequired: input.itAccessRequired,
         visaType: input.visaType,
-        accessLevel: "Contractor/Service Personnel Access",
+        accessLevel: input.accessLevel,
         accommodationConfirmed: false,
         itineraryAttached: false,
         inflightUpdated: false,
         remarks: "",
+        // Reception marks the applicable documents once it picks the
+        // submission up — the visitor never sets these.
         applicableDocuments: [],
-      },
-    },
-  };
-}
-
-function localSubmission(input: {
-  email: string;
-  department: string;
-  ghanaCardNo: string;
-  fullName: string;
-  dateOfBirth: string;
-  gender: string;
-  phone: string;
-  companyName: string;
-  liaisonPerson: string;
-  accessPurpose: "Work" | "Visit" | "VisitMine";
-  arrivalDate: string;
-  departureDate: string;
-  reasonForRequest: string;
-}): SeedSubmission {
-  return {
-    email: input.email,
-    department: input.department,
-    registrationType: "Local",
-    formData: {
-      person: {
-        passportNo: input.ghanaCardNo,
-        fullName: input.fullName,
-        dateOfBirth: input.dateOfBirth,
-        gender: input.gender,
-        email: input.email,
-        phone: input.phone,
-        emergencyContactName: "Emergency Contact",
-        emergencyContactPhone: "+233 244000444",
-      },
-      accessPurpose: input.accessPurpose,
-      arrivalDate: input.arrivalDate,
-      departureDate: input.departureDate,
-      registrationData: {
-        employmentStatus: "Contractor",
-        telephoneOnSite: "+233 244000555",
-        companyName: input.companyName,
-        contactNameMonthly: "Monthly Reporting Contact",
-        contactEmail: `reports${SEED_EMAIL_DOMAIN}`,
-        companyEmergencyName: "Company Emergency Contact",
-        companyEmergencyTel: "+233 244000666",
-        gmcLiaisonPerson: input.liaisonPerson,
-        reasonForRequest: input.reasonForRequest,
-        airportPickup: false,
-        transportTo: true,
-        transportFrom: true,
-        accommodationRequired: false,
-        permanentAccessBadge: false,
-        generalSiteInduction: true,
-        otherInductions: false,
-        bringingEquipment: false,
-        ppeRequired: true,
-        itAccessRequired: true,
-        accessLevel: "Visitor Access",
-        accommodationConfirmed: false,
-        itineraryAttached: false,
-        inflightUpdated: false,
-        remarks: "",
       },
     },
   };
@@ -174,14 +122,19 @@ const SUBMISSIONS: SeedSubmission[] = [
     fullName: "Li Wei",
     dateOfBirth: "1986-04-12",
     gender: "Male",
-    nationality: "China",
+    nationality: "Chinese",
     phone: "+86 13800138000",
+    employmentStatus: "Contractor",
     companyName: "Ningxia Tianyuan Engineering Ltd",
     liaisonPerson: "Kwame Mensah",
     accessPurpose: "Work",
     arrivalDate: "2026-11-03",
     departureDate: "2027-02-28",
     visaType: "Work Visa",
+    accessLevel: "Contractor/Service Personnel Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
     reasonForRequest: "Commissioning of the new crushing circuit.",
   }),
   foreignSubmission({
@@ -191,14 +144,19 @@ const SUBMISSIONS: SeedSubmission[] = [
     fullName: "Zhang Min",
     dateOfBirth: "1991-09-25",
     gender: "Female",
-    nationality: "China",
-    phone: "+86 13900139000",
+    nationality: "Chinese",
+    phone: "+86 13912345678",
+    employmentStatus: "Visitor(Expatriate)",
     companyName: "Ningxia Tianyuan Engineering Ltd",
     liaisonPerson: "Abena Owusu",
     accessPurpose: "VisitMine",
     arrivalDate: "2026-10-28",
     departureDate: "2026-11-11",
     visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: true,
+    accommodationLocation: "Takoradi",
+    itAccessRequired: false,
     reasonForRequest: "Process audit of the carbonate plant.",
   }),
   foreignSubmission({
@@ -208,45 +166,174 @@ const SUBMISSIONS: SeedSubmission[] = [
     fullName: "Daniel Okonkwo",
     dateOfBirth: "1979-01-30",
     gender: "Male",
-    nationality: "Nigeria",
+    nationality: "Nigerian",
     phone: "+234 8030001122",
+    employmentStatus: "Contractor",
     companyName: "Sahel Heavy Equipment Services",
     liaisonPerson: "Yaw Boateng",
     accessPurpose: "Work",
     arrivalDate: "2026-11-17",
     departureDate: "2026-12-20",
     visaType: "Visa on Arrival",
+    accessLevel: "Contractor/Service Personnel Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
     reasonForRequest: "Overhaul of two haul trucks.",
   }),
-  localSubmission({
-    email: `ama.asante${SEED_EMAIL_DOMAIN}`,
-    department: "Human Capital",
-    ghanaCardNo: "GHA-723451908-4",
-    fullName: "Ama Asante",
-    dateOfBirth: "1994-06-18",
-    gender: "Female",
-    phone: "+233 244112233",
-    companyName: "Takoradi Occupational Health Services",
-    liaisonPerson: "Esi Darko",
-    accessPurpose: "Visit",
-    arrivalDate: "2026-10-20",
-    departureDate: "2026-10-22",
-    reasonForRequest: "Occupational health review meeting.",
-  }),
-  localSubmission({
-    email: `kofi.annan${SEED_EMAIL_DOMAIN}`,
-    department: "Information Technology",
-    ghanaCardNo: "GHA-559201776-1",
-    fullName: "Kofi Annan",
-    dateOfBirth: "1988-12-02",
+  foreignSubmission({
+    email: `r.kumar${SEED_EMAIL_DOMAIN}`,
+    department: "Assay Lab",
+    passportNo: "Z4482910",
+    fullName: "Rajesh Kumar",
+    dateOfBirth: "1983-07-08",
     gender: "Male",
-    phone: "+233 201445566",
-    companyName: "Accra Network Systems",
-    liaisonPerson: "Nana Adjei",
+    nationality: "Indian",
+    phone: "+91 9811122233",
+    employmentStatus: "Contractor",
+    companyName: "Hindustan Analytical Instruments",
+    liaisonPerson: "Esi Darko",
+    accessPurpose: "Work",
+    arrivalDate: "2026-11-09",
+    departureDate: "2027-01-15",
+    visaType: "Work Visa",
+    accessLevel: "Operational Employee Access",
+    airportPickup: true,
+    accommodationLocation: "Nsuta",
+    itAccessRequired: true,
+    reasonForRequest: "Install and calibrate the new XRF analyser.",
+  }),
+  foreignSubmission({
+    email: `t.molefe${SEED_EMAIL_DOMAIN}`,
+    department: "Mining",
+    passportNo: "M00841277",
+    fullName: "Thabo Molefe",
+    dateOfBirth: "1987-03-21",
+    gender: "Male",
+    nationality: "South African",
+    phone: "+27 831234567",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Rand Mining Consultants",
+    liaisonPerson: "Kwame Mensah",
     accessPurpose: "VisitMine",
-    arrivalDate: "2026-11-05",
-    departureDate: "2026-11-08",
-    reasonForRequest: "Install network links at the mine site office.",
+    arrivalDate: "2026-10-26",
+    departureDate: "2026-10-31",
+    visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: false,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Pit geotechnical review with the mining team.",
+  }),
+  foreignSubmission({
+    email: `e.clarke${SEED_EMAIL_DOMAIN}`,
+    department: "Social Responsibility & External Relations",
+    passportNo: "561203448",
+    fullName: "Emma Clarke",
+    dateOfBirth: "1990-11-14",
+    gender: "Female",
+    nationality: "British",
+    phone: "+44 7912345678",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Lonrho Community Partners",
+    liaisonPerson: "Nana Adjei",
+    accessPurpose: "Visit",
+    arrivalDate: "2026-10-21",
+    departureDate: "2026-10-23",
+    visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: true,
+    accommodationLocation: "Accra",
+    itAccessRequired: false,
+    reasonForRequest: "Community development programme review.",
+  }),
+  foreignSubmission({
+    email: `l.brandt${SEED_EMAIL_DOMAIN}`,
+    department: "Mine Maintenance (EME)",
+    passportNo: "C7HN24M91",
+    fullName: "Lukas Brandt",
+    dateOfBirth: "1981-05-02",
+    gender: "Male",
+    nationality: "German",
+    phone: "+49 17012345678",
+    employmentStatus: "Contractor",
+    companyName: "Siemag Conveyor Systems GmbH",
+    liaisonPerson: "Yaw Boateng",
+    accessPurpose: "Work",
+    arrivalDate: "2026-12-01",
+    departureDate: "2027-03-05",
+    visaType: "Work Visa",
+    accessLevel: "Contractor/Service Personnel Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: true,
+    reasonForRequest: "Conveyor drive replacement at the washing plant.",
+  }),
+  foreignSubmission({
+    email: `s.tremblay${SEED_EMAIL_DOMAIN}`,
+    department: "Information Technology",
+    passportNo: "HK402288",
+    fullName: "Sophie Tremblay",
+    dateOfBirth: "1993-02-17",
+    gender: "Female",
+    nationality: "Canadian",
+    phone: "+1 6472345678",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Northbridge Network Solutions",
+    liaisonPerson: "Nana Adjei",
+    accessPurpose: "Visit",
+    arrivalDate: "2026-11-24",
+    departureDate: "2026-11-27",
+    visaType: "Business Visa",
+    accessLevel: "Standard Employee Access",
+    airportPickup: true,
+    accommodationLocation: "Accra",
+    itAccessRequired: true,
+    reasonForRequest: "Scoping the site network upgrade.",
+  }),
+  foreignSubmission({
+    email: `c.oliveira${SEED_EMAIL_DOMAIN}`,
+    department: "Carbonate Plant",
+    passportNo: "FX889034",
+    fullName: "Carlos Oliveira",
+    dateOfBirth: "1984-09-30",
+    gender: "Male",
+    nationality: "Brazilian",
+    phone: "+55 21987654321",
+    employmentStatus: "Contractor",
+    companyName: "Rio Process Engineering Ltda",
+    liaisonPerson: "Abena Owusu",
+    accessPurpose: "Work",
+    arrivalDate: "2026-11-30",
+    departureDate: "2027-02-10",
+    visaType: "Work Visa",
+    accessLevel: "Operational Employee Access",
+    airportPickup: true,
+    accommodationLocation: "Takoradi",
+    itAccessRequired: false,
+    reasonForRequest: "Carbonate plant throughput optimisation.",
+  }),
+  foreignSubmission({
+    email: `m.yilmaz${SEED_EMAIL_DOMAIN}`,
+    department: "Human Capital",
+    passportNo: "U18442907",
+    fullName: "Mehmet Yilmaz",
+    dateOfBirth: "1989-06-11",
+    gender: "Male",
+    nationality: "Turkish",
+    phone: "+90 5321234567",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Anadolu Mining Services",
+    liaisonPerson: "Esi Darko",
+    accessPurpose: "VisitMine",
+    arrivalDate: "2026-12-08",
+    departureDate: "2026-12-14",
+    visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: false,
+    itAccessRequired: false,
+    reasonForRequest:
+      "Pre-contract site familiarisation for the drilling tender.",
   }),
 ];
 
@@ -348,7 +435,18 @@ async function seedDocuments() {
     const registrationType =
       invitation.registrationType === "Local" ? "Local" : "Foreign";
 
-    for (const docType of REGISTRATION_DOCUMENT_TYPES[registrationType]) {
+    // A Visa-on-Arrival visitor has no visa document to upload yet, so the
+    // seeded set follows the same rule the public form enforces.
+    const submission = SUBMISSIONS.find(
+      (candidate) => candidate.email === invitation.email,
+    );
+
+    const docTypes = getRequiredRegistrationDocTypes(
+      registrationType,
+      submission?.formData.receptionData.visaType,
+    );
+
+    for (const docType of docTypes) {
       const fileName = `${docType}-${invitation.email.split("@")[0]}.png`;
 
       const stored = hasToken

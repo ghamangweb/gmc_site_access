@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { DashboardBreadcrumbs } from "@/components/layout/dashboard-breadcrumbs";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { DesktopOnlyGuard } from "@/components/layout/desktop-only-guard";
 import { getSession } from "@/lib/auth/session";
 import {
   getRecentNotifications,
@@ -41,6 +42,9 @@ export default async function DashboardLayout({
     >
       <DashboardBreadcrumbs homeHref="/dashboard" />
       {children}
+      {/* Staff screens genuinely need a desktop; the public /register page
+          deliberately has no guard. */}
+      <DesktopOnlyGuard />
     </DashboardShell>
   );
 }

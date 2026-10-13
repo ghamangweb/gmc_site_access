@@ -26,7 +26,7 @@ export type GmcLiaisonDepartment = (typeof GMC_LIAISON_DEPARTMENTS)[number];
 export type RegistrationType = "Local" | "Foreign";
 
 // `error`/`warning` stay English sentences — every existing staff call site
-// renders them directly. The public pre-registration form is the only client
+// renders them directly. The public registration form is the only client
 // that translates, so it reads `errorCode` when present and falls back to the
 // sentence. `missingDocTypes` carries the parameters of the one code that
 // needs them.
@@ -98,6 +98,8 @@ export const DOC_TYPES = [
   "hospital_fitness_form",
   "induction_declaration_form",
   "induction_registration_form",
+  "biometric_image",
+  "passport_photo",
 ] as const;
 
 export type DocType = (typeof DOC_TYPES)[number];
@@ -107,7 +109,9 @@ export type DocType = (typeof DOC_TYPES)[number];
 export type LayerOwnedDocType =
   | "hospital_fitness_form"
   | "induction_declaration_form"
-  | "induction_registration_form";
+  | "induction_registration_form"
+  | "biometric_image"
+  | "passport_photo";
 
 // What Reception can require of a visitor.
 export type ApplicableDocType = Exclude<DocType, LayerOwnedDocType>;
@@ -123,9 +127,11 @@ export const DOCUMENT_LABELS: Record<DocType, string> = {
   hospital_fitness_form: "Fitness form",
   induction_declaration_form: "Induction declaration form",
   induction_registration_form: "Induction registration form",
+  biometric_image: "Biometric capture",
+  passport_photo: "Passport photograph",
 };
 
-// Which documents a visitor must upload during pre-registration, by
+// Which documents a visitor must upload during registration, by
 // registration type — a local has no passport/visa/permit to give, so asking
 // for them would block them outright. Lives in `domain/` (not
 // `document-service.ts`) so the public forms can import it without pulling
@@ -137,7 +143,7 @@ export const REGISTRATION_DOCUMENT_TYPES: Record<RegistrationType, DocType[]> =
     Local: ["ghana_card"],
   };
 
-// Offered during pre-registration but never blocking — not every visitor
+// Offered during registration but never blocking — not every visitor
 // needs a MINCOM letter or a work permit (a short familiarization visit
 // doesn't), so these upload if the visitor has them and Reception chases the
 // rest later.
@@ -194,6 +200,15 @@ export const VISA_TYPES = [
 ] as const;
 
 export type VisaType = (typeof VISA_TYPES)[number];
+
+export const ID_TYPES = [
+  "Passport",
+  "Ghana Card",
+  "Driver's Licence",
+  "Voter ID",
+] as const;
+
+export type IdType = (typeof ID_TYPES)[number];
 
 export type TerminationStatus = "Pending" | "Approved" | "Rejected";
 

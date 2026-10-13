@@ -33,7 +33,7 @@ function fileNameFromUrl(blobUrl: string): string {
 
 type DocumentSelectorProps = {
   engagementId?: string;
-  /** Public pre-registration mode — uploads go to the token-authorized
+  /** Public registration mode — uploads go to the token-authorized
    * `/api/register/documents` and attach to the invitation instead of an
    * engagement. Mutually exclusive with `engagementId`. */
   invitationToken?: string;

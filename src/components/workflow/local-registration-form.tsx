@@ -32,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DocumentSelector } from "@/components/workflow/document-selector";
 import { PhoneInput } from "@/components/workflow/phone-input";
 import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
+import { RegistrationSuccess } from "@/components/workflow/registration-success";
 import {
   DOCUMENT_LABELS,
   getRegistrationDocTypes,
@@ -237,16 +238,7 @@ export function LocalRegistrationForm({
   }
 
   if (submitted) {
-    return (
-      <Card className="flex flex-col items-center gap-4 p-10 text-center">
-        <h2 className="text-lg font-semibold text-foreground">
-          {t("Thank you — your pre-registration has been submitted")}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {t("GMC staff will be in touch with next steps.")}
-        </p>
-      </Card>
-    );
+    return <RegistrationSuccess />;
   }
 
   return (
@@ -259,7 +251,7 @@ export function LocalRegistrationForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Visitor Details")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <SelectField
               control={form.control}
               name="employmentStatus"
@@ -348,8 +340,8 @@ export function LocalRegistrationForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Company Details")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
               <TextField
                 control={form.control}
                 name="companyName"
@@ -394,7 +386,7 @@ export function LocalRegistrationForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Access Details")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <TextField
               control={form.control}
               name="gmcLiaisonPerson"
@@ -414,7 +406,7 @@ export function LocalRegistrationForm({
               label="Date of Departure"
               disabled={isPending}
             />
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <TextAreaField
                 control={form.control}
                 name="reasonForRequest"
@@ -429,7 +421,7 @@ export function LocalRegistrationForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Site Support Requirements")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <YesNoField
               control={form.control}
               name="airportPickup"

@@ -55,7 +55,7 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   ├── layout.tsx
     │   ├── page.tsx                      → redirect to dashboard or sign-in
     │   ├── register/
-    │   │   └── page.tsx                  → PUBLIC pre-registration form (no auth, not under proxy protection)
+    │   │   └── page.tsx                  → PUBLIC registration form (no auth, not under proxy protection)
     │   ├── (auth)/                       → sign-in, sign-out, PIN, PIN setup, unauthorized
     │   ├── dashboard/
     │   │   ├── layout.tsx                → shared shell: session + unread count → DashboardShell + auto breadcrumbs
@@ -113,12 +113,12 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │       ├── client.ts
     │       ├── schema.ts                 → all Drizzle table definitions
     │       ├── seed.ts                   → first System Admin seed (local only)
-    │       ├── seed-registrations.ts     → dummy submitted pre-registrations for Reception's queue (local only)
+    │       ├── seed-registrations.ts     → dummy submitted registrations for Reception's queue (local only)
     │       └── seed-approvals.ts         → converts seeded submissions into engagements awaiting stakeholder sign-off (local only)
     └── components/
         ├── ui/                           → shadcn/ui components
         ├── layout/                       → public shell, dashboard shell + top bar, breadcrumbs, page header
-        └── workflow/                     → per-layer forms and queue components, including the public pre-registration
+        └── workflow/                     → per-layer forms and queue components, including the public registration
                                              forms (`reception-form.tsx` reused for Foreign via its `publicToken` prop,
                                              `local-registration-form.tsx` for Local) — no separate `components/registration/`
                                              folder was created; the department queue is the invitation console (send/log/revoke),
@@ -140,7 +140,7 @@ Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` �
   of the signed-in Department Head's own sent `invitations`, each revocable. `/register` sits
   **outside** `/dashboard/*` and outside `(auth)/*` — it is not wrapped by the dashboard shell,
   has no session lookup, and is excluded from `src/proxy.ts` protection. It now resolves to a
-  real pre-registration form (`ReceptionForm` for Foreign, `LocalRegistrationForm` for Local),
+  real registration form (`ReceptionForm` for Foreign, `LocalRegistrationForm` for Local),
   gated by the invitation token.
 
 
@@ -304,11 +304,13 @@ Microsoft Graph API
 | id | uuid | PK |
 | entra_object_id | text | Unique |
 | email | text | Written from the Entra `email` claim on first sign-in, then refreshed on every sign-in when the claim differs |
-| display_name | text | Entra `name` claim (falls back to `email`), refreshed on every sign-in when it differs — this is the name shown as GMC Liaison Person on a pre-registration form |
+| display_name | text | Entra `name` claim (falls back to `email`), refreshed on every sign-in when it differs — this is the name shown as GMC Liaison Person on a registration form |
 | system_role | text | User \| Guest \| Admin \| SystemAdmin |
 | workflow_roles | text[] | Receptionist, Hospital, DepartmentHead, etc. |
 | department | text | Nullable — GMC Liaison Department this user heads; only set when `workflow_roles` includes `DepartmentHead`. Constrained to the canonical `GmcLiaisonDepartment` list (`src/lib/domain/types.ts`'s `GMC_LIAISON_DEPARTMENTS`) shared with `registration_requests.department` — not arbitrary text |
-| pin_hash | text | Never plaintext |
+| pin_hash | text | Never plaintext; cleared on deactivation |
+| deactivated_at | timestamptz | Nullable — soft delete. Twelve tables reference this row (audit trail), so a hard DELETE would either violate a foreign key or destroy attribution. A deactivated user cannot sign in and is excluded from every recipient/approver lookup |
+| deactivated_by | uuid | Nullable — the System Admin who deactivated them |
 | pin_failed_attempts | int | |
 | pin_locked_until | timestamptz | Null when not locked |
 | provisioned_at | timestamptz | When System Admin granted access |
@@ -320,13 +322,13 @@ Microsoft Graph API
 |---|---|---|
 | id | uuid | PK |
 | department | text | Stamped from the issuing `staff_users.department` at send time — never chosen in the UI |
-| registration_type | text | `Local` \| `Foreign` — chosen by the Department Head when sending; determines which pre-registration form renders at `/register` for this token |
+| registration_type | text | `Local` \| `Foreign` — chosen by the Department Head when sending; determines which registration form renders at `/register` for this token |
 | email | text | Visitor's email, as entered by the Department Head |
 | token_hash | text | Unique — SHA-256 hash of the raw token; the raw token appears only in the emailed link, never persisted |
 | issued_by | uuid | FK → staff_users (the Department Head) |
 | issued_at | timestamptz | |
 | revoked_at | timestamptz | Nullable — status is derived (`revoked_at` set → Revoked, else Active), same convention as `workflow_cycles.archived_at` |
-| consumed_at | timestamptz | Nullable — set atomically on a successful pre-registration submission; a link with this set (or `revoked_at` set) can never be submitted again |
+| consumed_at | timestamptz | Nullable — set atomically on a successful registration submission; a link with this set (or `revoked_at` set) can never be submitted again |
 
 Issued via `src/lib/services/invitation-service.ts`, surfaced at `/dashboard/department`
 (`src/app/dashboard/(workflow)/department/`). The emailed link
@@ -394,7 +396,7 @@ token makes the whole submission fail before any row is written.
 |---|---|---|
 | id | uuid | PK |
 | engagement_id | uuid | Nullable FK → engagements — a staff upload against a real Engagement |
-| invitation_id | uuid | Nullable FK → invitations — a visitor's pre-registration upload, made before any Engagement exists |
+| invitation_id | uuid | Nullable FK → invitations — a visitor's registration upload, made before any Engagement exists |
 | workflow_cycle_id | uuid | Nullable — only set for engagement-parented uploads |
 | doc_type | text | passport_biodata, hospital_fitness_form, etc. |
 | blob_url | text | |
@@ -457,6 +459,21 @@ guard, SAS viewing and delete all stay in one place instead of every downstream 
 Added 2026-10-12 with Slice 4. The build plan said "no new tables", but `workflow_transitions`
 carries only a `comments` field — nowhere for the outcome, so this mirrors `hospital_clearances`.
 
+### `access_provisionings`
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workflow_cycle_id | uuid | FK — cycle-scoped, matching `hospital_clearances` and `induction_records` |
+| id_type | text | Passport \| Ghana Card \| Driver's Licence \| Voter ID |
+| biometric_captured | boolean | |
+| access_card_number | text | |
+| access_card_expiry | date | Never later than the engagement's departure date, enforced in `activateAccess`. The "or earliest visa/permit expiry" half of that rule **cannot be enforced yet** — those dates are not stored anywhere until Slice 8 adds them |
+| activated_at | timestamptz | |
+
+Added 2026-10-12 with Slice 6. The plan said "no new tables", but the card number, expiry and
+ID type have nowhere else to live — same reasoning as `induction_records` in Slice 4.
+
 ### `workflow_transitions`
 
 | Column | Type | Notes |
@@ -504,7 +521,7 @@ carries only a `comments` field — nowhere for the outcome, so this mirrors `ho
 |---|---|
 | `documents/{documentId}/{docType}/{filename}` | All uploads, staff and visitor alike |
 
-Keyed by the document row's own id, not its parent: a visitor's pre-registration upload is
+Keyed by the document row's own id, not its parent: a visitor's registration upload is
 re-pointed from its invitation onto a real Engagement at Reception hand-off, and a
 parent-keyed path would have to be moved (copy + delete) every time that happens. This path
 never changes for the life of the file.
@@ -514,6 +531,33 @@ Access: private containers; view via short-lived SAS URLs. Staff upload via
 `app/api/register/documents/` (public, invitation-token-authorized).
 
 ---
+
+## Notifications
+
+Every workflow event writes a `notifications` row (the dashboard bell) **and** sends email via
+Graph. The two are deliberately separate: the row is written inside the service, often in the
+same transaction as the state change, while email is sent from the Server Action afterwards —
+so a mail outage can never roll back a workflow transition.
+
+| Event | Dashboard | Email | Recipients |
+|---|---|---|---|
+| Public registration submitted | ✅ | ✅ | Department Head for that department **and** all Receptionists (2026-10-12 — Reception was previously left out even though the submission lands in their queue) |
+| Access/role requested | ✅ | ✅ | All System Administrators |
+| User provisioned | — | ✅ | The provisioned user |
+| PIN reset | — | ✅ | The affected user |
+| Stakeholder approval requested | ✅ | ✅ | HCM, GMM, DMD (all three) |
+| Approval received | ✅ | ✅ | Next layer per access path |
+| Delegated approval requested / granted | ✅ | ✅ | Stakeholders + System Admin / the delegate |
+| Hospital cleared / Unfit | ✅ | ✅ | Training School / Reception |
+| Induction completed | ✅ | ✅ | Security |
+| Termination requested | ✅ | ✅ | System Administrators |
+
+**A role with no holders is reported, not swallowed.** `notifyStaff` and the email loops no-op
+on an empty recipient list, so before 2026-10-12 requesting approval with no HCM/GMM/DMD
+provisioned returned plain success while telling nobody — the engagement then sat in a queue
+with no audience. Those actions now return a `warning` naming the missing role. The public
+submission action is the exception: it **logs** the gap instead, because that warning would
+otherwise show GMC's internal staffing problems to a visitor.
 
 ## Authentication
 
@@ -528,6 +572,7 @@ Access: private containers; view via short-lived SAS URLs. Staff upload via
 - Unprovisioned users (`system_role = User`): `/unauthorized` — role selector + access request CTA
 - Proxy: `src/proxy.ts` — single Next.js proxy pipeline; reads JWT only (no DB calls per request); **excludes `/register`**, which has zero auth
 - Protected routes: `/dashboard/*` (including `/dashboard/department`)
+- `requireProvisioned` reads `deactivated_at` from the **database**, not the JWT (2026-10-12). Sessions live up to an hour, and removing someone's access has to take effect immediately rather than whenever their token expires. Every other guard funnels through it. The proxy still reads the JWT only — this runs in page/action code that is already querying
 - `LAYER_ROLES.reception` is Receptionist-only (2026-10-12) — stakeholders have `/dashboard/approvals`, which is intentionally not in `LAYER_ROLES` so a delegated approver (who holds no workflow role) can still reach the engagement granted to them
 - PIN lockout: 3 failed attempts → 15-minute lock
 - PIN rules: no all-zeros, no repeating digits, no ascending/descending sequences
@@ -627,7 +672,7 @@ Rules the AI agent must never violate:
 - Blob paths are keyed by the document's own id, never by its parent — so re-pointing a
   visitor's upload onto an Engagement at Reception hand-off is a pure DB update with no blob
   copy. Don't reintroduce a parent id into the path
-- Required pre-registration documents are enforced server-side in `createRegistrationRequest`
+- Required registration documents are enforced server-side in `createRegistrationRequest`
   (via `getMissingRegistrationDocTypes`) **before** the token is consumed, so a submission
   blocked on a missing document leaves the invitation link still usable. The forms' disabled
   submit button is a convenience mirror of that check, never the enforcement

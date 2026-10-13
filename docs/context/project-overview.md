@@ -3,9 +3,9 @@
 ## About the Project
 GMC Site Access is a digital visitor and contractor site-access registration system for Ghana Manganese Company (GMC).
 
-The system replaces the manual process of registering visitors, obtaining the required approvals, completing site-access requirements, and activating or terminating access. The required approval is issued before the visitor acts: the Department Head sends an invitation link that authorises the pre-registration submission.
+The system replaces the manual process of registering visitors, obtaining the required approvals, completing site-access requirements, and activating or terminating access. The required approval is issued before the visitor acts: the Department Head sends an invitation link that authorises the registration submission.
 
-Visitors do not create accounts or log into the system. They begin the process by opening an invitation link sent to them by the Department Head and submitting the pre-registration form in a token-gated session. The form page itself is public, but submission requires a valid, unrevoked invitation link. Once submitted, GMC staff take over the process and move the request through the appropriate access workflow.
+Visitors do not create accounts or log into the system. They begin the process by opening an invitation link sent to them by the Department Head and submitting the registration form in a token-gated session. The form page itself is public, but submission requires a valid, unrevoked invitation link. Once submitted, GMC staff take over the process and move the request through the appropriate access workflow.
 
 The workflow begins with the Department Head, who sends an invitation email to the visitor from the dashboard at a button click after specifying the destination email. It continues through Reception, and then follows different processing paths depending on the visitor's purpose and whether mine-site access is required.
 
@@ -35,7 +35,7 @@ Visitors, expatraites, contractors, or representatives who provide information f
 External users:
 - Do not create accounts.
 - Do not log into the system.
-- Submit information through the pre-registration form, which they reach by opening an invitation link from the Department Head.
+- Submit information through the registration form, which they reach by opening an invitation link from the Department Head.
 
 #### GMC Staff
 
@@ -72,7 +72,7 @@ The system features both **system roles** and **workflow responsibilities**.
 
 ## Registration Process
 
-The visitor submits the pre-registration form with the unique token-gated link received through email from the department head.
+The visitor submits the registration form with the unique token-gated link received through email from the department head.
 
 The request contains the information required for the initial review, including the **GMC Liaison Department**, which is carried by the invitation link.
 
@@ -313,7 +313,7 @@ The audit trail records information such as:
 
 The following rules define the expected behaviour of the system:
 
-- The pre-registration form is viewable without authentication, but submission requires a valid, unrevoked invitation link.
+- The registration form is viewable without authentication, but submission requires a valid, unrevoked invitation link.
 - Visitors do not create accounts or log into the system.
 - Staff must authenticate before accessing staff functions.
 - Department Heads issue invitation links for their GMC Liaison Department. The invitation is the approval; there is no separate approval step after submission.
@@ -336,7 +336,7 @@ The following rules define the expected behaviour of the system:
 
 ## Features In Scope
 
-- Pre-registration form, viewable by anyone but submittable only by visitors holding a valid invitation link from the Department Head.
+- Registration form, viewable by anyone but submittable only by visitors holding a valid invitation link from the Department Head.
 - Department Head invitation console: generate, email, resend, and revoke invitation links.
 - Staff authentication using Microsoft Entra ID and PIN.
 - Role-based staff access.
@@ -354,7 +354,7 @@ The following rules define the expected behaviour of the system:
 - Guest read-only access.
 - Foreign visitor and expatriate registration.
 - Local visitor registration (2026-10-09 — moved in scope; invitations carry a Local/Foreign
-  registration type chosen by the Department Head, routing to a different pre-registration
+  registration type chosen by the Department Head, routing to a different registration
   form at `/register`).
 
 
@@ -383,7 +383,7 @@ At a high level, GMC Site Access follows this process:
 
 ↓
 
-**Visitor Submits Pre-Registration Form (token-gated)**
+**Visitor Submits Registration Form (token-gated)**
 
 ↓
 

@@ -6,7 +6,7 @@ import {
 
 export type RegistrationLocale = "en" | "zh";
 
-// Simplified Chinese for the public pre-registration form only. Keyed by the
+// Simplified Chinese for the public registration form only. Keyed by the
 // English string the component already renders, so English mode returns the
 // key untouched and the staff-facing ReceptionForm is byte-identical to how it
 // rendered before this file existed. A missing key falls back to English
@@ -146,8 +146,7 @@ const ZH_ENTRIES = {
   // --- Buttons and submission --------------------------------------------
   Submit: "提交",
   "Upload these documents to continue:": "请上传以下文件后继续：",
-  "Thank you — your pre-registration has been submitted":
-    "感谢您，预登记已提交",
+  "Thank you! Your registration has been submitted": "感谢您！登记已提交",
   "GMC staff will be in touch with next steps.":
     "GMC 工作人员将与您联系，告知后续步骤。",
 
@@ -165,8 +164,8 @@ const ZH_ENTRIES = {
     "此邀请链接无效、已被使用或已被撤销",
   "Upload these documents before submitting:": "提交前请先上传以下文件：",
   "Failed to submit form": "提交失败",
-  "Submission received, but the Department Head may not have been notified by email":
-    "提交已收到，但可能未能通过邮件通知部门主管",
+  "Submission received, but GMC staff may not have been notified by email":
+    "提交已收到，但可能未能通过邮件通知 GMC 工作人员",
   "File exceeds the 10MB upload limit": "文件超过 10MB 上传限制",
   "Missing token, docType, or file": "缺少令牌、文件类型或文件",
   "Invalid document type": "文件类型无效",

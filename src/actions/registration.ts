@@ -71,28 +71,57 @@ export async function submitRegistrationRequestAction(
   formData: ReceptionFormInput | LocalRegistrationFormInput,
 ): Promise<ActionResult> {
   try {
-    const { request, departmentHeads } = await createRegistrationRequest(
-      token,
-      formData,
-    );
+    const { request, departmentHeads, receptionists, visitorName } =
+      await createRegistrationRequest(token, formData);
 
-    let allEmailsSent = true;
-    for (const head of departmentHeads) {
-      const emailSent = await sendEmail({
-        to: head.email,
-        ...registrationSubmittedTemplate({ department: request.department }),
-      });
-      if (!emailSent) {
-        allEmailsSent = false;
-      }
+    // A visitor must never be shown GMC's internal staffing problems, so this
+    // is logged rather than returned as a warning — but it still must not pass
+    // silently: a submission nobody was told about goes nowhere.
+    if (departmentHeads.length === 0 || receptionists.length === 0) {
+      console.error(
+        "[actions/registration] submission notified incomplete audience:",
+        {
+          department: request.department,
+          departmentHeads: departmentHeads.length,
+          receptionists: receptionists.length,
+        },
+      );
     }
+
+    // Both audiences get the same event with a link to their own screen.
+    // Sent in parallel: a visitor is waiting on this response, and one slow
+    // mailbox shouldn't hold up the rest.
+    const results = await Promise.all([
+      ...departmentHeads.map((head) =>
+        sendEmail({
+          to: head.email,
+          ...registrationSubmittedTemplate({
+            department: request.department,
+            visitorName,
+            audience: "DepartmentHead",
+          }),
+        }),
+      ),
+      ...receptionists.map((receptionist) =>
+        sendEmail({
+          to: receptionist.email,
+          ...registrationSubmittedTemplate({
+            department: request.department,
+            visitorName,
+            audience: "Receptionist",
+          }),
+        }),
+      ),
+    ]);
+
+    const allEmailsSent = results.every(Boolean);
 
     return allEmailsSent
       ? { success: true }
       : {
           success: true,
           warning:
-            "Submission received, but the Department Head may not have been notified by email",
+            "Submission received, but GMC staff may not have been notified by email",
         };
   } catch (error) {
     console.error("[actions/registration]", error);

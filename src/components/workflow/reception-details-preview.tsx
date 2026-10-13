@@ -60,7 +60,7 @@ export function ReceptionDetailsPreview({
             </Badge>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Full Name" value={text(values.fullName)} />
           <Field
             label={isLocal ? "Ghana Card No." : "Passport No."}
@@ -100,7 +100,7 @@ export function ReceptionDetailsPreview({
         <h2 className="text-lg font-semibold text-foreground">
           Company Details
         </h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Company Name" value={text(values.companyName)} />
           <Field
             label="Contact (Monthly Reporting)"
@@ -122,7 +122,7 @@ export function ReceptionDetailsPreview({
         <h2 className="text-lg font-semibold text-foreground">
           Access Details
         </h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
             label="GMC Liaison Person"
             value={text(values.gmcLiaisonPerson)}
@@ -137,7 +137,7 @@ export function ReceptionDetailsPreview({
           {!isLocal && (
             <Field label="Visa Type" value={text(values.visaType)} />
           )}
-          <div className="col-span-3">
+          <div className="sm:col-span-2 lg:col-span-3">
             <Field
               label="Reason for Request"
               value={text(values.reasonForRequest)}
@@ -150,7 +150,7 @@ export function ReceptionDetailsPreview({
         <h2 className="text-lg font-semibold text-foreground">
           Site Support Requirements
         </h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
             label="Airport Pickup"
             value={yesNo(values.airportPickup)}
@@ -225,7 +225,7 @@ export function ReceptionDetailsPreview({
           <h2 className="text-lg font-semibold text-foreground">
             Administration
           </h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field
               label="Accommodation Confirmed"
               value={yesNo(values.accommodationConfirmed)}
@@ -241,7 +241,7 @@ export function ReceptionDetailsPreview({
               value={yesNo(values.inflightUpdated)}
               muted={values.inflightUpdated !== true}
             />
-            <div className="col-span-3">
+            <div className="sm:col-span-2 lg:col-span-3">
               <Field
                 label="Remarks / Other Information"
                 value={text(values.remarks)}
@@ -260,7 +260,7 @@ export function ReceptionDetailsPreview({
             The visitor attached no documents.
           </p>
         ) : (
-          <div className="grid grid-cols-4 gap-8 pt-2">
+          <div className="grid grid-cols-2 gap-6 pt-2 sm:grid-cols-3 lg:grid-cols-4 lg:gap-8">
             {documents.map(({ document, previewUrl }) => (
               <DocumentPreview
                 key={document.id}
