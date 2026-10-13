@@ -506,6 +506,54 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
       in as HCM/GMM/DMD: the row appears, "Review & Approve" opens the preview, and approving
       clears it from the queue
 
+### IT card type + Security access register (2026-10-13) ✅
+- [x] `ID_TYPES` (Passport / Ghana Card / Driver's Licence / Voter ID) replaced by `CARD_TYPES`
+      = **Visitor Card**, **RFID Card** — IT issues a card, it doesn't record an identity
+      document. Field relabelled "Card Type" in the form and the activated summary.
+      `access_provisionings.id_type` keeps its column name (empty table, no migration), but now
+      holds a card type
+- [x] Security's third tab **"Site Access Granted"** — everyone through the full workflow, with
+      card number, Access From, Access Until and the Duration between them, plus the access
+      state. Reads `listRecentProvisionings` (same source as IT's "Access Activated"); no row
+      action, it is a register rather than a queue
+- [x] Verified already in place from the previous slice: `ItForm` redirects to `/dashboard/it`,
+      `ForwardToITButton` to `/dashboard/security`, and both queues have a pending tab and a
+      worked-on tab
+- [x] `tsc --noEmit`, `biome check src/`, `bun run build` clean; 0 anti-slop findings on the
+      changed files
+- [ ] Manual in-browser check — activate access as IT: the card-type dropdown offers the two
+      card types, the redirect lands on IT's queue with the record under "Access Activated", and
+      Security's "Site Access Granted" tab lists the same visitor with the right duration
+
+### Hospital → Training hand-off + email link fixes (2026-10-13) ✅
+- [x] **Fit with Conditions now notifies Reception as well as Training School.**
+      `recordHospitalClearance` returns `trainingRecipients` + `receptionRecipients` instead of
+      one list: Fit → Training; Fit with Conditions → both; Unfit → Reception. Dashboard
+      notifications are worded per audience, and the action's warning names whichever audience
+      has nobody provisioned
+- [x] New `hospitalFitWithConditionsTemplate` — carries the doctor's comments, links Reception
+      to the record
+- [x] **Email "View the record" links no longer 403.** `proxy.ts` gates `/dashboard/<layer>` by
+      role, and the Unfit email sent a Receptionist to `/dashboard/hospital/:id`. Fixed as a
+      class: `templates.ts` gained a link helper per audience plus `layerEngagementLink(role,
+      id)`, and seven templates were repointed — approvals requests → `/dashboard/approvals/:id`,
+      approval-received → the next layer's route, delegated-approval → the delegations screen,
+      hospital-cleared → Training, hospital-unfit/fit-with-conditions → Reception,
+      access-activated → per recipient, termination → the dashboard root (no termination
+      approval screen exists yet). `nextRole` is typed `WorkflowRole` so a new layer forces the
+      decision. Dashboard notifications carry no links and were unaffected
+- [x] **Training School can see the fitness form.** New `HospitalHandoff` card on
+      `training/[engagementId]`: clearance outcome badge, doctor's comments and the fitness form
+      via `DocumentPreview` on a signed URL. Rendered only when a clearance exists, so a
+      visit+mine record shows no empty card. `getDocumentsForEngagement` already returned the
+      document — nothing rendered it
+- [x] `tsc --noEmit`, `biome check src/`, `bun run build` clean; anti-slop counts unchanged from
+      the committed baselines on every file touched
+- [ ] Manual in-browser check — record Fit, Fit with Conditions and Unfit in turn: confirm
+      Training's card shows the clearance and opens the fitness form, Reception gets the
+      conditional/unfit notification, and every email link opens the record instead of
+      "Forbidden"
+
 ### Every layer: worked-on tab + post-action redirect (2026-10-13) ✅
 - [x] `QueueViewTabs` (`components/layout/queue-view-tabs.tsx`) — Reception's segmented view
       switch extracted and reused by every layer; Reception refactored onto it so there is one

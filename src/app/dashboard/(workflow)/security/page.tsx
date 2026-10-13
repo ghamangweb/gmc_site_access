@@ -1,4 +1,4 @@
-import { SendIcon, ShieldCheckIcon } from "lucide-react";
+import { IdCardIcon, SendIcon, ShieldCheckIcon } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -27,9 +28,33 @@ import {
 import {
   countEngagementsForLayer,
   listEngagementsForLayer,
+  listRecentProvisionings,
   listRecentSecurityForwards,
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
+
+// How long the visitor is on site for: the access card's own validity window,
+// which is the authoritative one — `activateAccess` refuses an expiry later
+// than the departure date, so a card can never outlive the visit.
+function accessDuration(activatedAt: Date, cardExpiry: string): string {
+  const start = Date.parse(
+    `${activatedAt.toISOString().slice(0, 10)}T00:00:00Z`,
+  );
+
+  const end = Date.parse(`${cardExpiry}T00:00:00Z`);
+
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return "—";
+  }
+
+  const days = Math.round((end - start) / 86_400_000);
+
+  if (days <= 0) {
+    return "Expired";
+  }
+
+  return days === 1 ? "1 day" : `${days} days`;
+}
 
 export default async function SecurityQueuePage({
   searchParams,
@@ -44,11 +69,13 @@ export default async function SecurityQueuePage({
 
   const { view, q, page } = await searchParams;
 
-  const activeView = view === "forwarded" ? "forwarded" : "awaiting";
+  const activeView =
+    view === "forwarded" || view === "granted" ? view : "awaiting";
+
   const request = toPageRequest(q, page);
 
   // Visit-only records never reach Security — they finish at Reception.
-  const [awaitingCount, awaiting, forwarded] = await Promise.all([
+  const [awaitingCount, awaiting, forwarded, granted] = await Promise.all([
     countEngagementsForLayer("AtSecurity", ["Work", "VisitMine"]),
     activeView === "awaiting"
       ? listEngagementsForLayer("AtSecurity", ["Work", "VisitMine"], request)
@@ -56,6 +83,10 @@ export default async function SecurityQueuePage({
     activeView === "forwarded"
       ? listRecentSecurityForwards(request)
       : undefined,
+    // The end of the line: IT has issued a card, so the visitor is through
+    // every stage. Same source as IT's own "Access Activated" tab — one row
+    // per card issued.
+    activeView === "granted" ? listRecentProvisionings(request) : undefined,
   ]);
 
   const views = [
@@ -69,6 +100,11 @@ export default async function SecurityQueuePage({
       label: "Forwarded to IT",
       value: "forwarded",
       href: "/dashboard/security?view=forwarded",
+    },
+    {
+      label: "Site Access Granted",
+      value: "granted",
+      href: "/dashboard/security?view=granted",
     },
   ];
 
@@ -87,7 +123,9 @@ export default async function SecurityQueuePage({
           placeholder={
             activeView === "awaiting"
               ? "Search the queue"
-              : "Search forwarded records"
+              : activeView === "forwarded"
+                ? "Search forwarded records"
+                : "Search granted access"
           }
         />
       </div>
@@ -225,6 +263,85 @@ export default async function SecurityQueuePage({
             page={forwarded.page}
             pageSize={forwarded.pageSize}
             total={forwarded.total}
+            pageParam="page"
+            searchParams={{ q, view }}
+          />
+        </div>
+      )}
+
+      {activeView === "granted" && granted && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {granted.rows.length === 0 ? (
+            <EmptyState
+              icon={IdCardIcon}
+              title="Nobody has site access yet"
+              description="Visitors appear here once IT activates their access card — the end of the workflow."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Passport No.</TableHead>
+                  <TableHead>Nature of Visit</TableHead>
+                  <TableHead>Card No.</TableHead>
+                  <TableHead>Access From</TableHead>
+                  <TableHead>Access Until</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Access</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {granted.rows.map(({ provisioning, engagement, person }) => {
+                  // SAFETY: access_purpose is a text column written only from
+                  // the AccessPurpose union by `createEngagement`.
+                  const purposeLabel =
+                    ACCESS_PURPOSE_LABELS[
+                      engagement.accessPurpose as AccessPurpose
+                    ] ?? engagement.accessPurpose;
+
+                  return (
+                    <TableRow
+                      key={provisioning.id}
+                      className="hover:bg-muted/50"
+                    >
+                      <TableCell>{person.fullName}</TableCell>
+                      <TableCell>{person.passportNo}</TableCell>
+                      <TableCell>{purposeLabel}</TableCell>
+                      <TableCell>{provisioning.accessCardNumber}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatQueueDate(provisioning.activatedAt)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {provisioning.accessCardExpiry}
+                      </TableCell>
+                      <TableCell>
+                        {accessDuration(
+                          provisioning.activatedAt,
+                          provisioning.accessCardExpiry,
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            engagement.accessState === "Active"
+                              ? "bg-status-success-bg text-status-success-fg"
+                              : "bg-status-neutral-bg text-status-neutral-fg"
+                          }
+                        >
+                          {engagement.accessState}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+          <QueuePagination
+            page={granted.page}
+            pageSize={granted.pageSize}
+            total={granted.total}
             pageParam="page"
             searchParams={{ q, view }}
           />

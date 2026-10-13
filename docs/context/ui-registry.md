@@ -1357,6 +1357,89 @@ outcome now states its consequence under the select — Fit proceeds to Training
 Conditions proceeds *and* notifies Reception, Unfit holds at Hospital and notifies Reception.
 The three are not interchangeable and the form shouldn't make them look it.
 
+### IT card type + Security's "Site Access Granted" tab (2026-10-13)
+
+Files: `lib/domain/types.ts` (`CARD_TYPES`), `it-form.tsx`,
+`dashboard/(workflow)/security/page.tsx`
+
+| Property | Class |
+|---|---|
+| Duration cell | plain `text-sm`; "Expired" when the card's window has closed |
+| Access badge | Active → success, anything else → neutral |
+| Empty state | `EmptyState` with lucide `IdCardIcon` |
+
+**Pattern notes:**
+**`ID_TYPES` → `CARD_TYPES`.** IT's dropdown offered Passport / Ghana Card / Driver's Licence /
+Voter ID — identity documents the visitor already holds, which is not what IT issues. It is now
+**Visitor Card** and **RFID Card**, the two cards GMC hands out, and the field reads "Card
+Type" in both the form and the activated-access summary. `access_provisionings.id_type` keeps
+its column name (no migration; the table was empty), so the column now stores a card type —
+worth knowing before writing a query against it.
+
+**Security has a third tab, "Site Access Granted"** — the workers who are through every stage,
+with how long their mine-site access runs for: card number, Access From (`activatedAt`), Access
+Until (`accessCardExpiry`), and a Duration computed between the two. It reads
+`listRecentProvisionings`, the same source as IT's "Access Activated" tab, because a
+provisioning row *is* the record of a completed workflow. Duration uses the **card's** window,
+not arrival→departure: `activateAccess` already refuses an expiry later than the departure
+date, so the card can never outlive the visit, and the card is what the gate actually checks.
+No row action — this tab is a register, not a queue; Security's work on these records is done.
+
+Both layers already redirected to their own queue after acting (`ItForm` →`/dashboard/it`,
+`ForwardToITButton` → `/dashboard/security`) and both queues already carried a pending tab and
+a worked-on tab, from the QueueViewTabs change above.
+
+### Hospital → Training hand-off, and email links that land (2026-10-13)
+
+Files: `components/workflow/hospital-handoff.tsx` (new),
+`dashboard/(workflow)/training/[engagementId]/page.tsx`, `lib/email/templates.ts`,
+`actions/engagements.ts`, `workflow-service.ts` (`recordHospitalClearance`)
+
+| Property | Class |
+|---|---|
+| Card | `Card` + `flex flex-col gap-5 p-6` |
+| Outcome badge | Fit → success, Fit with Conditions → warning, Unfit → danger |
+| Field label | `font-medium text-muted-foreground text-xs` |
+| Comments row | `border-border border-b pb-4` |
+| Fitness form | `DocumentPreview` with a 15-minute signed URL, `flex flex-wrap gap-6` |
+
+**Pattern notes:**
+`HospitalHandoff` is the one exception to "Training is identity plus the form, nothing else":
+the induction it signs off depends on a medical Training could not see. The card shows the
+clearance outcome, the doctor's comments and the fitness form itself, read-only. It renders
+**only when a clearance exists** — a visit+mine visitor never went through Hospital, so there is
+no hand-off and no empty card. Reception keeps its own read-only view of the same document;
+that was never the problem.
+
+**Notification routing per outcome.** `recordHospitalClearance` returned one `recipients` list
+and the action mailed one template to all of it, so **Fit with Conditions told Training only** —
+Reception, whose job the conditions are, heard nothing. It now returns `trainingRecipients` and
+`receptionRecipients`: Fit → Training; Fit with Conditions → Training *and* Reception (new
+`hospitalFitWithConditionsTemplate`, which carries the doctor's comments); Unfit → Reception.
+Dashboard notifications are written per audience with their own wording, and the action's
+"nobody was notified" warning now names each audience that could not be reached.
+
+**Every engagement link in an email is audience-specific.** `proxy.ts` gates
+`/dashboard/<layer>` on that layer's workflow role, so a link to the wrong layer answers with a
+bare `Forbidden` — which is what Reception got on every Unfit clearance, and Training on every
+Fit one. `templates.ts` now has a helper per audience plus `layerEngagementLink(role, id)`, and
+each template uses the one its recipients can actually open:
+
+| Template | Recipients | Link |
+|---|---|---|
+| `stakeholderApprovalRequested` | HCM/GMM/DMD (+ admins) | `/dashboard/approvals/:id` |
+| `stakeholderApprovalReceived` | the next layer's staff | derived from `nextRole` |
+| `delegatedApprovalRequested` | System Administrators | `/dashboard/system-admin/delegations` |
+| `hospitalCleared` | Training School | `/dashboard/training/:id` |
+| `hospitalFitWithConditions` | Reception | `/dashboard/reception/:id` |
+| `hospitalUnfit` | Reception | `/dashboard/reception/:id` |
+| `accessActivated` | Security **and** Reception | per recipient, via `audience` |
+| `terminationRequested` | System Administrators | the dashboard root (no termination screen exists yet) |
+
+`stakeholderApprovalReceivedTemplate.nextRole` is typed `WorkflowRole` rather than `string`, so
+a new layer cannot be added without deciding where its email points. Dashboard notifications
+are plain text with no links, so they were never affected.
+
 ### QueueViewTabs + every layer's worked-on tab (2026-10-13)
 
 Files: `components/layout/queue-view-tabs.tsx` (new), `dashboard/(workflow)/hospital/page.tsx`,

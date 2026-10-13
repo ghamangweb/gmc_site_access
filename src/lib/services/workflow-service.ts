@@ -997,7 +997,8 @@ export async function recordHospitalClearance(
   performedBy: string,
 ): Promise<{
   engagement: Engagement;
-  recipients: StaffUser[];
+  trainingRecipients: StaffUser[];
+  receptionRecipients: StaffUser[];
   outcome: "Cleared" | "Unfit";
 }> {
   const preCheck = await getEngagementById(engagementId);
@@ -1023,9 +1024,19 @@ export async function recordHospitalClearance(
 
   const outcome: "Cleared" | "Unfit" =
     input.clearanceStatus === "Unfit" ? "Unfit" : "Cleared";
-  const recipients =
+
+  // Per project-overview.md, the three outcomes notify different people:
+  // Fit goes to Training School alone; Fit with Conditions goes to Training
+  // School *and* Reception, because the conditions are Reception's to manage;
+  // Unfit goes to Reception only, since the record stays at Hospital.
+  // Reception used to hear nothing at all about a conditional clearance.
+  const trainingRecipients =
     outcome === "Cleared"
       ? await getStaffByWorkflowRoles(["TrainingStaff"])
+      : [];
+  const receptionRecipients =
+    input.clearanceStatus === "Fit"
+      ? []
       : await getStaffByWorkflowRoles(["Receptionist"]);
 
   const updated = await db.transaction(async (tx) => {
@@ -1089,23 +1100,38 @@ export async function recordHospitalClearance(
       });
     }
 
-    if (recipients.length > 0) {
-      await tx.insert(notifications).values(
-        recipients.map((recipient) => ({
-          recipientStaffUserId: recipient.id,
-          engagementId,
-          message:
-            outcome === "Cleared"
-              ? "Hospital clearance recorded and routed to Training School."
-              : "Hospital marked this record Unfit — it remains at Hospital.",
-        })),
-      );
+    // Each audience is told what it has to act on, not one shared sentence.
+    const receptionMessage =
+      outcome === "Unfit"
+        ? "Hospital marked this record Unfit — it remains at Hospital."
+        : "Hospital cleared this record Fit with Conditions — it has moved to Training School.";
+
+    const dashboardNotices = [
+      ...trainingRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: "Hospital clearance recorded and routed to Training School.",
+      })),
+      ...receptionRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: receptionMessage,
+      })),
+    ];
+
+    if (dashboardNotices.length > 0) {
+      await tx.insert(notifications).values(dashboardNotices);
     }
 
     return updatedEngagement;
   });
 
-  return { engagement: updated, recipients, outcome };
+  return {
+    engagement: updated,
+    trainingRecipients,
+    receptionRecipients,
+    outcome,
+  };
 }
 
 export type InductionRecord = typeof inductionRecords.$inferSelect;
