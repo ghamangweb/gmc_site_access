@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -37,6 +38,7 @@ export function ItForm({
   provisioning?: AccessProvisioning;
   readOnly: boolean;
 }) {
+  const router = useRouter();
   const [idType, setIdType] = useState<IdType>("Passport");
   const [biometricCaptured, setBiometricCaptured] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
@@ -80,6 +82,10 @@ export function ItForm({
       } else {
         toast.success("Site access activated");
       }
+
+      // Back to IT's queue, where the activated record now shows under
+      // "Access Activated".
+      router.push("/dashboard/it");
     });
   }
 

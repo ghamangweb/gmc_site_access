@@ -41,9 +41,13 @@ export function RegistrationRequestRow({
           </Button>
         ) : (
           canManage && (
+            // "Review", not "Create Engagement": the link opens the visitor's
+            // submission for checking, and creating the engagement is the
+            // button at the end of that screen — same shape as Approvals'
+            // "Review & Approve".
             <Button asChild size="sm">
               <Link href={`/dashboard/reception/new?requestId=${request.id}`}>
-                Create Engagement
+                Review
               </Link>
             </Button>
           )

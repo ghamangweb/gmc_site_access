@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -15,14 +16,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DocumentSelector } from "@/components/workflow/document-selector";
-import type { HospitalClearanceStatus } from "@/lib/domain/types";
+import {
+  HOSPITAL_CLEARANCE_LABELS,
+  type HospitalClearanceStatus,
+} from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
-
-const STATUS_LABELS: Record<HospitalClearanceStatus, string> = {
-  Fit: "Fit",
-  FitWithConditions: "Fit with Conditions",
-  Unfit: "Unfit",
-};
 
 // What each outcome does to the engagement, per project-overview.md. Spelled
 // out because the three are not interchangeable: one advances the visitor,
@@ -52,6 +50,7 @@ export function HospitalForm({
   latestClearance,
   readOnly,
 }: HospitalFormProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<HospitalClearanceStatus | "">("");
   const [comments, setComments] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -71,17 +70,24 @@ export function HospitalForm({
         clearanceStatus: status,
         doctorComments: comments,
       });
-      if (result.success) {
-        setStatus("");
-        setComments("");
-        if (result.warning) {
-          toast.warning(result.warning);
-        } else {
-          toast.success("Clearance recorded");
-        }
-      } else {
+      if (!result.success) {
         toast.error(result.error);
+
+        return;
       }
+
+      setStatus("");
+      setComments("");
+
+      if (result.warning) {
+        toast.warning(result.warning);
+      } else {
+        toast.success("Clearance recorded");
+      }
+
+      // Hospital records a decision and moves on, so the queue — not the
+      // record just acted on — is where the next piece of work is.
+      router.push("/dashboard/hospital");
     });
   }
 
@@ -93,7 +99,8 @@ export function HospitalForm({
 
       {latestClearance && (
         <p className="mb-4 text-xs text-muted-foreground">
-          Last recorded: {STATUS_LABELS[latestClearance.clearanceStatus]} —{" "}
+          Last recorded:{" "}
+          {HOSPITAL_CLEARANCE_LABELS[latestClearance.clearanceStatus]} —{" "}
           {latestClearance.doctorComments} (
           {latestClearance.clearanceDate.toLocaleDateString()})
         </p>
@@ -124,13 +131,15 @@ export function HospitalForm({
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(STATUS_LABELS) as HospitalClearanceStatus[]).map(
-                (value) => (
-                  <SelectItem key={value} value={value}>
-                    {STATUS_LABELS[value]}
-                  </SelectItem>
-                ),
-              )}
+              {(
+                Object.keys(
+                  HOSPITAL_CLEARANCE_LABELS,
+                ) as HospitalClearanceStatus[]
+              ).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {HOSPITAL_CLEARANCE_LABELS[value]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {status !== "" && (

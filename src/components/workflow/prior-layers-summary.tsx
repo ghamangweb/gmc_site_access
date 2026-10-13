@@ -1,6 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import type { HospitalClearanceStatus } from "@/lib/domain/types";
+import {
+  HOSPITAL_CLEARANCE_LABELS,
+  type HospitalClearanceStatus,
+} from "@/lib/domain/types";
 import type {
   HospitalClearance,
   InductionRecord,
@@ -14,12 +17,6 @@ const CLEARANCE_BADGE: Record<HospitalClearanceStatus, string> = {
   Fit: "bg-status-success-bg text-status-success-fg",
   FitWithConditions: "bg-status-warning-bg text-status-warning-fg",
   Unfit: "bg-status-danger-bg text-status-danger-fg",
-};
-
-const CLEARANCE_LABEL: Record<HospitalClearanceStatus, string> = {
-  Fit: "Fit",
-  FitWithConditions: "Fit with Conditions",
-  Unfit: "Unfit",
 };
 
 function formatDate(value: Date): string {
@@ -76,7 +73,8 @@ export function PriorLayersSummary({
                   clearanceStatus ? CLEARANCE_BADGE[clearanceStatus] : ""
                 }
               >
-                {(clearanceStatus && CLEARANCE_LABEL[clearanceStatus]) ??
+                {(clearanceStatus &&
+                  HOSPITAL_CLEARANCE_LABELS[clearanceStatus]) ??
                   clearance.clearanceStatus}
               </Badge>
               <span className="text-muted-foreground text-xs">

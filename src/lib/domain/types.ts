@@ -214,6 +214,18 @@ export type TerminationStatus = "Pending" | "Approved" | "Rejected";
 
 export type HospitalClearanceStatus = "Fit" | "FitWithConditions" | "Unfit";
 
+// What a clearance outcome is called on screen — the stored value keeps its
+// camel case, only the label reads like English. Single source, like
+// WORKFLOW_STATE_LABELS.
+export const HOSPITAL_CLEARANCE_LABELS: Record<
+  HospitalClearanceStatus,
+  string
+> = {
+  Fit: "Fit",
+  FitWithConditions: "Fit with Conditions",
+  Unfit: "Unfit",
+};
+
 export type ReceptionData = {
   employmentStatus: string;
   telephoneOnSite: string;

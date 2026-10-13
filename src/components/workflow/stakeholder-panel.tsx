@@ -141,8 +141,11 @@ export function StakeholderPanel({
           toast.success("Engagement approved");
         }
         setApproveOpen(false);
+        // `returnHref`, not Reception's queue: a stakeholder holds no
+        // Receptionist role, so pushing them to /dashboard/reception was
+        // answered by the proxy with a bare 403 the moment they approved.
         redirectTimeoutRef.current = setTimeout(
-          () => router.push("/dashboard/reception"),
+          () => router.push(returnHref),
           2000,
         );
       } else {

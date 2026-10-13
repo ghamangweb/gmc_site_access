@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
-import { Badge } from "@/components/ui/badge";
+import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -25,9 +25,12 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
+  countEngagementsAwaitingApproval,
+  countStakeholderApprovalsBy,
   listEngagementsAwaitingApproval,
   listRecentStakeholderApprovals,
 } from "@/lib/services/workflow-service";
+import { formatQueueDate } from "@/lib/utils";
 
 const STAKEHOLDER_ROLES = ["HCM", "GMM", "DMD"] as const;
 
@@ -46,14 +49,7 @@ function daysWaiting(requestedAt: Date): string {
 export default async function ApprovalsQueuePage({
   searchParams,
 }: {
-  // Two queues on one page, so each pages and searches on its own params —
-  // moving through one must not reset the other.
-  searchParams: Promise<{
-    q?: string;
-    page?: string;
-    aq?: string;
-    apage?: string;
-  }>;
+  searchParams: Promise<{ view?: string; q?: string; page?: string }>;
 }) {
   const session = await requirePinConfirmed();
 
@@ -61,22 +57,33 @@ export default async function ApprovalsQueuePage({
     session.workflowRoles.includes(role),
   );
 
-  // A delegate holds no stakeholder role — the grant is per engagement, so
-  // they reach this page only while one is outstanding for them.
-  const { q, page, aq, apage } = await searchParams;
-  const pendingRequest = toPageRequest(q, page);
-  const approvedRequest = toPageRequest(aq, apage);
+  const { view, q, page } = await searchParams;
 
-  const [pending, approved] = await Promise.all([
-    isStakeholder
-      ? listEngagementsAwaitingApproval(undefined, pendingRequest)
-      : listEngagementsAwaitingApproval(session.staffUserId, pendingRequest),
-    listRecentStakeholderApprovals(approvedRequest),
+  const activeView = view === "approved" ? "approved" : "awaiting";
+  const request = toPageRequest(q, page);
+
+  // A delegate holds no stakeholder role — the grant is per engagement, so
+  // they only see what was delegated to them.
+  const delegatedTo = isStakeholder ? undefined : session.staffUserId;
+
+  const [pendingCount, signedCount, pending, approved] = await Promise.all([
+    countEngagementsAwaitingApproval(delegatedTo),
+    // A delegate who has already signed still belongs here — that sign-off is
+    // the only record of their part in the workflow.
+    delegatedTo ? countStakeholderApprovalsBy(delegatedTo) : Promise.resolve(0),
+    activeView === "awaiting"
+      ? listEngagementsAwaitingApproval(delegatedTo, request)
+      : undefined,
+    // Stakeholders see every sign-off (any one approval is enough, so a
+    // colleague's counts); a delegate sees only their own.
+    activeView === "approved"
+      ? listRecentStakeholderApprovals(request, delegatedTo)
+      : undefined,
   ]);
 
-  const rows = pending.rows;
-
-  if (!isStakeholder && pending.total === 0) {
+  // The grant is per engagement, not a standing role: a delegate with nothing
+  // outstanding and nothing signed has no business on this page.
+  if (!isStakeholder && pendingCount === 0 && signedCount === 0) {
     redirect("/dashboard");
   }
 
@@ -85,6 +92,20 @@ export default async function ApprovalsQueuePage({
   );
 
   const firstName = session.displayName?.split(" ")[0] ?? "there";
+
+  const views = [
+    {
+      label: "Awaiting Approval",
+      value: "awaiting",
+      href: "/dashboard/approvals",
+      count: pendingCount,
+    },
+    {
+      label: "Approved",
+      value: "approved",
+      href: "/dashboard/approvals?view=approved",
+    },
+  ];
 
   return (
     <div>
@@ -96,22 +117,23 @@ export default async function ApprovalsQueuePage({
             : "Engagements delegated to you for sign-off."
         }
       />
-      <section className="mb-10 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-foreground text-lg">
-              Awaiting Approval
-            </h2>
-            {pending.total > 0 && (
-              <Badge className="bg-status-warning-bg text-status-warning-fg">
-                {pending.total}
-              </Badge>
-            )}
-          </div>
-          <QueueSearch searchParam="q" pageParam="page" />
-        </div>
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <QueueViewTabs views={views} activeView={activeView} />
+        <QueueSearch
+          searchParam="q"
+          pageParam="page"
+          placeholder={
+            activeView === "awaiting"
+              ? "Search the queue"
+              : "Search approved records"
+          }
+        />
+      </div>
+
+      {activeView === "awaiting" && pending && (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {rows.length === 0 ? (
+          {pending.rows.length === 0 ? (
             <EmptyState
               icon={ClipboardCheckIcon}
               title="Nothing awaiting approval"
@@ -130,7 +152,7 @@ export default async function ApprovalsQueuePage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ engagement, person }) => {
+                {pending.rows.map(({ engagement, person }) => {
                   // SAFETY: access_purpose is a text column written only from
                   // the AccessPurpose union; the ?? shows a stray legacy value
                   // raw rather than rendering undefined.
@@ -163,25 +185,17 @@ export default async function ApprovalsQueuePage({
               </TableBody>
             </Table>
           )}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-foreground text-lg">Approved</h2>
-            {approved.total > 0 && (
-              <Badge className="bg-status-success-bg text-status-success-fg">
-                {approved.total}
-              </Badge>
-            )}
-          </div>
-          <QueueSearch
-            searchParam="aq"
-            pageParam="apage"
-            placeholder="Search approved"
+          <QueuePagination
+            page={pending.page}
+            pageSize={pending.pageSize}
+            total={pending.total}
+            pageParam="page"
+            searchParams={{ q }}
           />
         </div>
+      )}
+
+      {activeView === "approved" && approved && (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           {approved.rows.length === 0 ? (
             <EmptyState
@@ -208,17 +222,13 @@ export default async function ApprovalsQueuePage({
                     <TableCell>{person.passportNo}</TableCell>
                     <TableCell>
                       {approval.approverName}
-                      <span className="ml-2 text-xs text-muted-foreground">
+                      <span className="ml-2 text-muted-foreground text-xs">
                         {approval.approverRole}
                         {approval.isDelegated ? " (delegated)" : ""}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {approval.approvedAt.toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatQueueDate(approval.approvedAt)}
                     </TableCell>
                     <TableCell>
                       {
@@ -242,14 +252,14 @@ export default async function ApprovalsQueuePage({
             </Table>
           )}
           <QueuePagination
-            page={approvedRequest.page}
+            page={approved.page}
             pageSize={approved.pageSize}
             total={approved.total}
-            pageParam="apage"
-            searchParams={{ q, page, aq }}
+            pageParam="page"
+            searchParams={{ q, view }}
           />
         </div>
-      </section>
+      )}
     </div>
   );
 }

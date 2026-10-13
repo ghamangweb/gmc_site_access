@@ -506,6 +506,46 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
       in as HCM/GMM/DMD: the row appears, "Review & Approve" opens the preview, and approving
       clears it from the queue
 
+### Every layer: worked-on tab + post-action redirect (2026-10-13) ✅
+- [x] `QueueViewTabs` (`components/layout/queue-view-tabs.tsx`) — Reception's segmented view
+      switch extracted and reused by every layer; Reception refactored onto it so there is one
+      implementation
+- [x] Every workflow queue is now two tabs, awaiting by default, one table at a time on a
+      shared `view`/`q`/`page` triplet: Hospital (Awaiting Clearance / Recorded Clearances),
+      Training (Awaiting Induction / Recorded Inductions), Security (Awaiting Review /
+      Forwarded to IT), IT (Awaiting Setup / Access Activated), Approvals (Awaiting Approval /
+      Approved), Reception (Submitted Registrations / Engagements, unchanged)
+- [x] New listings in `workflow-service.ts`: `listRecentHospitalClearances`,
+      `listRecentInductions`, `listRecentSecurityForwards` (from `workflow_transitions` —
+      Security writes no record of its own), `listRecentProvisionings`
+- [x] Tab counts are their own queries — `countEngagementsForLayer`,
+      `countEngagementsAwaitingApproval` — so the awaiting pill is right on either tab
+- [x] `HospitalForm`, `TrainingForm` and `ItForm` redirect to their layer's queue after a
+      successful submit (`ForwardToITButton` and `StakeholderPanel` already did). Reception is
+      the deliberate exception: it lands on the new engagement, where its next step lives
+- [x] `formatQueueDate` (`lib/utils.ts`) and `HOSPITAL_CLEARANCE_LABELS` (`lib/domain/types.ts`)
+      replace the per-file copies of the queue date format and the clearance labels
+- [x] The delegate guard on `/dashboard/approvals` now tests the unfiltered pending count, so a
+      search that matches nothing no longer bounces a delegate to `/dashboard`
+- [x] `tsc --noEmit`, `biome check src/`, `bun run build` clean; no new `oxlint` anti-slop
+      findings (`hospital-form.tsx` went from 6 to 5)
+- [x] **Stakeholder sign-off no longer 403s.** `StakeholderPanel.handleApprove` pushed to
+      `/dashboard/reception` regardless of `returnHref`; a stakeholder has no Receptionist role,
+      so `proxy.ts` answered "Forbidden". Both handlers use `returnHref` now, landing them on
+      `/dashboard/approvals` with its Awaiting / Approved tabs
+- [x] `applyStakeholderApprovalAction` revalidates `/dashboard/approvals`, that record's
+      approvals route and both Reception routes — it only revalidated the Reception record
+      before, so the queue could still list the row as awaiting
+- [x] `listRecentStakeholderApprovals(request, approverStaffUserId?)` — a delegate's Approved tab
+      shows only their own sign-offs; stakeholders still see everyone's. `countStakeholderApprovalsBy`
+      lets a delegate who has signed stay on the page instead of being bounced to `/dashboard`
+- [x] Reception's submission row action relabelled "Create Engagement" → **"Review"** — the link
+      opens the submission for checking; creating the engagement is the button at the end of
+      that screen. Converted rows still read "View Engagement"
+- [ ] Manual in-browser check per layer — record/approve/forward, confirm the redirect lands on
+      the queue, the row leaves the awaiting tab and appears on the worked-on tab with the right
+      date, outcome and stage; confirm search and paging work on both tabs
+
 ### Reception sees submitted registrations (2026-10-11)
 - [x] Migration `0016_fair_ma_gnuci.sql` — `registration_requests.engagement_id`
       (nullable FK), generated and **applied**
