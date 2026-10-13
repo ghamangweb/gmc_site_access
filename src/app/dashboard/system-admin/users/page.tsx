@@ -28,10 +28,17 @@ export default async function AdminUsersPage() {
     pendingRequests.find((n) => n.requesterStaffUserId === staffUserId)
       ?.requestedDepartment ?? null;
 
+  // Pending requests first (they need action), deactivated users last (they
+  // need none).
   const sortedUsers = [...users].sort((a, b) => {
-    const pendingA = isPending(a.id) ? 1 : 0;
-    const pendingB = isPending(b.id) ? 1 : 0;
-    return pendingB - pendingA;
+    const deactivatedA = a.deactivatedAt ? 1 : 0;
+    const deactivatedB = b.deactivatedAt ? 1 : 0;
+
+    if (deactivatedA !== deactivatedB) {
+      return deactivatedA - deactivatedB;
+    }
+
+    return (isPending(b.id) ? 1 : 0) - (isPending(a.id) ? 1 : 0);
   });
 
   return (
@@ -47,7 +54,7 @@ export default async function AdminUsersPage() {
           </Button>
         }
       />
-      <div className="overflow-x-auto bg-card">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {sortedUsers.length === 0 ? (
           <EmptyState
             icon={UsersRound}

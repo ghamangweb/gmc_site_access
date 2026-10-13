@@ -48,6 +48,7 @@ import { CancelEngagementButton } from "@/components/workflow/cancel-engagement-
 import { DocumentSelector } from "@/components/workflow/document-selector";
 import { PhoneInput } from "@/components/workflow/phone-input";
 import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
+import { RegistrationSuccess } from "@/components/workflow/registration-success";
 import { GHANA_LOCATIONS } from "@/lib/domain/ghana-locations";
 import { NATIONALITIES } from "@/lib/domain/nationalities";
 import {
@@ -189,7 +190,7 @@ type ReceptionFormProps = {
   uploadedDocuments?: Document[];
   readOnly?: boolean;
   allowLookup?: boolean;
-  /** Public, unauthenticated pre-registration mode — gated by an invitation
+  /** Public, unauthenticated registration mode — gated by an invitation
    * token instead of staff auth. Switches document uploads to the
    * token-authorized route (attaching to the invitation, not an engagement)
    * and posts to a different, guard-free Server Action. */
@@ -289,7 +290,7 @@ export function ReceptionForm({
   // check in `createRegistrationRequest` can never disagree.
   const requiredDocTypes = getRequiredRegistrationDocTypes("Foreign", visaType);
 
-  // Public pre-registration can't be submitted until the compulsory documents
+  // Public registration can't be submitted until the compulsory documents
   // are up. `createRegistrationRequest` enforces this server-side too — this
   // is purely so the visitor sees it before clicking.
   const missingRequiredDocs = publicToken
@@ -472,16 +473,7 @@ export function ReceptionForm({
   const { t, tActionError } = useRegistrationLanguage();
 
   if (submitted) {
-    return (
-      <Card className="flex flex-col items-center gap-4 p-10 text-center">
-        <h2 className="text-lg font-semibold text-foreground">
-          {t("Thank you — your pre-registration has been submitted")}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {t("GMC staff will be in touch with next steps.")}
-        </p>
-      </Card>
-    );
+    return <RegistrationSuccess />;
   }
 
   if (created) {
@@ -531,7 +523,7 @@ export function ReceptionForm({
               </AlertDescription>
             </Alert>
           )}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <PassportField
               control={form.control}
               disabled={disabled || !!engagementId}
@@ -625,8 +617,8 @@ export function ReceptionForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Company Details")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
               <TextField
                 control={form.control}
                 name="companyName"
@@ -671,7 +663,7 @@ export function ReceptionForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Access Details")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <TextField
               control={form.control}
               name="gmcLiaisonPerson"
@@ -697,7 +689,7 @@ export function ReceptionForm({
               label="Date of Departure from Site"
               disabled={disabled}
             />
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <TextAreaField
                 control={form.control}
                 name="reasonForRequest"
@@ -712,7 +704,7 @@ export function ReceptionForm({
           <h2 className="text-lg font-semibold text-foreground">
             {t("Site Support Requirements")}
           </h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <div className="flex flex-col gap-3">
               <CheckboxField
                 control={form.control}
@@ -802,7 +794,7 @@ export function ReceptionForm({
               label="Other Inductions / Training"
               disabled={disabled}
             />
-            <div className="col-span-2 grid grid-cols-2 gap-x-8">
+            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:col-span-2 sm:grid-cols-2">
               <SelectField
                 control={form.control}
                 name="visaType"

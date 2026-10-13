@@ -79,7 +79,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         ) {
           // Entra owns the name and email, so a rename there has to reach
           // everything that reads them back — the Department Head's name on a
-          // pre-registration form, notification copy, the user list. Empty
+          // registration form, notification copy, the user list. Empty
           // claims are ignored rather than written over good stored values,
           // and a failed refresh never blocks a sign-in: the stale row still
           // authenticates.
@@ -97,6 +97,13 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           } catch (error) {
             console.error("[auth/entra]", error);
           }
+        }
+
+        // A deactivated account must not get a session at all. Returning
+        // without setting staffUserId leaves the token unusable, and the
+        // proxy's `!session?.user` branch sends them back to sign-in.
+        if (staffUser.deactivatedAt) {
+          return null;
         }
 
         token.staffUserId = staffUser.id;

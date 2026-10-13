@@ -1081,7 +1081,7 @@ registration upload.
 
 **Visitor uploads now follow the submission into the Engagement (2026-10-11):** until this
 fix nothing re-pointed them — a visitor could upload every compulsory document during
-pre-registration and Reception's "Applicable Document Uploads" card would still render empty,
+registration and Reception's "Applicable Document Uploads" card would still render empty,
 because `getDocumentsForEngagement` filters on `documents.engagement_id` while the rows still
 carried `invitation_id`. `attachInvitationDocumentsToEngagement` (document-service) now runs
 as part of `linkRequestToEngagement`: it sets `engagement_id`, clears `invitation_id` (the
@@ -1152,6 +1152,73 @@ rather than breaking the page. This needed `documents.file_name` and `documents.
 is no way to tell an image from a PDF or to name a download. Both are captured in the file
 router's `onUploadComplete` from `file.name` / `file.type`; rows predating the migration render
 the icon fallback, and the seeded ones were backfilled.
+
+### RegistrationSuccess (2026-10-12)
+
+File: `src/components/workflow/registration-success.tsx`
+Used by: `reception-form.tsx` (public mode) and `local-registration-form.tsx`
+
+| Property | Class |
+|---|---|
+| Wrapper | `flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center` — centred in the form pane, not pinned to the top |
+| Outer halo | `size-24 rounded-full bg-status-success-bg` |
+| Inner disc | `size-16 rounded-full bg-status-success` |
+| Check | lucide `CheckIcon`, `size-9 text-primary-foreground`, **`strokeWidth={3}`** |
+| Heading | `font-semibold text-2xl text-foreground` |
+| Body | `max-w-sm text-muted-foreground text-sm` |
+
+**Pattern notes:**
+Replaces the plain `Card` both public forms used to render inline — the same markup was
+duplicated in two files and has been extracted so the Local and Foreign paths cannot drift.
+
+The mark is **two concentric circles**, a soft `status-success-bg` halo around a solid
+`status-success` disc, which is what makes it read as a deliberate confirmation rather than a
+stray icon. `strokeWidth={3}` is doing real work: lucide's default 2 looks thin and tentative
+at this size. The tick is `text-primary-foreground` — the system's only white token — because
+there is no "on-success" foreground token; `status-success-fg` is a dark green meant for text
+on the *light* background, and would be unreadable on the disc.
+
+**No card, and no border.** The success state is the whole pane at this point, so wrapping it
+in a bordered surface just boxes in whitespace.
+
+Copy says **"your registration has been submitted"** — "registration" is GMC's internal
+name for this workflow stage; the visitor just filled in a registration form, so that is what
+it is called to them. The old dictionary key was replaced, not kept as an alias.
+
+### Staff user lifecycle: revoke and deactivate (2026-10-12)
+
+Files: `system-admin/users/user-row.tsx`, `users/page.tsx`, `actions/admin.ts`,
+`lib/services/auth-service.ts`, `lib/auth/guards.ts`, `lib/auth/entra.ts`
+
+**Pattern notes:**
+Two distinct actions, because they mean different things:
+- **Revoke access** — system role back to `User`, workflow roles and department cleared. They
+  can still sign in but reach nothing, exactly like a new account. Fully reversible by
+  provisioning again. Shown only for a provisioned user.
+- **Deactivate** — the soft delete. `DropdownMenuItem variant="destructive"` below a
+  separator. Clears roles *and* the PIN, sets `deactivated_at`/`deactivated_by`.
+
+**There is no hard delete, deliberately.** Twelve tables carry an FK to `staff_users` —
+`workflow_transitions.performed_by`, `stakeholder_approvals.approver_staff_user_id`,
+`invitations.issued_by`, `documents.uploaded_by` and so on. A real DELETE would either fail on
+a foreign key for anyone who has ever acted, or (with a cascade) destroy the audit trail
+`project-overview.md` requires. Don't add one.
+
+A deactivated row renders at `opacity-60`, shows a `status-danger` "Deactivated" badge in the
+Status column, sorts to the bottom of the list, and its menu offers **only** Reactivate —
+there is nothing else sensible to do to it. Reactivating brings them back **unprovisioned**,
+so roles are re-granted deliberately rather than silently restored.
+
+**Enforcement is in three places**, and all three are needed:
+1. `entra.ts`'s `jwt` callback returns `null` for a deactivated user, so no session is issued.
+2. `requireProvisioned` checks `deactivated_at` in the **database** on every guarded page and
+   action — a JWT lives up to an hour, and removing access must not wait for it to expire.
+3. Every recipient/approver lookup (`getStaffByWorkflowRoles`, the System Admin queries, the
+   Department Head and Receptionist queries) filters on `isNull(deactivatedAt)`, so a departed
+   staff member stops receiving notifications and stops counting as an available approver.
+
+Both actions refuse to act on **your own account** — locking yourself out of the only screen
+that could undo it.
 
 ### Queue search + pagination (2026-10-12)
 
@@ -1621,7 +1688,7 @@ inline in the page rather than in a new `components/layout/` shell because nothi
 it; promote it to a shell component if a second page ever needs the same split.
 
 The page's only `<h1>` is the hero on the image — "Ghana Manganese Company Mine Site Access
-Registration". The form column has no header of its own (an earlier "Pre-Registration" title
+Registration". The form column has no header of its own (an earlier "Registration" title
 there was removed), so the first `Card` sits at the top of the pane. Text over the darkened
 photo uses `text-primary-foreground` (the system's only white token) — there is no dedicated
 "on-image" token, so reuse this one rather than inventing a class.

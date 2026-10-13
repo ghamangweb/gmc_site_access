@@ -15,6 +15,7 @@ import {
 import type { SessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
 import {
+  accessProvisionings,
   engagements,
   hospitalClearances,
   inductionRecords,
@@ -73,7 +74,12 @@ export async function getStaffByWorkflowRoles(
   return db
     .select()
     .from(staffUsers)
-    .where(arrayOverlaps(staffUsers.workflowRoles, roles));
+    .where(
+      and(
+        arrayOverlaps(staffUsers.workflowRoles, roles),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    );
 }
 
 async function getStakeholdersAndSystemAdmins(): Promise<StaffUser[]> {
@@ -81,7 +87,12 @@ async function getStakeholdersAndSystemAdmins(): Promise<StaffUser[]> {
   const admins = await db
     .select()
     .from(staffUsers)
-    .where(eq(staffUsers.systemRole, "SystemAdmin"));
+    .where(
+      and(
+        eq(staffUsers.systemRole, "SystemAdmin"),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    );
 
   const byId = new Map<string, StaffUser>();
   for (const user of [...stakeholders, ...admins]) {
@@ -820,7 +831,12 @@ export async function requestTermination(
   const admins = await db
     .select()
     .from(staffUsers)
-    .where(eq(staffUsers.systemRole, "SystemAdmin"));
+    .where(
+      and(
+        eq(staffUsers.systemRole, "SystemAdmin"),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    );
 
   await notifyStaff(
     admins,
@@ -1158,6 +1174,232 @@ export async function recordInductionCompletion(
           recipientStaffUserId: recipient.id,
           engagementId,
           message: "Induction completed — record forwarded to Security.",
+        })),
+      );
+    }
+
+    return updatedEngagement;
+  });
+
+  return { engagement: updated, recipients };
+}
+
+export type AccessProvisioning = typeof accessProvisionings.$inferSelect;
+
+// Security's only action: it audits what the earlier layers recorded and
+// hands the record to IT. Nothing is captured here, so there is no Security
+// table — the transition row is the record that it happened.
+export async function forwardToIT(
+  engagementId: string,
+  performedBy: string,
+): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
+  const preCheck = await getEngagementById(engagementId);
+
+  if (!preCheck) {
+    throw new Error("Engagement not found");
+  }
+
+  if (preCheck.workflowState !== "AtSecurity") {
+    throw new Error("Engagement is not awaiting Security review");
+  }
+
+  const recipients = await getStaffByWorkflowRoles(["ITStaff"]);
+
+  const updated = await db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement || engagement.workflowState !== "AtSecurity") {
+      throw new Error("Engagement is not awaiting Security review");
+    }
+
+    const [cycle] = await tx
+      .select()
+      .from(workflowCycles)
+      .where(
+        and(
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      )
+      .orderBy(desc(workflowCycles.cycleNumber))
+      .limit(1);
+
+    if (!cycle) {
+      throw new Error("No active workflow cycle for this engagement");
+    }
+
+    const [updatedEngagement] = await tx
+      .update(engagements)
+      .set({ workflowState: "AwaitingProvisioning" })
+      .where(eq(engagements.id, engagementId))
+      .returning();
+
+    await tx.insert(workflowTransitions).values({
+      engagementId,
+      workflowCycleId: cycle.id,
+      fromState: "AtSecurity",
+      toState: "AwaitingProvisioning",
+      performedBy,
+      comments: "Security review complete — forwarded to IT",
+    });
+
+    if (recipients.length > 0) {
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: "Security cleared this record — ready for access setup.",
+        })),
+      );
+    }
+
+    return updatedEngagement;
+  });
+
+  return { engagement: updated, recipients };
+}
+
+export async function getAccessProvisioning(
+  engagementId: string,
+): Promise<AccessProvisioning | undefined> {
+  const [cycle] = await db
+    .select()
+    .from(workflowCycles)
+    .where(
+      and(
+        eq(workflowCycles.engagementId, engagementId),
+        isNull(workflowCycles.archivedAt),
+      ),
+    )
+    .orderBy(desc(workflowCycles.cycleNumber))
+    .limit(1);
+
+  if (!cycle) {
+    return undefined;
+  }
+
+  const [record] = await db
+    .select()
+    .from(accessProvisionings)
+    .where(eq(accessProvisionings.workflowCycleId, cycle.id))
+    .orderBy(desc(accessProvisionings.activatedAt))
+    .limit(1);
+
+  return record;
+}
+
+const REQUIRED_IT_DOCS: DocType[] = ["biometric_image", "passport_photo"];
+
+// The last step: access becomes live. Both the workflow and the access state
+// move here — they are separate columns because a Completed engagement can
+// later have its access terminated without the workflow being rewritten.
+export async function activateAccess(
+  engagementId: string,
+  input: {
+    idType: string;
+    biometricCaptured: boolean;
+    accessCardNumber: string;
+    accessCardExpiry: string;
+  },
+  performedBy: string,
+): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
+  const preCheck = await getEngagementById(engagementId);
+
+  if (!preCheck) {
+    throw new Error("Engagement not found");
+  }
+
+  if (preCheck.workflowState !== "AwaitingProvisioning") {
+    throw new Error("Engagement is not awaiting access provisioning");
+  }
+
+  const uploaded = await getDocumentsForEngagement(engagementId);
+  const missing = REQUIRED_IT_DOCS.filter(
+    (docType) => !uploaded.some((doc) => doc.docType === docType),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Upload both before activating access: ${missing
+        .map((docType) => DOCUMENT_LABELS[docType])
+        .join(", ")}`,
+    );
+  }
+
+  // Business rule from project-overview.md. The visa/permit half of it cannot
+  // be checked yet — those expiry dates are not stored until Slice 8.
+  if (input.accessCardExpiry > preCheck.departureDate) {
+    throw new Error(
+      `Access card expiry cannot be later than the departure date (${preCheck.departureDate})`,
+    );
+  }
+
+  // Security and Reception both want to know access went live.
+  const recipients = await getStaffByWorkflowRoles([
+    "SecurityStaff",
+    "Receptionist",
+  ]);
+
+  const updated = await db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement || engagement.workflowState !== "AwaitingProvisioning") {
+      throw new Error("Engagement is not awaiting access provisioning");
+    }
+
+    const [cycle] = await tx
+      .select()
+      .from(workflowCycles)
+      .where(
+        and(
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      )
+      .orderBy(desc(workflowCycles.cycleNumber))
+      .limit(1);
+
+    if (!cycle) {
+      throw new Error("No active workflow cycle for this engagement");
+    }
+
+    await tx.insert(accessProvisionings).values({
+      workflowCycleId: cycle.id,
+      idType: input.idType,
+      biometricCaptured: input.biometricCaptured,
+      accessCardNumber: input.accessCardNumber,
+      accessCardExpiry: input.accessCardExpiry,
+    });
+
+    const [updatedEngagement] = await tx
+      .update(engagements)
+      .set({ workflowState: "Completed", accessState: "Active" })
+      .where(eq(engagements.id, engagementId))
+      .returning();
+
+    await tx.insert(workflowTransitions).values({
+      engagementId,
+      workflowCycleId: cycle.id,
+      fromState: "AwaitingProvisioning",
+      toState: "Completed",
+      performedBy,
+      comments: `Access activated — card ${input.accessCardNumber}`,
+    });
+
+    if (recipients.length > 0) {
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: "Site access has been activated.",
         })),
       );
     }

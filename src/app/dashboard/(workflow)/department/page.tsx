@@ -29,7 +29,7 @@ export default async function DepartmentQueuePage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Department Invitations"
-        subtitle="Invite visitors to pre-register and manage the invitation links you've sent."
+        subtitle="Invite visitors to register and manage the invitation links you've sent."
       />
 
       {canManage && (

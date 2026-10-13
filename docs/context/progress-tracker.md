@@ -361,7 +361,7 @@ introduces a new doc type (Training, IT) only needs an entry in
 
 ---
 
-## Department Head Invitation Console + Public Pre-Registration 🔶
+## Department Head Invitation Console + Public Registration 🔶
 
 **Not a numbered build-plan slice** — `build-plan.md` has no slice for this yet; it's the
 first real build-out of the Department-Head-invitation flow `project-overview.md`/
@@ -436,7 +436,7 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
 - [x] `src/app/register/page.tsx` — two-pane layout: left image pane (`bg-auth.jpg`) carrying
       the GMC logo and the page `<h1>` ("Ghana Manganese Company Mine Site Access
       Registration"), right form pane in a shadcn `ScrollArea`; panes split the viewport
-      50/50. The old "Pre-Registration" header above the form is gone
+      50/50. The old "Registration" header above the form is gone
 - [x] `src/components/ui/scroll-area.tsx` — shadcn `ScrollArea` installed (no new dependency;
       `radix-ui` was already present). The CLI emitted `import { cn } from "cn"` and installed
       a junk `cn` package — import repointed to `@/lib/utils`, package removed
@@ -460,7 +460,7 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
 - [x] "Administration" section removed from the public form — gated behind `!publicToken` in
       `reception-form.tsx`, deleted from `local-registration-form.tsx` (with its orphaned
       `CheckboxField` helper + `Checkbox` import)
-- [x] Public submit button label "Submit Pre-Registration" → "Submit" in both forms
+- [x] Public submit button label "Submit Registration" → "Submit" in both forms
 - [x] English ⇄ 简体中文 toggle on the public form (`lib/i18n/registration-dictionary.ts`,
       `registration-language-provider.tsx`, `registration-language-toggle.tsx`,
       `registration-headline.tsx`, `registration-invalid-link.tsx`); `t()` applied inside the
@@ -534,7 +534,7 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
 - [x] Uploaded files always render in `DocumentSelector` (previously hidden until the
       "applicable" box was ticked); Create Engagement shows the visitor's files with their
       boxes pre-ticked
-- [x] Visitor's pre-registration uploads re-point onto the Engagement at conversion
+- [x] Visitor's registration uploads re-point onto the Engagement at conversion
       (`attachInvitationDocumentsToEngagement`) — previously they stayed on the invitation and
       Reception saw an empty uploads card
 - [x] Local / Foreign / All filter on the submissions table, driven by `?type=` search param
@@ -545,10 +545,18 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
       `UTApi` when `UPLOADTHING_TOKEN` is set, otherwise placeholder rows (listed and handed
       off correctly, but View can't open them). Per-invitation idempotent, so re-running after
       adding the token fills in what's missing. 8 real documents attached on 2026-10-11
-- [x] `src/lib/db/seed-registrations.ts` + `bun run db:seed:registrations` — 5 dummy
-      submissions (3 Foreign, 2 Local) with a consumed invitation each; skips if any
+- [x] `src/lib/db/seed-registrations.ts` + `bun run db:seed:registrations` — 10 dummy
+      Foreign submissions with a consumed invitation each; skips if any
       `@seed.gmc.local` invitation already exists. Local dev only
-- [ ] Manual in-browser check — submit a pre-registration, confirm it appears in Reception's
+- [x] Reseeded 2026-10-13 after the database was emptied down to the System Admin. Local
+      rows dropped (`localSubmission` removed) — Reception is being exercised on the Foreign
+      path only, so the seed is 10 Foreign submissions spread across all 7 liaison
+      departments and all 3 access purposes, with varied nationality (NATIONALITIES values,
+      not country names), visa type, employment status, access level, airport pickup and
+      accommodation. Compulsory documents now come from `getRequiredRegistrationDocTypes`
+      rather than `REGISTRATION_DOCUMENT_TYPES`, so the Visa-on-Arrival row gets a passport
+      page and no visa — 19 real documents uploaded
+- [ ] Manual in-browser check — submit a registration, confirm it appears in Reception's
       new table, click Create Engagement and confirm the form arrives prefilled, create it,
       then confirm the row flips to a Converted badge linking to that engagement
 
@@ -604,6 +612,59 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
 
 ---
 
+## Public form made mobile-accessible (2026-10-12)
+- [x] `DesktopOnlyGuard` moved off the root layout onto the dashboard and `(auth)` layouts, so
+      `/register` is no longer blocked below `lg` while staff screens still are
+- [x] `/register` responsive: document scroll on mobile (`ScrollArea` keeps its fixed viewport
+      only at `lg`), stepped padding, image pane hidden below `lg`
+- [x] Both public forms: `grid-cols-1 … sm:grid-cols-2`, full-width cells `sm:col-span-2`
+- [x] `ReceptionDetailsPreview` and the document grid made responsive too (they render on the
+      Create Engagement screen, which is staff-only, but share components with the public path)
+- [x] Explicit `viewport` export; `maximumScale` deliberately not set
+- [ ] Manual check — open `/register?preview=success` and a real token link on a phone and a
+      tablet; confirm no horizontal scroll and that the 中文 toggle still reaches
+
+## Terminology: "pre-registration" → "registration" (2026-10-12)
+- [x] Removed project-wide — 48 occurrences across 13 source files and 4 context docs
+- [x] Live copy affected: the invitation email subject and body ("invited to register",
+      "Start your registration"), the submission email subject, and both dashboard
+      notification messages
+- [x] Verified: zero occurrences remain in `src/`, `docs/` or `CLAUDE.md`; all 29 literal
+      `t()` keys still resolve against the Chinese dictionary (no silent English fallback)
+- [x] Identifiers were already neutral — `registration_requests`, `RegistrationRequest`,
+      `/register`, `registrationType` needed no change
+
+## Public form success state (2026-10-12)
+- [x] `RegistrationSuccess` extracted from both forms — green two-ring check mark, centred in
+      the pane, no card; heading no longer says "registration"
+- [x] Chinese key updated to match
+
+## Staff user lifecycle (2026-10-12)
+- [x] Migration `0020` — `staff_users.deactivated_at` / `deactivated_by`
+- [x] "Revoke access" (back to unprovisioned) and "Deactivate" (soft delete) + "Reactivate"
+- [x] No hard delete: 12 tables FK `staff_users`, mostly audit trail
+- [x] Enforced at sign-in (no session issued), in `requireProvisioned` (DB read, so it takes
+      effect immediately rather than when the JWT expires), and in every recipient lookup
+- [x] Both actions refuse to act on your own account
+- [x] Verified against the live DB: deactivate dropped the Receptionist from
+      `getStaffByWorkflowRoles` (1 → 0), cleared roles and PIN; reactivate restored sign-in;
+      original state fully restored afterwards
+
+## Notification audit (2026-10-12)
+- [x] Verified end-to-end against the live DB; Graph credentials confirmed working
+      (token acquired, `Mail.Send` application role granted, sender `kanyidoho@ghamang.com.gh`)
+- [x] **Fixed:** public submission notified only the Department Head — Reception, who actually
+      acts on it, got nothing. Both are now notified, each with a link to their own screen
+- [x] **Fixed:** a notification to a role with no holders reported success while reaching
+      nobody. Stakeholder approval, hospital clearance and induction now return a warning
+      naming the missing role; the public submission logs it instead (never shown to a visitor)
+- [x] Confirmed working: role request → System Admin (3 real rows in the DB), provisioning
+      email, stakeholder/hospital/induction/termination notifications, dashboard bell
+      (unread count, list, mark-all-read)
+- [ ] **Action needed — no stakeholder is provisioned.** Zero users hold HCM, GMM or DMD, so
+      approval requests currently reach nobody. No TrainingStaff or SecurityStaff either, so
+      those hand-offs are also unnotified until someone is assigned
+
 ## Queue scale: search + pagination (2026-10-12)
 - [x] `lib/domain/pagination.ts` — `Page<T>`, `PageRequest`, `toPageRequest`, 20 per page
 - [x] `QueueSearch` (client, 300ms debounce, URL-driven, resets page) + `QueuePagination`
@@ -652,13 +713,36 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
 
 ---
 
-## Slice 5 — Security 🔲
+## Slice 5 — Security ✅ (2026-10-12)
+- [x] `/dashboard/security` queue (Work + VisitMine at `AtSecurity`) with search + pagination
+- [x] `/dashboard/security/[id]` — `PriorLayersSummary` (approval, clearance, induction) plus
+      the full `ReceptionDetailsPreview` with openable document previews
+- [x] `forwardToIT` → `AwaitingProvisioning`, transition row, IT notified; `forwardToITAction`,
+      `forwardedToITTemplate`
+- [x] SecurityStaff routed from `/dashboard`; `security` breadcrumb + `LAYER_ROLES` entry
+- [ ] Manual check — needs a user holding `SecurityStaff`
+
+*Note: Security records no data of its own, so there is no Security table — the
+`workflow_transitions` row is the record that the review happened.*
 
 *Not started.*
 
 ---
 
-## Slice 6 — IT 🔲
+## Slice 6 — IT ✅ (2026-10-12)
+- [x] Migration `0021` — `access_provisionings` (cycle-scoped)
+- [x] `biometric_image` + `passport_photo` doc types, owned by ITStaff and added to
+      `LayerOwnedDocType`; `ID_TYPES` tuple
+- [x] `/dashboard/it` queue (`AwaitingProvisioning`) + `/dashboard/it/[id]` with
+      `PriorLayersSummary` and `ItForm`
+- [x] `activateAccess` → `workflow_state = Completed`, `access_state = Active`; both uploads
+      required; card expiry capped at the departure date (client **and** server)
+- [x] `activateAccessAction`, `accessActivatedTemplate` → Security + Reception
+- [x] Once activated the form renders read-only as "Access Active" with the card details
+- [x] **Full pipeline verified against the live DB**: AtTraining → induction → AtSecurity →
+      forward → AwaitingProvisioning → activate → Completed/Active, card recorded, expiry rule
+      rejected a date past departure. Engagement rolled back to AtTraining afterwards
+- [ ] Manual check — needs users holding `SecurityStaff` and `ITStaff`
 
 *Not started.*
 

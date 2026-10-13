@@ -78,18 +78,30 @@ export function departmentInvitationTemplate(opts: {
   const department = escapeHtml(opts.department);
   const link = `${baseUrl()}/register?token=${encodeURIComponent(opts.token)}`;
   return {
-    subject: "GMC Site Access — pre-registration invitation",
-    html: `<p>You have been invited to pre-register for a site visit to Ghana Manganese Company (${department}).</p><p><a href="${link}">Start your pre-registration</a>.</p>`,
+    subject: "GMC Site Access — registration invitation",
+    html: `<p>You have been invited to register for a site visit to Ghana Manganese Company (${department}).</p><p><a href="${link}">Start your registration</a>.</p>`,
   };
 }
 
 export function registrationSubmittedTemplate(opts: {
   department: string;
+  visitorName?: string;
+  // Department Heads review it in their invitation console; Reception acts on
+  // it in their own queue, so the same event links to two different places.
+  audience: "DepartmentHead" | "Receptionist";
 }): MessageTemplate {
   const department = escapeHtml(opts.department);
+  const visitor = opts.visitorName ? escapeHtml(opts.visitorName) : undefined;
+  const who = visitor ? `${visitor} has` : "A visitor has";
+
+  const { path, cta } =
+    opts.audience === "Receptionist"
+      ? { path: "/dashboard/reception", cta: "Create the engagement" }
+      : { path: "/dashboard/department", cta: "Review it" };
+
   return {
-    subject: "GMC Site Access — new pre-registration submission",
-    html: `<p>A visitor has submitted a pre-registration form for ${department}.</p><p><a href="${baseUrl()}/dashboard/department">Review it</a>.</p>`,
+    subject: "GMC Site Access — new registration submission",
+    html: `<p>${who} submitted a registration form for ${department}.</p><p><a href="${baseUrl()}${path}">${cta}</a>.</p>`,
   };
 }
 
@@ -101,10 +113,12 @@ function hospitalEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/hospital/${engagementId}`;
 }
 
-// Security's dashboard ships in Slice 5. Until then this deliberately points
-// at the dashboard root — a link to /dashboard/security/:id would 404 today.
-function securityQueueLink(): string {
-  return `${baseUrl()}/dashboard`;
+function securityEngagementLink(engagementId: string): string {
+  return `${baseUrl()}/dashboard/security/${engagementId}`;
+}
+
+function itEngagementLink(engagementId: string): string {
+  return `${baseUrl()}/dashboard/it/${engagementId}`;
 }
 
 export function stakeholderApprovalRequestedTemplate(opts: {
@@ -174,7 +188,7 @@ export function inductionCompletedTemplate(opts: {
 
   return {
     subject: "GMC Site Access — induction completed",
-    html: `<p>${personName} has completed induction at Training School and the record has been forwarded to Security.</p><p><a href="${securityQueueLink()}">View the record</a>.</p>`,
+    html: `<p>${personName} has completed induction at Training School and the record has been forwarded to Security.</p><p><a href="${securityEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 
@@ -186,6 +200,34 @@ export function hospitalUnfitTemplate(opts: {
   return {
     subject: "GMC Site Access — hospital marked record Unfit",
     html: `<p>${personName} was marked Unfit at Hospital and remains at Hospital pending re-evaluation.</p><p><a href="${hospitalEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
+  };
+}
+
+export function forwardedToITTemplate(opts: {
+  personName: string;
+  engagementId: string;
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+
+  return {
+    subject: "GMC Site Access — record cleared by Security",
+    html: `<p>Security has cleared ${personName}. The record is ready for biometric enrollment and access-card setup.</p><p><a href="${itEngagementLink(opts.engagementId)}">Set up access</a>.</p>`,
+  };
+}
+
+export function accessActivatedTemplate(opts: {
+  personName: string;
+  accessCardNumber: string;
+  accessCardExpiry: string;
+  engagementId: string;
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const card = escapeHtml(opts.accessCardNumber);
+  const expiry = escapeHtml(opts.accessCardExpiry);
+
+  return {
+    subject: "GMC Site Access — access activated",
+    html: `<p>Site access is now active for ${personName}.</p><p>Access card ${card}, valid until ${expiry}.</p><p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 

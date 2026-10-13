@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/session";
 
-// Route to each role's workflow dashboard as it ships. Roles without a
-// dashboard yet (Training, Security, IT) fall through to the "coming soon"
-// placeholder below.
+// Route to each role's workflow dashboard. Every workflow role now has one,
+// so the placeholder below is only reached by a provisioned user with no
+// workflow role at all.
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) {
@@ -32,6 +32,14 @@ export default async function DashboardPage() {
 
   if (session.workflowRoles.includes("TrainingStaff")) {
     redirect("/dashboard/training");
+  }
+
+  if (session.workflowRoles.includes("SecurityStaff")) {
+    redirect("/dashboard/security");
+  }
+
+  if (session.workflowRoles.includes("ITStaff")) {
+    redirect("/dashboard/it");
   }
   if (session.workflowRoles.includes("DepartmentHead")) {
     redirect("/dashboard/department");

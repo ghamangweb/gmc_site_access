@@ -28,6 +28,8 @@ const DOC_TYPE_OWNERS: Record<DocType, WorkflowRole> = {
   hospital_fitness_form: "HospitalStaff",
   induction_declaration_form: "TrainingStaff",
   induction_registration_form: "TrainingStaff",
+  biometric_image: "ITStaff",
+  passport_photo: "ITStaff",
 };
 
 export function getDocTypeOwnerRole(docType: string): WorkflowRole | undefined {
@@ -97,7 +99,7 @@ export async function recordUploadedDocument(
   return document;
 }
 
-// Reception's hand-off. A visitor's pre-registration uploads belong to the
+// Reception's hand-off. A visitor's registration uploads belong to the
 // Engagement the moment it exists, so the row's parent is re-pointed rather
 // than the file being re-uploaded — the blob is keyed by the document's own
 // id, so nothing in storage has to move. The single-parent check constraint

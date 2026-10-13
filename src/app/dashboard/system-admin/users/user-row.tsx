@@ -4,7 +4,13 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { provisionUserAction, resetPinAction } from "@/actions/admin";
+import {
+  deactivateUserAction,
+  provisionUserAction,
+  reactivateUserAction,
+  resetPinAction,
+  revokeAccessAction,
+} from "@/actions/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -60,6 +67,7 @@ type StaffUserRow = {
   workflowRoles: string[];
   department: string | null;
   provisionedAt: Date | null;
+  deactivatedAt: Date | null;
 };
 
 function roleBadge(key: string, value: string, htmlId: string, label: string) {
@@ -142,6 +150,60 @@ export function UserRow({
     });
   }
 
+  function handleRevokeAccess() {
+    const confirmed = window.confirm(
+      `Revoke ${user.displayName}'s access? Their roles are cleared and they can sign in but reach nothing. You can provision them again at any time.`,
+    );
+
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      const result = await revokeAccessAction(user.id);
+
+      if (result.success) {
+        toast.success("Access revoked", {
+          description: `${user.displayName} is now unprovisioned.`,
+        });
+      } else {
+        toast.error("Couldn't revoke access", { description: result.error });
+      }
+    });
+  }
+
+  function handleDeactivate() {
+    const confirmed = window.confirm(
+      `Deactivate ${user.displayName}? They can no longer sign in and their PIN is cleared. Everything they did stays on the record, and you can reactivate them later.`,
+    );
+
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      const result = await deactivateUserAction(user.id);
+
+      if (result.success) {
+        toast.success("User deactivated", {
+          description: `${user.displayName} can no longer sign in.`,
+        });
+      } else {
+        toast.error("Couldn't deactivate user", { description: result.error });
+      }
+    });
+  }
+
+  function handleReactivate() {
+    startTransition(async () => {
+      const result = await reactivateUserAction(user.id);
+
+      if (result.success) {
+        toast.success("User reactivated", {
+          description: `${user.displayName} can sign in again — provision them to restore roles.`,
+        });
+      } else {
+        toast.error("Couldn't reactivate user", { description: result.error });
+      }
+    });
+  }
+
   function handleResetPin() {
     const confirmed = window.confirm(
       `Reset PIN for ${user.displayName}? They will need to set a new PIN on next login.`,
@@ -166,17 +228,31 @@ export function UserRow({
 
   return (
     <>
-      <TableRow className={isPending ? "bg-accent" : ""}>
+      <TableRow
+        className={
+          user.deactivatedAt
+            ? "opacity-60"
+            : isPending
+              ? "bg-accent"
+              : undefined
+        }
+      >
         <TableCell>{user.displayName}</TableCell>
         <TableCell>{user.email}</TableCell>
         <TableCell>{user.systemRole}</TableCell>
         <TableCell>{user.workflowRoles.join(", ") || "—"}</TableCell>
         <TableCell>
-          {user.provisionedAt
-            ? "Provisioned"
-            : isPending
-              ? "Pending"
-              : "Unprovisioned"}
+          {user.deactivatedAt ? (
+            <Badge className="bg-status-danger-bg text-status-danger-fg">
+              Deactivated
+            </Badge>
+          ) : user.provisionedAt ? (
+            "Provisioned"
+          ) : isPending ? (
+            "Pending"
+          ) : (
+            "Unprovisioned"
+          )}
         </TableCell>
         <TableCell className="text-right">
           <DropdownMenu>
@@ -192,12 +268,32 @@ export function UserRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setProvisionOpen(true)}>
-                Provision
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleResetPin}>
-                Reset PIN
-              </DropdownMenuItem>
+              {user.deactivatedAt ? (
+                <DropdownMenuItem onSelect={handleReactivate}>
+                  Reactivate
+                </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem onSelect={() => setProvisionOpen(true)}>
+                    Provision
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={handleResetPin}>
+                    Reset PIN
+                  </DropdownMenuItem>
+                  {user.provisionedAt && (
+                    <DropdownMenuItem onSelect={handleRevokeAccess}>
+                      Revoke access
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={handleDeactivate}
+                  >
+                    Deactivate
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </TableCell>

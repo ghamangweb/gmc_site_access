@@ -16,7 +16,12 @@ import {
   delegatedApprovalGrantedTemplate,
   pinResetTemplate,
 } from "@/lib/email/templates";
-import { provisionStaffUser } from "@/lib/services/auth-service";
+import {
+  deactivateStaffUser,
+  provisionStaffUser,
+  reactivateStaffUser,
+  revokeStaffAccess,
+} from "@/lib/services/auth-service";
 import {
   grantDelegatedApproval,
   revokeDelegatedApproval,
@@ -171,6 +176,96 @@ export async function resetPinAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to reset PIN",
+    };
+  }
+}
+
+export async function revokeAccessAction(
+  staffUserId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireSystemAdmin();
+
+    // Locking yourself out would leave the system with one fewer administrator
+    // and no way back in from this screen.
+    if (session.staffUserId === staffUserId) {
+      return { success: false, error: "You cannot revoke your own access" };
+    }
+
+    const user = await revokeStaffAccess(staffUserId);
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    revalidatePath("/dashboard/system-admin/users");
+
+    return { success: true };
+  } catch (error) {
+    console.error("[actions/admin]", error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to revoke access",
+    };
+  }
+}
+
+export async function deactivateUserAction(
+  staffUserId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireSystemAdmin();
+
+    if (session.staffUserId === staffUserId) {
+      return {
+        success: false,
+        error: "You cannot deactivate your own account",
+      };
+    }
+
+    const user = await deactivateStaffUser(staffUserId, session.staffUserId);
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    revalidatePath("/dashboard/system-admin/users");
+
+    return { success: true };
+  } catch (error) {
+    console.error("[actions/admin]", error);
+
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to deactivate user",
+    };
+  }
+}
+
+export async function reactivateUserAction(
+  staffUserId: string,
+): Promise<ActionResult> {
+  try {
+    await requireSystemAdmin();
+
+    const user = await reactivateStaffUser(staffUserId);
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    revalidatePath("/dashboard/system-admin/users");
+
+    return { success: true };
+  } catch (error) {
+    console.error("[actions/admin]", error);
+
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to reactivate user",
     };
   }
 }

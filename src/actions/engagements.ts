@@ -6,7 +6,9 @@ import { requirePinConfirmed, requireWriteAccess } from "@/lib/auth/guards";
 import type { ActionResult, HospitalClearanceStatus } from "@/lib/domain/types";
 import { sendEmail } from "@/lib/email/send";
 import {
+  accessActivatedTemplate,
   delegatedApprovalRequestedTemplate,
+  forwardedToITTemplate,
   hospitalClearedTemplate,
   hospitalUnfitTemplate,
   inductionCompletedTemplate,
@@ -22,9 +24,11 @@ import {
   type RegistrationCompletion,
 } from "@/lib/services/registration-service";
 import {
+  activateAccess,
   applyStakeholderApproval,
   cancelEngagement,
   createEngagement,
+  forwardToIT,
   getActiveEngagementForPassport,
   getEngagementDetail,
   type ReceptionFormInput,
@@ -213,6 +217,19 @@ export async function requestStakeholderApprovalAction(
     }
 
     revalidatePath(`/dashboard/reception/${engagementId}`);
+    revalidatePath("/dashboard/approvals");
+
+    // Nobody holding HCM/GMM/DMD means the request reached no one and the
+    // engagement now sits in a queue with no audience. That has to be said
+    // out loud — reporting plain success here is how a record gets lost.
+    if (recipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Approval requested, but no HCM, GMM or DMD user is provisioned — nobody was notified. Ask a System Administrator to assign a stakeholder role.",
+      };
+    }
+
     return allSent
       ? { success: true }
       : {
@@ -365,6 +382,16 @@ export async function submitHospitalClearanceAction(
 
     revalidatePath("/dashboard/hospital");
     revalidatePath(`/dashboard/hospital/${engagementId}`);
+
+    if (recipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          outcome === "Cleared"
+            ? "Clearance recorded, but no Training School user is provisioned — nobody was notified."
+            : "Clearance recorded, but no Receptionist is provisioned — nobody was notified.",
+      };
+    }
     return allSent
       ? { success: true }
       : {
@@ -421,6 +448,14 @@ export async function submitTrainingCompletionAction(
 
     revalidatePath("/dashboard/training");
     revalidatePath(`/dashboard/training/${engagementId}`);
+
+    if (recipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Induction recorded, but no Security user is provisioned — nobody was notified.",
+      };
+    }
 
     return allSent
       ? { success: true }
@@ -487,6 +522,125 @@ export async function requestTerminationAction(
         error instanceof Error
           ? error.message
           : "Failed to request termination",
+    };
+  }
+}
+
+export async function forwardToITAction(
+  engagementId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("SecurityStaff");
+
+    const { recipients } = await forwardToIT(engagementId, session.staffUserId);
+    const detail = await getEngagementDetail(engagementId);
+
+    let allSent = true;
+
+    if (detail) {
+      for (const recipient of recipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...forwardedToITTemplate({
+            personName: detail.person.fullName,
+            engagementId,
+          }),
+        });
+
+        if (!sent) allSent = false;
+      }
+    }
+
+    revalidatePath("/dashboard/security");
+    revalidatePath(`/dashboard/security/${engagementId}`);
+    revalidatePath("/dashboard/it");
+
+    if (recipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Forwarded, but no IT user is provisioned — nobody was notified.",
+      };
+    }
+
+    return allSent
+      ? { success: true }
+      : {
+          success: true,
+          warning: "Forwarded to IT, but some emails may not have sent",
+        };
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to forward to IT",
+    };
+  }
+}
+
+export async function activateAccessAction(
+  engagementId: string,
+  input: {
+    idType: string;
+    biometricCaptured: boolean;
+    accessCardNumber: string;
+    accessCardExpiry: string;
+  },
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("ITStaff");
+
+    const { recipients } = await activateAccess(
+      engagementId,
+      input,
+      session.staffUserId,
+    );
+    const detail = await getEngagementDetail(engagementId);
+
+    let allSent = true;
+
+    if (detail) {
+      for (const recipient of recipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...accessActivatedTemplate({
+            personName: detail.person.fullName,
+            accessCardNumber: input.accessCardNumber,
+            accessCardExpiry: input.accessCardExpiry,
+            engagementId,
+          }),
+        });
+
+        if (!sent) allSent = false;
+      }
+    }
+
+    revalidatePath("/dashboard/it");
+    revalidatePath(`/dashboard/it/${engagementId}`);
+    revalidatePath("/dashboard/reception");
+
+    if (recipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Access activated, but no Security or Reception user is provisioned — nobody was notified.",
+      };
+    }
+
+    return allSent
+      ? { success: true }
+      : {
+          success: true,
+          warning: "Access activated, but some emails may not have sent",
+        };
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to activate access",
     };
   }
 }

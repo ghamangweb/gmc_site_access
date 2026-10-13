@@ -7,15 +7,22 @@ import { RegistrationHeadline } from "@/components/workflow/registration-headlin
 import { RegistrationInvalidLink } from "@/components/workflow/registration-invalid-link";
 import { RegistrationLanguageProvider } from "@/components/workflow/registration-language-provider";
 import { RegistrationLanguageToggle } from "@/components/workflow/registration-language-toggle";
+import { RegistrationSuccess } from "@/components/workflow/registration-success";
 import { getDocumentsForInvitation } from "@/lib/services/document-service";
 import { validateInvitationToken } from "@/lib/services/invitation-service";
 
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; preview?: string }>;
 }) {
-  const { token } = await searchParams;
+  const { token, preview } = await searchParams;
+
+  // `?preview=success` renders the post-submit screen without filling the form
+  // in. Guarded on NODE_ENV so it can never become a public surface in
+  // production — it exists to review the design, not as a feature.
+  const previewSuccess =
+    preview === "success" && process.env.NODE_ENV !== "production";
 
   const invitation = token ? await validateInvitationToken(token) : null;
 
@@ -25,7 +32,7 @@ export default async function RegisterPage({
 
   return (
     <RegistrationLanguageProvider>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex min-h-screen lg:h-screen lg:overflow-hidden">
         <aside className="relative hidden h-screen w-1/2 shrink-0 overflow-hidden lg:block">
           <Image
             src="/bg-auth.jpg"
@@ -35,7 +42,10 @@ export default async function RegisterPage({
             priority
             className="object-cover brightness-50"
           />
-          <div className="relative z-10 flex h-full flex-col justify-between p-12">
+          {/* Logo and headline read as one block. They were previously pinned
+              to opposite ends of a full-height column by `justify-between`,
+              which on a tall pane left them floating unrelated to each other. */}
+          <div className="relative z-10 flex h-full flex-col justify-end gap-6 p-12">
             <div className="inline-flex self-start rounded-xl bg-card p-4">
               <Image
                 src="/logo_whitebg.png"
@@ -49,13 +59,15 @@ export default async function RegisterPage({
           </div>
         </aside>
 
-        <ScrollArea className="h-screen w-full min-w-0 bg-background lg:w-1/2">
-          <main className="p-10">
+        <ScrollArea className="w-full min-w-0 bg-background lg:h-screen lg:w-1/2">
+          <main className="px-5 py-8 sm:px-8 lg:p-10">
             <div className="mb-6 flex justify-end">
               <RegistrationLanguageToggle />
             </div>
 
-            {invitation && token ? (
+            {previewSuccess ? (
+              <RegistrationSuccess />
+            ) : invitation && token ? (
               invitation.registrationType === "Local" ? (
                 <LocalRegistrationForm
                   token={token}
