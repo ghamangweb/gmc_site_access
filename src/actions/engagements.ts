@@ -10,6 +10,7 @@ import {
   delegatedApprovalRequestedTemplate,
   forwardedToITTemplate,
   hospitalClearedTemplate,
+  hospitalFitWithConditionsTemplate,
   hospitalUnfitTemplate,
   inductionCompletedTemplate,
   stakeholderApprovalReceivedTemplate,
@@ -359,42 +360,67 @@ export async function submitHospitalClearanceAction(
 ): Promise<ActionResult> {
   try {
     const session = await requireWriteAccess("HospitalStaff");
-    const { recipients, outcome } = await recordHospitalClearance(
-      engagementId,
-      input,
-      session.staffUserId,
-    );
+    const { trainingRecipients, receptionRecipients, outcome } =
+      await recordHospitalClearance(engagementId, input, session.staffUserId);
     const detail = await getEngagementDetail(engagementId);
 
     let allSent = true;
     if (detail) {
-      for (const recipient of recipients) {
+      for (const recipient of trainingRecipients) {
         const sent = await sendEmail({
           to: recipient.email,
-          ...(outcome === "Cleared"
-            ? hospitalClearedTemplate({
+          ...hospitalClearedTemplate({
+            personName: detail.person.fullName,
+            engagementId,
+          }),
+        });
+        if (!sent) allSent = false;
+      }
+
+      // Reception hears about a conditional clearance as well as an Unfit
+      // one — the record moved on, but the conditions are theirs to manage.
+      for (const recipient of receptionRecipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...(outcome === "Unfit"
+            ? hospitalUnfitTemplate({
                 personName: detail.person.fullName,
                 engagementId,
               })
-            : hospitalUnfitTemplate({
+            : hospitalFitWithConditionsTemplate({
                 personName: detail.person.fullName,
                 engagementId,
+                doctorComments: input.doctorComments,
               })),
         });
+
         if (!sent) allSent = false;
       }
     }
 
     revalidatePath("/dashboard/hospital");
     revalidatePath(`/dashboard/hospital/${engagementId}`);
+    // The record lands in Training's queue and, when Reception is told, on
+    // their dashboard too.
+    revalidatePath("/dashboard/training");
+    revalidatePath("/dashboard/reception");
 
-    if (recipients.length === 0) {
+    // Whoever should have been told but could not be. Reporting plain success
+    // here is how a record goes quiet in a queue nobody is watching.
+    const unreachable: string[] = [];
+
+    if (outcome === "Cleared" && trainingRecipients.length === 0) {
+      unreachable.push("no Training School user is provisioned");
+    }
+
+    if (input.clearanceStatus !== "Fit" && receptionRecipients.length === 0) {
+      unreachable.push("no Receptionist is provisioned");
+    }
+
+    if (unreachable.length > 0) {
       return {
         success: true,
-        warning:
-          outcome === "Cleared"
-            ? "Clearance recorded, but no Training School user is provisioned — nobody was notified."
-            : "Clearance recorded, but no Receptionist is provisioned — nobody was notified.",
+        warning: `Clearance recorded, but ${unreachable.join(" and ")} — nobody was notified.`,
       };
     }
     return allSent
@@ -614,6 +640,11 @@ export async function activateAccessAction(
             accessCardNumber: input.accessCardNumber,
             accessCardExpiry: input.accessCardExpiry,
             engagementId,
+            // Security and Reception are both told, and each opens the
+            // record from its own route.
+            audience: recipient.workflowRoles.includes("SecurityStaff")
+              ? "SecurityStaff"
+              : "Receptionist",
           }),
         });
 

@@ -105,12 +105,25 @@ export function registrationSubmittedTemplate(opts: {
   };
 }
 
+// Every link has to land on the route the *recipient* can open. `proxy.ts`
+// gates /dashboard/<layer> on that layer's workflow role, so mailing a
+// Receptionist a /dashboard/hospital/... link answered them with a bare
+// "Forbidden" — which is exactly what used to happen on an Unfit clearance.
+// One helper per audience, and each template names the audience it is for.
 function engagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/reception/${engagementId}`;
 }
 
+function approvalsEngagementLink(engagementId: string): string {
+  return `${baseUrl()}/dashboard/approvals/${engagementId}`;
+}
+
 function hospitalEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/hospital/${engagementId}`;
+}
+
+function trainingEngagementLink(engagementId: string): string {
+  return `${baseUrl()}/dashboard/training/${engagementId}`;
 }
 
 function securityEngagementLink(engagementId: string): string {
@@ -121,6 +134,26 @@ function itEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/it/${engagementId}`;
 }
 
+// Where a record is openable by whoever a layer hands it to.
+function layerEngagementLink(role: WorkflowRole, engagementId: string): string {
+  switch (role) {
+    case "HospitalStaff":
+      return hospitalEngagementLink(engagementId);
+    case "TrainingStaff":
+      return trainingEngagementLink(engagementId);
+    case "SecurityStaff":
+      return securityEngagementLink(engagementId);
+    case "ITStaff":
+      return itEngagementLink(engagementId);
+    case "HCM":
+    case "GMM":
+    case "DMD":
+      return approvalsEngagementLink(engagementId);
+    default:
+      return engagementLink(engagementId);
+  }
+}
+
 export function stakeholderApprovalRequestedTemplate(opts: {
   personName: string;
   engagementId: string;
@@ -128,20 +161,21 @@ export function stakeholderApprovalRequestedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   return {
     subject: "GMC Site Access — stakeholder approval requested",
-    html: `<p>Stakeholder approval is requested for ${personName}'s Reception record.</p><p>Approval from any one of HCM, GMM, or DMD is sufficient.</p><p><a href="${engagementLink(opts.engagementId)}">Review and approve</a>.</p>`,
+    html: `<p>Stakeholder approval is requested for ${personName}'s Reception record.</p><p>Approval from any one of HCM, GMM, or DMD is sufficient.</p><p><a href="${approvalsEngagementLink(opts.engagementId)}">Review and approve</a>.</p>`,
   };
 }
 
 export function stakeholderApprovalReceivedTemplate(opts: {
   personName: string;
   engagementId: string;
-  nextRole: string;
+  // Who the record was routed to — and therefore which queue the link opens.
+  nextRole: WorkflowRole;
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   const nextRole = escapeHtml(opts.nextRole);
   return {
     subject: "GMC Site Access — record routed to your queue",
-    html: `<p>${personName}'s Reception record has been approved and routed to ${nextRole}.</p><p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
+    html: `<p>${personName}'s Reception record has been approved and routed to ${nextRole}.</p><p><a href="${layerEngagementLink(opts.nextRole, opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 
@@ -154,7 +188,7 @@ export function delegatedApprovalRequestedTemplate(opts: {
   const reason = escapeHtml(opts.reason);
   return {
     subject: "GMC Site Access — delegated approval requested",
-    html: `<p>HCM, GMM, and DMD are unavailable to approve ${personName}'s Reception record.</p><p>Reason: ${reason}</p><p>A System Administrator may grant the Receptionist a one-off delegated approval.</p><p><a href="${engagementLink(opts.engagementId)}">Review the record</a>.</p>`,
+    html: `<p>HCM, GMM, and DMD are unavailable to approve ${personName}'s Reception record.</p><p>Reason: ${reason}</p><p>A System Administrator may grant the Receptionist a one-off delegated approval.</p><p><a href="${baseUrl()}/dashboard/system-admin/delegations">Grant the delegation</a>.</p>`,
   };
 }
 
@@ -176,7 +210,7 @@ export function hospitalClearedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   return {
     subject: "GMC Site Access — hospital clearance recorded",
-    html: `<p>${personName} has been cleared by Hospital and routed to Training School.</p><p><a href="${hospitalEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
+    html: `<p>${personName} has been cleared by Hospital and routed to Training School.</p><p>The fitness form is attached to the record.</p><p><a href="${trainingEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 
@@ -199,7 +233,23 @@ export function hospitalUnfitTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   return {
     subject: "GMC Site Access — hospital marked record Unfit",
-    html: `<p>${personName} was marked Unfit at Hospital and remains at Hospital pending re-evaluation.</p><p><a href="${hospitalEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
+    html: `<p>${personName} was marked Unfit at Hospital and remains at Hospital pending re-evaluation.</p><p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
+  };
+}
+
+// Reception's half of a conditional clearance: the record has moved on, but
+// the conditions are theirs to manage, so they are told as well as Training.
+export function hospitalFitWithConditionsTemplate(opts: {
+  personName: string;
+  engagementId: string;
+  doctorComments: string;
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const doctorComments = escapeHtml(opts.doctorComments);
+
+  return {
+    subject: "GMC Site Access — hospital clearance recorded with conditions",
+    html: `<p>${personName} was cleared Fit with Conditions at Hospital and has moved on to Training School.</p><p>Doctor's comments: ${doctorComments}</p><p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 
@@ -220,6 +270,9 @@ export function accessActivatedTemplate(opts: {
   accessCardNumber: string;
   accessCardExpiry: string;
   engagementId: string;
+  // Security and Reception are both notified, and they open the record from
+  // different routes.
+  audience: WorkflowRole;
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   const card = escapeHtml(opts.accessCardNumber);
@@ -227,7 +280,7 @@ export function accessActivatedTemplate(opts: {
 
   return {
     subject: "GMC Site Access — access activated",
-    html: `<p>Site access is now active for ${personName}.</p><p>Access card ${card}, valid until ${expiry}.</p><p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
+    html: `<p>Site access is now active for ${personName}.</p><p>Access card ${card}, valid until ${expiry}.</p><p><a href="${layerEngagementLink(opts.audience, opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 
@@ -240,6 +293,6 @@ export function terminationRequestedTemplate(opts: {
   const reason = escapeHtml(opts.reason);
   return {
     subject: "GMC Site Access — access termination requested",
-    html: `<p>Access termination has been requested for ${personName}.</p><p>Reason: ${reason}</p><p><a href="${engagementLink(opts.engagementId)}">Review the request</a>.</p>`,
+    html: `<p>Access termination has been requested for ${personName}.</p><p>Reason: ${reason}</p><p><a href="${baseUrl()}">Sign in to review the request</a>.</p>`,
   };
 }

@@ -201,14 +201,14 @@ export const VISA_TYPES = [
 
 export type VisaType = (typeof VISA_TYPES)[number];
 
-export const ID_TYPES = [
-  "Passport",
-  "Ghana Card",
-  "Driver's Licence",
-  "Voter ID",
-] as const;
+// What IT issues, not an identity document the visitor already holds. The
+// list was Passport / Ghana Card / Driver's Licence / Voter ID, which
+// described the wrong thing entirely — IT hands out a site access card.
+// `access_provisionings.id_type` keeps its column name; only the values it
+// stores changed.
+export const CARD_TYPES = ["Visitor Card", "RFID Card"] as const;
 
-export type IdType = (typeof ID_TYPES)[number];
+export type CardType = (typeof CARD_TYPES)[number];
 
 export type TerminationStatus = "Pending" | "Approved" | "Rejected";
 

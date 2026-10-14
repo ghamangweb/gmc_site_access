@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DocumentSelector } from "@/components/workflow/document-selector";
-import { ID_TYPES, type IdType } from "@/lib/domain/types";
+import { CARD_TYPES, type CardType } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 import type { AccessProvisioning } from "@/lib/services/workflow-service";
 
@@ -39,7 +39,7 @@ export function ItForm({
   readOnly: boolean;
 }) {
   const router = useRouter();
-  const [idType, setIdType] = useState<IdType>("Passport");
+  const [cardType, setCardType] = useState<CardType>("Visitor Card");
   const [biometricCaptured, setBiometricCaptured] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
@@ -65,7 +65,7 @@ export function ItForm({
   function handleSubmit() {
     startTransition(async () => {
       const result = await activateAccessAction(engagementId, {
-        idType,
+        idType: cardType,
         biometricCaptured,
         accessCardNumber: cardNumber.trim(),
         accessCardExpiry: cardExpiry,
@@ -101,7 +101,7 @@ export function ItForm({
             value={provisioning.accessCardNumber}
           />
           <Field label="Card Expiry" value={provisioning.accessCardExpiry} />
-          <Field label="ID Type" value={provisioning.idType} />
+          <Field label="Card Type" value={provisioning.idType} />
           <Field
             label="Biometric Captured"
             value={provisioning.biometricCaptured ? "Yes" : "No"}
@@ -139,12 +139,12 @@ export function ItForm({
 
         <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <Label>ID Type *</Label>
+            <Label>Card Type *</Label>
             <Select
-              value={idType}
+              value={cardType}
               onValueChange={(next) => {
-                // SAFETY: the Select's only options are ID_TYPES members.
-                setIdType(next as IdType);
+                // SAFETY: the Select's only options are CARD_TYPES members.
+                setCardType(next as CardType);
               }}
               disabled={disabled}
             >
@@ -152,7 +152,7 @@ export function ItForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ID_TYPES.map((option) => (
+                {CARD_TYPES.map((option) => (
                   <SelectItem key={option} value={option}>
                     {option}
                   </SelectItem>
