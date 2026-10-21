@@ -52,7 +52,7 @@ The system features both **system roles** and **workflow responsibilities**.
 
 | Role | Responsibility |
 |---|---|
-| **System Administrator** | Manages staff users, assigns roles, manages PINs, and approves access termination |
+| **System Administrator** | Manages staff users, assigns roles and manages PINs |
 | **Admin** | Performs authorised actions within assigned workflow areas |
 | **Guest** | Read-only access within assigned workflow areas |
 | **User** | Microsoft sign-in identity without access to workflow functions until provisioned |
@@ -66,8 +66,7 @@ The system features both **system roles** and **workflow responsibilities**.
 | **HCM / GMM / DMD** | Provides stakeholder approval |
 | **Hospital Staff** | Handles medical fitness clearance |
 | **Training School Staff** | Handles induction clearance |
-| **Security Staff** | Reviews site-access requirements and forwards approved records to IT |
-| **IT Staff** | access activation or revocation |
+| **Security Staff** | Reviews site-access requirements, issues the access card, activates access, and revokes it after an approved termination |
 
 
 ## Registration Process
@@ -103,7 +102,7 @@ The Receptionist:
 - Continues the Engagement through the appropriate workflow.
 
 Reception can request for a delegated approval.
-Reception can also initiate an access termination request when required.
+Reception can also request that active access be revoked when required.
 
 The HCM/GMM/DMD:
 - Only handles stakeholder approval (one stakeholder approval is enough to get the engagement moving to the next stage)
@@ -117,8 +116,8 @@ Hospital processing applies to visitors coming to work.
 
 Hospital staff:
 
-- Record the medical clearance status.
-- upload medical record document.
+- Record the medical clearance status. That is all — no fitness form or other document is
+  uploaded at this stage, and doctor's comments are optional (revised 2026-10-21).
 
 The possible clearance outcomes are:
 
@@ -156,20 +155,17 @@ For the work path, if induction is not completed within three months of Hospital
 
 Security reviews the information and requirements completed by the previous stages.
 
-Once the requirements are satisfied, Security forwards the Engagement to IT for biometric enrollment and access-card processing.
+Once the requirements are satisfied, Security completes the final access setup itself
+(there is no separate IT stage — removed 2026-10-21; IT's former work moved here).
 
+Security is responsible for:
 
-## Information Technology
-
-IT completes the final access setup.
-
-IT is responsible for:
-
-- Passport photo upload.
+- Passport photo upload (no biometric file upload — the "biometric enrollment captured" tick stays).
+- Recording the access card (type, number, expiry — never later than the departure date).
 - Activating access after successful completion.
 - Revoking access following an approved termination.
 
-Once access is successfully activated, Security and Reception are notified.
+Once access is successfully activated, Reception is notified.
 
 
 
@@ -181,9 +177,9 @@ The Engagement follows one of three main paths depending on the purpose of the v
 
 | Access Purpose | Mine-Site Access | Workflow (from invitation → submission) |
 |---|---|---|
-| Coming to work | Yes | Reception → Hospital → Training School → Security → IT |
+| Coming to work | Yes | Reception → Hospital → Training School → Security |
 | Coming to visit | No | Reception only |
-| Coming to visit | Yes | Reception → Training School → Security → IT |
+| Coming to visit | Yes | Reception → Training School → Security |
 
 Each stage must be completed before the Engagement can move to the next required stage.
 
@@ -216,15 +212,16 @@ Information and approvals completed by previous workflow stages remain available
 
 
 
-### Access Termination
+### Access Revocation
 
-Access termination follows a controlled approval process.
+Revocation has no approval step (revised 2026-10-21): once Reception requests it, Security can
+carry it out. Only active access can be revoked; an expired card has nothing left to switch off.
 
 The process is:
 
-**Reception initiates termination request → System Administrator Approves → IT  revokes access**
+**Reception requests revocation → Security revokes access**
 
-The termination request, approval, and access revocation are recorded in the system's audit trail.
+The request and the revocation are recorded in the system's audit trail.
 
 
 
@@ -407,7 +404,7 @@ At a high level, GMC Site Access follows this process:
 
 ↓
 
-**IT Activates Site Access**
+**Security Activates Site Access**
 
 ↓
 

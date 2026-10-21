@@ -892,7 +892,7 @@ Reception's full form.
 ### HospitalForm
 
 File: `src/components/workflow/hospital-form.tsx`
-Last updated: 2026-07-16
+Last updated: 2026-10-21
 
 | Property | Class |
 |---|---|
@@ -901,16 +901,13 @@ Last updated: 2026-07-16
 | Field stack | `flex flex-col gap-4`, each field `flex flex-col gap-2` |
 
 **Pattern notes:**
-Plain `useState` + `useTransition`, not `react-hook-form` — only two real
-input fields (clearance status, doctor comments) plus the upload slot;
-RHF was justified for Reception's ~35 fields, not for this. Uses
-`DocumentSelector` in `mode="required"` for the mandatory
-`hospital_fitness_form` upload (see that component's notes above) — the
-Submit Clearance button stays disabled until the file is uploaded AND a
-status is chosen AND comments are non-empty, mirroring
-`submitForStakeholderApproval`'s missing-document guard pattern but
-enforced client-side too for immediate feedback (the server-side guard in
-`recordHospitalClearance` is still the real enforcement). When a prior
+Plain `useState` + `useTransition`, not `react-hook-form` — only two
+input fields (clearance status, doctor comments); RHF was justified for
+Reception's ~35 fields, not for this. **2026-10-21 (feedback):** Hospital no
+longer uploads a fitness form and doctor comments are optional — the only
+required input is the clearance status, so Submit Clearance enables as soon as
+one is chosen. `DocumentSelector`'s `mode="required"` has no remaining caller.
+When a prior
 clearance exists for the active workflow cycle, a small `text-xs
 text-muted-foreground` line above the form shows it for context ("Last
 recorded: Unfit — ... (date)") — the form itself always starts blank,
@@ -1122,13 +1119,14 @@ Used by: `registration-submission-preview.tsx`
 | Property | Class |
 |---|---|
 | Wrapper | `flex flex-col items-center gap-4` — no card, no surface of its own |
-| Sheet stack | two `absolute` sheets at `-top-2 -right-2` and `-top-1 -right-1`, each `h-full w-full rounded-lg border border-border bg-card` |
-| Page | `relative aspect-[1/1.414] overflow-hidden rounded-lg border border-border bg-card`, `max-w-[260px]` |
-| Image | plain `<img>`, `h-full w-full object-contain` |
-| PDF | `<iframe>` with `#toolbar=0&navpanes=0&view=FitH`, `pointer-events-none` |
-| Fallback | lucide `FileTextIcon` `h-8 w-8` + "No preview", muted |
-| Actions | `Button variant="ghost" size="sm"` for View and Download, centred under the label |
-| Grid | `grid grid-cols-4 gap-8 pt-2` in the preview's Documents card |
+| Leaf pile | Only when `documents.page_count` > 1: one `absolute inset-0 origin-bottom-left rounded-md border border-border bg-card` leaf per extra page, max 3, offset **right only** (`translate-x-[5px]/[10px]/[15px]`, no vertical offset). Wrapper is `group`; on hover leaves fan out (`rotate-[2deg]/[4deg]/[6deg]` and +2/3/4px translate (toned down 2026-10-21 from 4/8/12deg)), staggered `delay-75`/`delay-150`, `transition-transform duration-300 ease-out`, off under `motion-reduce`. Single-page / unknown count = plain sheet, no animation (2026-10-21) |
+| Page | `pointer-events-none relative aspect-[1/1.414] overflow-hidden rounded-md border border-border bg-card`, `max-w-[120px]` (shrunk from 260px 2026-10-21 — a visual cue, not a reader) |
+| Sheet content | `ProtectedDocumentPages firstPageOnly` — page 1 on a canvas, `object-contain`; no `previewUrl` prop and no signed URL in the page any more |
+| Loading | Centred `Loader2Icon` `size-5 animate-spin` (skeletons were tried and reverted 2026-10-21), absolutely positioned inside the fixed sheet / `min-h-full` viewer body so it never shifts layout. Pages mount hidden and fade in (`animate-in fade-in-0 duration-300`) once all are drawn. Failure: "Preview unavailable" |
+| Fallback | lucide `FileTextIcon` `h-6 w-6` + "No preview", muted |
+| Actions | None (2026-10-21). The tile is one `<button>` (`group cursor-pointer`) that opens a `Dialog` (**fixed** `h-[90vh] w-[calc(100vw-2rem)] sm:max-w-4xl`, `print:hidden` — never content-sized: the dialog is centred by translate, so a changing height made it jump), body `overflow-y-auto [scrollbar-gutter:stable]` holding every page, drawn by `ProtectedDocumentPages`. The label swaps on hover/focus: name fades out, centred `EyeIcon` `size-3.5` + "Preview" fades in. Leaf fan-out shares the same `group`. No Download anywhere |
+| Size | Tile is a fixed `w-[140px]`, sheet a fixed `w-[120px] shrink-0`, icons `size-*` + `shrink-0` — previously `w-full max-w-[120px]` shrank in narrow grid cells, so the sheet and its icons varied in size between screens (2026-10-21) |
+| Grid | `grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] justify-items-center gap-6 pt-2` in the preview's Documents card |
 | Shadow | none — see below |
 
 **Pattern notes:**
@@ -1304,9 +1302,9 @@ covers **both paths that reach induction**: `listEngagementsForLayer("AtTraining
 "VisitMine"])` — work-path visitors arriving from Hospital, and mine-site visitors who come
 straight from Reception.
 
-`TrainingForm` requires **both** `induction_declaration_form` and
-`induction_registration_form` before sign-off, mirroring Hospital's fitness-form gate, and
-`recordInductionCompletion` enforces it server-side rather than trusting the button state.
+`TrainingForm` has no document uploads (removed 2026-10-21, matching Hospital): sign-off has no required
+input and "Comments" is optional (stored `""` when blank), and the clearance-age check below is still enforced server-side in
+`recordInductionCompletion`.
 
 **The clearance-age banner is unique to this layer.** A work-path medical is good for 90 days:
 under 30 remaining shows a `status-warning` banner, expired shows `status-danger` **and
@@ -1406,7 +1404,8 @@ Files: `components/workflow/hospital-handoff.tsx` (new),
 **Pattern notes:**
 `HospitalHandoff` is the one exception to "Training is identity plus the form, nothing else":
 the induction it signs off depends on a medical Training could not see. The card shows the
-clearance outcome, the doctor's comments and the fitness form itself, read-only. It renders
+clearance outcome and the doctor's comments (shown as "—" when none), read-only; the fitness
+form was dropped 2026-10-21 since Hospital no longer uploads one. It renders
 **only when a clearance exists** — a visit+mine visitor never went through Hospital, so there is
 no hand-off and no empty card. Reception keeps its own read-only view of the same document;
 that was never the problem.
@@ -1910,3 +1909,30 @@ Last updated: YYYY-MM-DD
 **Pattern notes:**
 Key decisions, gotchas, or invariants specific to this component.
 ```
+
+### AccessActivationForm (2026-10-21 — replaces `ItForm`)
+
+Update 2026-10-21: the biometric-capture **upload** was dropped; only the passport photograph is
+required (label "Passport Photograph *"). The "Biometric enrollment captured" checkbox stays.
+`biometric_image` remains in `DocType` for existing rows but nothing offers or requires it.
+
+File: `src/components/workflow/access-activation-form.tsx`. The IT stage was removed; this is
+the same form (biometric + passport-photo uploads, card type, card number, card expiry capped at
+departure, "Biometric enrollment captured") now rendered at the **bottom of
+`security/[engagementId]`**, after `PriorLayersSummary` and the document previews — review first,
+then act. Classes unchanged from `ItForm`. Once activated it renders the read-only "Access
+Active" summary. On success it routes to `/dashboard/security`, where the record appears under
+the "Site Access Granted" tab. Earlier notes in this file that mention `ItForm`,
+`ForwardToITButton`, `/dashboard/it` or Security's "Forwarded to IT" tab describe components that
+no longer exist.
+
+### ProtectedDocumentPages (2026-10-21)
+
+File: `src/components/workflow/protected-document-pages.tsx`. Fetches a document from
+`/api/documents/:id/file` and draws it onto `<canvas>` elements (images via `createImageBitmap`,
+PDFs via `pdfjs-dist`), so there is no `<img>`, no browser PDF toolbar and no file URL in the DOM.
+`select-none print:hidden`, context menu and drag suppressed. `firstPageOnly` = thumbnail.
+**What it does not do:** stop a screenshot or someone reading the response in devtools' network
+tab — it removes the easy routes (save button, right-click save, Ctrl+S, a copyable URL), nothing
+more. The route refuses browser navigations via `Sec-Fetch-Dest`. Not yet applied to
+`DocumentSelector`'s upload-slot eye icon, which still opens a signed URL in a new tab.

@@ -15,12 +15,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { DocumentSelector } from "@/components/workflow/document-selector";
 import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
 } from "@/lib/domain/types";
-import type { Document } from "@/lib/services/document-service";
 
 // What each outcome does to the engagement, per project-overview.md. Spelled
 // out because the three are not interchangeable: one advances the visitor,
@@ -39,14 +37,12 @@ type LatestClearance = {
 
 type HospitalFormProps = {
   engagementId: string;
-  uploadedDocuments: Document[];
   latestClearance?: LatestClearance;
   readOnly: boolean;
 };
 
 export function HospitalForm({
   engagementId,
-  uploadedDocuments,
   latestClearance,
   readOnly,
 }: HospitalFormProps) {
@@ -56,11 +52,7 @@ export function HospitalForm({
   const [isPending, startTransition] = useTransition();
 
   const disabled = readOnly || isPending;
-  const hasFitnessForm = uploadedDocuments.some(
-    (doc) => doc.docType === "hospital_fitness_form",
-  );
-  const canSubmit =
-    !disabled && hasFitnessForm && status !== "" && comments.trim().length > 0;
+  const canSubmit = !disabled && status !== "";
 
   function handleSubmit() {
     if (status === "") return;
@@ -100,24 +92,14 @@ export function HospitalForm({
       {latestClearance && (
         <p className="mb-4 text-xs text-muted-foreground">
           Last recorded:{" "}
-          {HOSPITAL_CLEARANCE_LABELS[latestClearance.clearanceStatus]} —{" "}
-          {latestClearance.doctorComments} (
-          {latestClearance.clearanceDate.toLocaleDateString()})
+          {HOSPITAL_CLEARANCE_LABELS[latestClearance.clearanceStatus]}
+          {latestClearance.doctorComments &&
+            `: ${latestClearance.doctorComments}`}{" "}
+          ({latestClearance.clearanceDate.toLocaleDateString()})
         </p>
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label>Fitness Form *</Label>
-          <DocumentSelector
-            engagementId={engagementId}
-            mode="required"
-            docTypes={["hospital_fitness_form"]}
-            uploadedDocuments={uploadedDocuments}
-            disabled={disabled}
-          />
-        </div>
-
         <div className="flex flex-col gap-2">
           <Label>Clearance Status *</Label>
           <Select
@@ -150,7 +132,7 @@ export function HospitalForm({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label>Doctor Comments *</Label>
+          <Label>Doctor Comments (optional)</Label>
           <Textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}

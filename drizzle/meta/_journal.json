@@ -155,6 +155,34 @@
       "when": 1791835829406,
       "tag": "0021_great_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792597990259,
+      "tag": "0022_remove_it_stage",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792598596389,
+      "tag": "0023_add_document_page_count",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792600911999,
+      "tag": "0024_termination_requested_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792604714363,
+      "tag": "0025_encrypt_sensitive_columns",
+      "breakpoints": true
     }
   ]
 }

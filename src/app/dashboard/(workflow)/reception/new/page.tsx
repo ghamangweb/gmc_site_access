@@ -10,7 +10,6 @@ import { registrationRequestToFormValues } from "@/lib/domain/registration-prefi
 import { type ApplicableDocType, DOC_TYPES } from "@/lib/domain/types";
 import { getDocumentsForInvitation } from "@/lib/services/document-service";
 import { getRegistrationRequest } from "@/lib/services/registration-service";
-import { getSignedFileUrl } from "@/lib/uploadthing/api";
 
 function isApplicableDocType(docType: string): docType is ApplicableDocType {
   // SAFETY: widening the readonly tuple to `string[]` only to ask whether an
@@ -58,24 +57,6 @@ export default async function NewReceptionPage({
     .map((document) => document.docType)
     .filter(isApplicableDocType);
 
-  // Signed once per document, server-side, so the preview can render the file
-  // itself instead of just naming it. A failure here is not fatal: the card
-  // falls back to an icon and still offers Download.
-  const previewDocuments = await Promise.all(
-    uploadedDocuments.map(async (document) => {
-      try {
-        return {
-          document,
-          previewUrl: await getSignedFileUrl(document.fileKey),
-        };
-      } catch (error) {
-        console.error("[reception/new] preview url", error);
-
-        return { document, previewUrl: null };
-      }
-    }),
-  );
-
   // Parsed once and used twice: the preview renders it, the edit form is
   // prefilled with it, so the two can never show different data.
   const submittedValues = request
@@ -102,7 +83,7 @@ export default async function NewReceptionPage({
               values={submittedValues}
               registrationType={request.registrationType}
               department={request.department}
-              documents={previewDocuments}
+              documents={uploadedDocuments}
             />
           }
           belowPreview={

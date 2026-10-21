@@ -8,7 +8,6 @@ export type WorkflowRole =
   | "HospitalStaff"
   | "TrainingStaff"
   | "SecurityStaff"
-  | "ITStaff"
   | "DepartmentHead";
 
 export const GMC_LIAISON_DEPARTMENTS = [
@@ -58,7 +57,6 @@ export type WorkflowState =
   | "AtHospital"
   | "AtTraining"
   | "AtSecurity"
-  | "AwaitingProvisioning"
   | "Completed"
   | "Cancelled";
 
@@ -72,7 +70,6 @@ export const WORKFLOW_STATE_LABELS: Record<WorkflowState, string> = {
   AtHospital: "Hospital",
   AtTraining: "Training",
   AtSecurity: "Security",
-  AwaitingProvisioning: "Awaiting Provisioning",
   Completed: "Completed",
   Cancelled: "Cancelled",
 };
@@ -83,6 +80,35 @@ export type AccessState =
   | "Expired"
   | "TerminationRequested"
   | "Terminated";
+
+// What an access state is called on screen. "Termination" is the stored,
+// internal word; the people using the screens say revoke.
+export const ACCESS_STATE_LABELS: Record<AccessState, string> = {
+  Pending: "Pending",
+  Active: "Active",
+  Expired: "Expired",
+  TerminationRequested: "Revocation Requested",
+  Terminated: "Revoked",
+};
+
+// Today as YYYY-MM-DD in UTC, the same shape as the date columns. Ghana is on
+// UTC, so this is also the local date.
+export function isoToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// What a record's access really is right now. `access_state` is only written
+// when something happens, and nothing happens when a card simply runs out, so
+// an Active record whose card has lapsed is Expired whatever the column says.
+// A card is valid through its expiry date, so it lapses the day after.
+export function getEffectiveAccessState(
+  accessState: AccessState,
+  cardExpiry: string | undefined,
+): AccessState {
+  return accessState === "Active" && cardExpiry && cardExpiry < isoToday()
+    ? "Expired"
+    : accessState;
+}
 
 // A runtime tuple, not just a union: the UploadThing file router validates
 // the incoming docType with `z.enum(DOC_TYPES)`, which needs real values.
@@ -201,16 +227,18 @@ export const VISA_TYPES = [
 
 export type VisaType = (typeof VISA_TYPES)[number];
 
-// What IT issues, not an identity document the visitor already holds. The
+// What Security issues, not an identity document the visitor already holds. The
 // list was Passport / Ghana Card / Driver's Licence / Voter ID, which
-// described the wrong thing entirely — IT hands out a site access card.
+// described the wrong thing entirely — Security hands out a site access card.
 // `access_provisionings.id_type` keeps its column name; only the values it
 // stores changed.
 export const CARD_TYPES = ["Visitor Card", "RFID Card"] as const;
 
 export type CardType = (typeof CARD_TYPES)[number];
 
-export type TerminationStatus = "Pending" | "Approved" | "Rejected";
+// Reception requests, Security revokes: there is no approval step in between
+// (changed 2026-10-21), so a request is either waiting or done.
+export type TerminationStatus = "Pending" | "Revoked";
 
 export type HospitalClearanceStatus = "Fit" | "FitWithConditions" | "Unfit";
 

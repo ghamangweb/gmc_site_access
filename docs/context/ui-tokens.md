@@ -81,7 +81,7 @@ className="bg-blue-600 text-gray-500"
   --status-info-bg:           204 100% 94%;
   --status-info-fg:           204 100% 22%;
 
-  /* Workflow status — neutral (Draft, AwaitingProvisioning) */
+  /* Workflow status — neutral (Draft) */
   --status-neutral:           215 16% 47%;
   --status-neutral-bg:        210 40% 96%;
   --status-neutral-fg:        215 25% 27%;
@@ -194,7 +194,7 @@ Map every workflow and access state to a bucket — never assign colors per indi
 | Pending, Flagged, TerminationRequested, FitWithConditions | `warning` |
 | Rejected, Terminated, Expired, Unfit, Cancelled | `danger` |
 | AtReception, AtHospital, AtTraining, AtSecurity, AtIT | `info` |
-| Draft, AwaitingProvisioning | `neutral` |
+| Draft | `neutral` |
 
 Badge classes: `bg-status-{bucket}-bg text-status-{bucket}-fg`
 

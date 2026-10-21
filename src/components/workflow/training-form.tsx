@@ -9,14 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DocumentSelector } from "@/components/workflow/document-selector";
-import type { Document } from "@/lib/services/document-service";
 import type { ClearanceAge } from "@/lib/services/workflow-service";
-
-const REQUIRED_DOCS = [
-  "induction_declaration_form",
-  "induction_registration_form",
-] as const;
 
 type LatestInduction = {
   generalSiteInduction: boolean;
@@ -27,13 +20,11 @@ type LatestInduction = {
 
 export function TrainingForm({
   engagementId,
-  uploadedDocuments,
   clearance,
   latestInduction,
   readOnly,
 }: {
   engagementId: string;
-  uploadedDocuments: Document[];
   /** Work-path medicals expire after three months; visit+mine records never
    * went through Hospital and report `applicable: false`. */
   clearance: ClearanceAge;
@@ -49,12 +40,7 @@ export function TrainingForm({
   const expired = clearance.applicable && clearance.expired;
   const disabled = readOnly || isPending || expired;
 
-  const missingDocs = REQUIRED_DOCS.filter(
-    (docType) => !uploadedDocuments.some((doc) => doc.docType === docType),
-  );
-
-  const canSubmit =
-    !disabled && missingDocs.length === 0 && comments.trim().length > 0;
+  const canSubmit = !disabled;
 
   function handleSubmit() {
     startTransition(async () => {
@@ -73,7 +59,7 @@ export function TrainingForm({
       if (result.warning) {
         toast.warning(result.warning);
       } else {
-        toast.success("Induction recorded — forwarded to Security");
+        toast.success("Induction recorded and forwarded to Security");
       }
 
       setComments("");
@@ -108,23 +94,14 @@ export function TrainingForm({
 
       {latestInduction && (
         <p className="mb-4 text-xs text-muted-foreground">
-          Last recorded: {latestInduction.trainerComments} (
-          {latestInduction.completedAt.toLocaleDateString()})
+          Last recorded:{" "}
+          {latestInduction.trainerComments &&
+            `${latestInduction.trainerComments} `}
+          ({latestInduction.completedAt.toLocaleDateString()})
         </p>
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label>Induction Forms *</Label>
-          <DocumentSelector
-            engagementId={engagementId}
-            mode="required"
-            docTypes={[...REQUIRED_DOCS]}
-            uploadedDocuments={uploadedDocuments}
-            disabled={disabled}
-          />
-        </div>
-
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Checkbox
@@ -161,7 +138,7 @@ export function TrainingForm({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="trainer-comments">Trainer Comments *</Label>
+          <Label htmlFor="trainer-comments">Comments (optional)</Label>
           <Textarea
             id="trainer-comments"
             value={comments}
@@ -181,11 +158,6 @@ export function TrainingForm({
             >
               Complete Induction
             </Button>
-            {missingDocs.length > 0 && !expired && (
-              <p className="text-xs text-muted-foreground">
-                Upload both induction forms to continue.
-              </p>
-            )}
           </div>
         )}
       </div>

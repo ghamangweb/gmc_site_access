@@ -9,7 +9,11 @@ import {
   type VisaType,
   type WorkflowRole,
 } from "@/lib/domain/types";
-import { deleteUploadedFile, getSignedFileUrl } from "@/lib/uploadthing/api";
+import {
+  countUploadedPages,
+  deleteUploadedFile,
+  getSignedFileUrl,
+} from "@/lib/uploadthing/api";
 
 export type Document = typeof documents.$inferSelect;
 
@@ -28,8 +32,8 @@ const DOC_TYPE_OWNERS: Record<DocType, WorkflowRole> = {
   hospital_fitness_form: "HospitalStaff",
   induction_declaration_form: "TrainingStaff",
   induction_registration_form: "TrainingStaff",
-  biometric_image: "ITStaff",
-  passport_photo: "ITStaff",
+  biometric_image: "SecurityStaff",
+  passport_photo: "SecurityStaff",
 };
 
 export function getDocTypeOwnerRole(docType: string): WorkflowRole | undefined {
@@ -81,6 +85,8 @@ export async function recordUploadedDocument(
     workflowCycleId = cycle?.id;
   }
 
+  const pageCount = await countUploadedPages(input.fileKey, input.contentType);
+
   const [document] = await db
     .insert(documents)
     .values({
@@ -92,6 +98,7 @@ export async function recordUploadedDocument(
       fileUrl: input.fileUrl,
       fileName: input.fileName,
       contentType: input.contentType,
+      pageCount,
       uploadedBy: input.uploadedBy,
     })
     .returning();

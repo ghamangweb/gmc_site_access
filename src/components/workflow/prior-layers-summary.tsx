@@ -11,8 +11,8 @@ import type {
 } from "@/lib/services/workflow-service";
 
 // What the earlier layers decided, read-only. Security audits this before
-// forwarding, and IT sees it before switching access on — both are signing off
-// on work they did not do, so they need to see it rather than take it on faith.
+// switching access on — it is signing off on work it did not do, so it needs
+// to see it rather than take it on faith.
 const CLEARANCE_BADGE: Record<HospitalClearanceStatus, string> = {
   Fit: "bg-status-success-bg text-status-success-fg",
   FitWithConditions: "bg-status-warning-bg text-status-warning-fg",
@@ -55,7 +55,7 @@ export function PriorLayersSummary({
             {approval.approverName}{" "}
             <span className="text-muted-foreground">
               ({approval.approverRole}
-              {approval.isDelegated ? ", delegated" : ""}) —{" "}
+              {approval.isDelegated ? ", delegated" : ""}),{" "}
               {formatDate(approval.approvedAt)}
             </span>
           </span>
@@ -89,7 +89,7 @@ export function PriorLayersSummary({
           </div>
         ) : (
           <span className="text-muted-foreground text-sm">
-            Not applicable — this visitor did not go through Hospital
+            Not applicable. This visitor did not go through Hospital
           </span>
         )}
       </Row>

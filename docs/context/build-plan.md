@@ -254,12 +254,12 @@ Unfit records stay at Hospital and Reception is notified.
 | File | What it does |
 |---|---|
 | `src/app/dashboard/hospital/page.tsx` | Hospital queue — work-path records at `AtHospital` |
-| `src/components/workflow/hospital-form.tsx` | Fitness form upload + clearance form |
+| `src/components/workflow/hospital-form.tsx` | Clearance form (status + optional comments) |
 
 Hospital form:
-- Compulsory upload: `hospital_fitness_form` (must be uploaded before clearance can be submitted)
+- No document upload (revised 2026-10-21 — the `hospital_fitness_form` requirement was dropped)
 - Medical clearance status: Fit / FitWithConditions / Unfit
-- Doctor comments (required)
+- Doctor comments (optional)
 - Clearance date (auto-recorded on submit)
 - Read-only view of Reception data (personal details, company, stakeholder approvals)
 
@@ -302,10 +302,10 @@ No new tables. Uses `workflow_cycles` and `workflow_transitions` from Slice 2.
 | File | What it does |
 |---|---|
 | `src/app/dashboard/training/page.tsx` | Training queue — work-path + visit+mine records at `AtTraining` |
-| `src/components/workflow/training-form.tsx` | Induction form + uploads + sign-off |
+| `src/components/workflow/training-form.tsx` | Induction checkboxes + comments + sign-off |
 
 Training form:
-- Compulsory uploads (both required before sign-off): `induction_declaration_form` + `induction_registration_form`
+- No document uploads (revised 2026-10-21 — the two induction form uploads were dropped)
 - General site induction, other inductions/training
 - Induction status, completion date
 - Induction sign-off (signature)
@@ -332,8 +332,9 @@ Training form:
 
 ## Slice 5 — Security
 
-**Delivers:** Security staff can audit all prior layer data and forward records to IT for biometric
-enrollment.
+**Delivers:** Security staff can audit all prior layer data. (Revised 2026-10-21: IT was removed from the
+workflow; Security now also does what Slice 6 describes below — there is no forward step, and
+`AwaitingProvisioning` no longer exists. Slice 6 is superseded.)
 
 ### Schema
 
@@ -366,7 +367,7 @@ No new tables.
 
 ---
 
-## Slice 6 — IT
+## Slice 6 — IT (superseded 2026-10-21 — now part of Security)
 
 **Delivers:** IT staff can complete biometric enrollment, issue access cards, and activate site
 access. Full work-path and visit+mine-path records can complete end-to-end.
@@ -413,7 +414,7 @@ IT form:
 
 ---
 
-## Slice 7 — Access Termination
+## Slice 7 — Access Termination (revised and built 2026-10-21: no System Admin approval, Security revokes; see `progress-tracker.md`)
 
 **Delivers:** Reception can request termination. System Admin approves or rejects. IT executes
 revocation. Full audit trail throughout.

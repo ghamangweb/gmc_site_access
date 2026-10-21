@@ -26,7 +26,6 @@ const ROLE_OPTIONS = [
   "HospitalStaff",
   "TrainingStaff",
   "SecurityStaff",
-  "ITStaff",
   "DepartmentHead",
 ];
 

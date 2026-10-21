@@ -209,7 +209,7 @@ export async function createRegistrationRequest(
       receptionists.map((receptionist) => ({
         recipientStaffUserId: receptionist.id,
         registrationRequestId: request.id,
-        message: `${visitorName} submitted a registration for ${department} — ready to become an engagement.`,
+        message: `${visitorName} submitted a registration for ${department} and is ready to become an engagement.`,
       })),
     );
   }
@@ -251,7 +251,7 @@ function summariseRequest(
   return {
     id: request.id,
     fullName: formData.person?.fullName ?? "Unknown",
-    identityNo: formData.person?.passportNo ?? "—",
+    identityNo: formData.person?.passportNo ?? "-",
     registrationType,
     department: request.department,
     accessPurpose,

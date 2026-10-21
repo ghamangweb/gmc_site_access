@@ -7,8 +7,8 @@ import type { ActionResult, HospitalClearanceStatus } from "@/lib/domain/types";
 import { sendEmail } from "@/lib/email/send";
 import {
   accessActivatedTemplate,
+  accessRevokedTemplate,
   delegatedApprovalRequestedTemplate,
-  forwardedToITTemplate,
   hospitalClearedTemplate,
   hospitalFitWithConditionsTemplate,
   hospitalUnfitTemplate,
@@ -29,7 +29,6 @@ import {
   applyStakeholderApproval,
   cancelEngagement,
   createEngagement,
-  forwardToIT,
   getActiveEngagementForPassport,
   getEngagementDetail,
   type ReceptionFormInput,
@@ -37,6 +36,7 @@ import {
   recordInductionCompletion,
   requestDelegatedApproval,
   requestTermination,
+  revokeAccess,
   submitForStakeholderApproval,
   updateReceptionData,
 } from "@/lib/services/workflow-service";
@@ -227,7 +227,7 @@ export async function requestStakeholderApprovalAction(
       return {
         success: true,
         warning:
-          "Approval requested, but no HCM, GMM or DMD user is provisioned — nobody was notified. Ask a System Administrator to assign a stakeholder role.",
+          "Approval requested, but no HCM, GMM or DMD user is provisioned, so nobody was notified. Ask a System Administrator to assign a stakeholder role.",
       };
     }
 
@@ -257,7 +257,7 @@ export async function applyStakeholderApprovalAction(
   try {
     const session = await requirePinConfirmed();
     if (session.systemRole === "Guest") {
-      return { success: false, error: "Read-only access — cannot approve" };
+      return { success: false, error: "Read-only access: cannot approve" };
     }
 
     const { recipients, nextRole } = await applyStakeholderApproval(
@@ -420,7 +420,7 @@ export async function submitHospitalClearanceAction(
     if (unreachable.length > 0) {
       return {
         success: true,
-        warning: `Clearance recorded, but ${unreachable.join(" and ")} — nobody was notified.`,
+        warning: `Clearance recorded, but ${unreachable.join(" and ")}, so nobody was notified.`,
       };
     }
     return allSent
@@ -484,7 +484,7 @@ export async function submitTrainingCompletionAction(
       return {
         success: true,
         warning:
-          "Induction recorded, but no Security user is provisioned — nobody was notified.",
+          "Induction recorded, but no Security user is provisioned, so nobody was notified.",
       };
     }
 
@@ -537,33 +537,45 @@ export async function requestTerminationAction(
       }
     }
 
+    revalidatePath("/dashboard/reception");
     revalidatePath(`/dashboard/reception/${engagementId}`);
+    revalidatePath("/dashboard/security");
+
+    if (recipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Revocation requested, but no Security user is provisioned, so nobody was notified.",
+      };
+    }
+
     return allSent
       ? { success: true }
       : {
           success: true,
           warning:
-            "Termination requested, but some notification emails may not have sent",
+            "Revocation requested, but some notification emails may not have sent",
         };
   } catch (error) {
     console.error("[actions/engagements]", error);
     return {
       success: false,
       error:
-        error instanceof Error
-          ? error.message
-          : "Failed to request termination",
+        error instanceof Error ? error.message : "Failed to request revocation",
     };
   }
 }
 
-export async function forwardToITAction(
+export async function revokeAccessAction(
   engagementId: string,
 ): Promise<ActionResult> {
   try {
     const session = await requireWriteAccess("SecurityStaff");
 
-    const { recipients } = await forwardToIT(engagementId, session.staffUserId);
+    const { recipients } = await revokeAccess(
+      engagementId,
+      session.staffUserId,
+    );
     const detail = await getEngagementDetail(engagementId);
 
     let allSent = true;
@@ -572,7 +584,7 @@ export async function forwardToITAction(
       for (const recipient of recipients) {
         const sent = await sendEmail({
           to: recipient.email,
-          ...forwardedToITTemplate({
+          ...accessRevokedTemplate({
             personName: detail.person.fullName,
             engagementId,
           }),
@@ -584,13 +596,14 @@ export async function forwardToITAction(
 
     revalidatePath("/dashboard/security");
     revalidatePath(`/dashboard/security/${engagementId}`);
-    revalidatePath("/dashboard/it");
+    revalidatePath("/dashboard/reception");
+    revalidatePath(`/dashboard/reception/${engagementId}`);
 
     if (recipients.length === 0) {
       return {
         success: true,
         warning:
-          "Forwarded, but no IT user is provisioned — nobody was notified.",
+          "Access revoked, but no Receptionist is provisioned, so nobody was notified.",
       };
     }
 
@@ -598,14 +611,14 @@ export async function forwardToITAction(
       ? { success: true }
       : {
           success: true,
-          warning: "Forwarded to IT, but some emails may not have sent",
+          warning: "Access revoked, but some emails may not have sent",
         };
   } catch (error) {
     console.error("[actions/engagements]", error);
 
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to forward to IT",
+      error: error instanceof Error ? error.message : "Failed to revoke access",
     };
   }
 }
@@ -620,7 +633,7 @@ export async function activateAccessAction(
   },
 ): Promise<ActionResult> {
   try {
-    const session = await requireWriteAccess("ITStaff");
+    const session = await requireWriteAccess("SecurityStaff");
 
     const { recipients } = await activateAccess(
       engagementId,
@@ -640,11 +653,6 @@ export async function activateAccessAction(
             accessCardNumber: input.accessCardNumber,
             accessCardExpiry: input.accessCardExpiry,
             engagementId,
-            // Security and Reception are both told, and each opens the
-            // record from its own route.
-            audience: recipient.workflowRoles.includes("SecurityStaff")
-              ? "SecurityStaff"
-              : "Receptionist",
           }),
         });
 
@@ -652,15 +660,15 @@ export async function activateAccessAction(
       }
     }
 
-    revalidatePath("/dashboard/it");
-    revalidatePath(`/dashboard/it/${engagementId}`);
+    revalidatePath("/dashboard/security");
+    revalidatePath(`/dashboard/security/${engagementId}`);
     revalidatePath("/dashboard/reception");
 
     if (recipients.length === 0) {
       return {
         success: true,
         warning:
-          "Access activated, but no Security or Reception user is provisioned — nobody was notified.",
+          "Access activated, but no Receptionist is provisioned, so nobody was notified.",
       };
     }
 

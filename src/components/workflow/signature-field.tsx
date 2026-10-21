@@ -104,7 +104,7 @@ function UploadSignature({
     reader.onload = () => onChange(reader.result as string);
     reader.onerror = () => {
       setFileName(null);
-      toast.error("Failed to read image — try again");
+      toast.error("Failed to read image. Try again");
     };
     reader.readAsDataURL(file);
   }

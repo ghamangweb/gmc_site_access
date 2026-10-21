@@ -273,6 +273,7 @@ export default async function ReceptionQueuePage({
                       passportNo={person.passportNo}
                       accessPurpose={engagement.accessPurpose}
                       workflowState={workflowState}
+                      accessState={engagement.accessState}
                       canManage={canManage}
                     />
                   );

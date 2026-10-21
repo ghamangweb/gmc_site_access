@@ -11,7 +11,6 @@ const LAYER_ROLES: Record<string, WorkflowRole[]> = {
   hospital: ["HospitalStaff"],
   training: ["TrainingStaff"],
   security: ["SecurityStaff"],
-  it: ["ITStaff"],
 };
 
 export default auth((req) => {

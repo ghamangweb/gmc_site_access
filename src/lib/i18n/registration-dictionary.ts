@@ -169,7 +169,7 @@ const ZH_ENTRIES = {
   "File exceeds the 10MB upload limit": "文件超过 10MB 上传限制",
   "Missing token, docType, or file": "缺少令牌、文件类型或文件",
   "Invalid document type": "文件类型无效",
-  "That document is already uploaded — remove it first":
+  "That document is already uploaded. Remove it first":
     "该文件已上传，请先删除后再试",
   "This invitation link is invalid, already used, or revoked":
     "此邀请链接无效、已被使用或已被撤销",

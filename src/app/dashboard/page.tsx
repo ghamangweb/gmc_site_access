@@ -38,9 +38,6 @@ export default async function DashboardPage() {
     redirect("/dashboard/security");
   }
 
-  if (session.workflowRoles.includes("ITStaff")) {
-    redirect("/dashboard/it");
-  }
   if (session.workflowRoles.includes("DepartmentHead")) {
     redirect("/dashboard/department");
   }

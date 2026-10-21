@@ -506,6 +506,144 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
       in as HCM/GMM/DMD: the row appears, "Review & Approve" opens the preview, and approving
       clears it from the queue
 
+### Hospital simplified: status only (2026-10-21) ✅
+Feedback: Hospital records the fitness outcome and nothing else.
+- [x] No fitness-form upload — `HospitalForm` dropped its `DocumentSelector`, and
+      `recordHospitalClearance` no longer rejects a clearance without one
+- [x] Doctor's comments optional — stored trimmed, `""` when blank (column stays `NOT NULL`, so
+      no migration); Fit-with-Conditions email omits the comments line when empty
+- [x] Training's `HospitalHandoff` shows outcome + comments only; its signed-URL fetching and the
+      hospital page's document query were removed
+- [x] `hospital_fitness_form` stays in `DocType`/`DOC_TYPE_OWNERS` so rows uploaded before this
+      change remain valid; nothing offers it any more
+- [x] `tsc --noEmit`, `biome check src/` clean
+- [x] **Training School too:** the two induction-form uploads (`induction_declaration_form`,
+      `induction_registration_form`) are gone from `TrainingForm`, and `recordInductionCompletion`
+      no longer requires them. Comments are optional too, relabelled "Comments (optional)" (stored `""` when blank; column stays `NOT NULL`). Doc types
+      stay in `DocType`/`DOC_TYPE_OWNERS` for existing rows
+- [x] Training queue's Recorded Inductions tab: "Stage" column and the per-row View action removed (the table already shows everything)
+- [ ] Manual in-browser check — record each outcome with no comments and no upload; confirm
+      Submit enables on status alone and Training's card shows "—" for comments
+
+### IT removed from the workflow (2026-10-21) ✅
+Feedback: everything IT did is Security's job, so Training School → Security is the end of the line.
+- [x] `ITStaff` role, `AwaitingProvisioning` state, `/dashboard/it` routes, proxy/breadcrumb/dashboard
+      redirect entries, `forwardToIT` + `forwardToITAction`, `ForwardToITButton` and
+      `forwardedToITTemplate` all deleted
+- [x] `it-form.tsx` → `access-activation-form.tsx` (`AccessActivationForm`), rendered at the bottom of
+      `security/[engagementId]` after the review material. Submitting runs `activateAccess`:
+      `AtSecurity` → `Completed` / `Active`, same fields, same uploads, same expiry-≤-departure rule
+- [x] `biometric_image` / `passport_photo` now owned by `SecurityStaff`; `activateAccessAction` requires it
+- [x] Activation notifies Reception only (Security is the actor)
+- [x] Security queue: tabs are now Awaiting Review / Site Access Granted ("Forwarded to IT" tab and
+      `listRecentSecurityForwards` removed)
+- [x] Migration `0022_remove_it_stage.sql` (custom) moves any `AwaitingProvisioning` engagement to
+      `AtSecurity`. Applied to the dev DB 2026-10-21
+- [x] Existing users still holding the `ITStaff` string keep it in the DB (no data purge); the role is
+      gone from every picker and route, so they land on the "coming soon" page until reassigned
+- [x] `tsc --noEmit` (apart from stale `.next/types` references to the deleted `it/` pages, which clear on
+      the next `next dev`/`build`) and `biome check src/` clean
+- [ ] Manual in-browser check — take a record through Training → Security, upload both files, fill the
+      card fields, activate; confirm it lands under "Site Access Granted" and Reception is notified
+- Slice 7 (access revocation) was built later the same day: Security revokes, see Slice 7 below
+
+### Field encryption (2026-10-21) 🔶 steps 1-2 of 4 written, not yet applied
+Goal: the developer with Neon access sees only ciphertext. Plan: crypto + key, fields, backfill,
+documents. Key is an env var; no Azure Key Vault (decided 2026-10-21). It only satisfies the requirement
+once the production key is set by the client in the host's sensitive env settings, out of the developer's reach.
+- [x] `src/lib/crypto` (AES-256-GCM, blind index, search tokens) + `getMasterKey()` swap point;
+      `ENCRYPTION_KEY` added to the encrypted `.env.development`; round-trip, tamper detection,
+      legacy passthrough and prefix-search checked
+- [x] Drizzle `encryptedText` / `encryptedJson` columns; schema switched for persons, engagement
+      reception data, registration form data, hospital clearance (status + comments), induction
+      comments, revocation reason, invitation email, notification text, transition comments
+- [x] Passport lookup now uses `persons.passport_no_hash`; queue search uses `search_tokens`
+      (**behaviour change: word-start match only, 2+ characters**)
+- [x] Migration `0025_encrypt_sensitive_columns.sql` (hand-edited: `USING` casts, placeholder hash so
+      NOT NULL/UNIQUE hold) **written, NOT applied**; `src/lib/db/backfill-encryption.ts` +
+      `bun run db:backfill:encryption` **written, NOT run**
+- [ ] **Apply: `bun run db:migrate` then immediately `bun run db:backfill:encryption`.** The running
+      app errors between them (and the dev server must be restarted after)
+- [ ] Step 4, documents: server-side upload route, per-file key, encrypted file name, 4MB cap, image
+      downscaling, viewer decrypts
+- Not encrypted: staff users, dates and states, ids. Add `ENCRYPTION_KEY` to every other environment
+  before deploying, or the app will not start
+
+### Access expiry: validation + effective state (2026-10-21) ✅
+Cause of "Duration says Expired but access is Active": (1) nothing ever moved `access_state` off
+`Active` when a card lapsed; (2) `activateAccess` had no lower bound on the card expiry, and Duration
+was computed activation-day → expiry, so a card issued expiring today read "Expired" from day one.
+- [x] Card expiry cannot be in the past: form message + `activateAccess` guard (valid through the
+      expiry date, so today is allowed)
+- [x] `getEffectiveAccessState(state, cardExpiry)` + `isoToday()` in `lib/domain/types.ts`: an `Active`
+      record whose card expiry is before today is `Expired`. Used by Security's register badge
+      (danger bucket for Expired) and the "Access Active/Expired" heading on the record page
+- [x] `expireLapsedAccess()` (`workflow-service.ts`) writes `Expired` to `engagements.access_state`
+      for lapsed active-cycle cards; called when Security's "Site Access Granted" tab loads (no timer
+      job exists yet). Ran once against the dev DB: 0 lapsed rows
+- [x] Duration is now the issued window, activation day to expiry day **inclusive** (same-day card =
+      1 day); it no longer says "Expired" - that is the Access column's job
+- Not built: a nightly job and a Reception notification when access lapses (belongs with Slice 8's
+  Azure Functions); the sweep writes no `workflow_transitions` row (those record workflow_state moves)
+
+### Em dash removed from user-facing text (2026-10-21) ✅
+- [x] All em dashes (—) replaced in UI copy, toasts, error/warning messages, dashboard notification
+      text, email subjects ("GMC Site Access: …") and the Chinese dictionary key that mirrors an
+      English message. Empty-value placeholders are now `-`. Rule added to `ui-rules.md`
+- Not changed: code comments, dev seed-script logs, and the en dash in the pagination range ("1–20")
+- Notifications already stored in the database keep their old text; only new ones use the new wording
+
+### In-app document viewer (2026-10-21) ✅
+- [x] Preview now opens a dialog; the file is fetched from same-origin `GET /api/documents/[id]/file`
+      (inline, `no-store`, 403 for browser navigations) and drawn on canvases — `pdfjs-dist@6.4.299`
+      added (approved). No signed UploadThing URL reaches the page any more: `previewUrl` plumbing
+      removed from reception/new, engagement-detail and the Security page
+- [x] Viewer polish: dialog is a fixed `90vh` × `max-w-4xl` (was content-sized, which re-centred and jumped as pages loaded); loading spinner kept (skeletons tried, reverted at request); pages fade in; `scrollbar-gutter: stable` stops the scrollbar shifting layout
+- [x] `bun run build` clean (worker bundled), `tsc --noEmit`, `biome check src/` clean
+- [ ] Manual in-browser check — thumbnails render (PDF + image), clicking opens the dialog with all
+      pages, no right-click menu, `/api/documents/<id>/file` pasted into a tab is refused, closing
+      the dialog frees it
+- Not covered: `DocumentSelector`'s eye icon (upload slots) still opens a signed URL in a new tab;
+  `/download` route still exists (unlinked, blocked for Security)
+
+### Security activation: photograph only (2026-10-21) ✅
+- [x] `biometric_image` upload no longer required or offered — only `passport_photo` (form +
+      `activateAccess` guard). The "Biometric enrollment captured" checkbox is unchanged
+
+### Document previews: honest page pile + Security view-only (2026-10-21) ✅
+- [x] `DocumentPreview` is a small (120px), non-interactive sheet; leaves pile on the **right edge only**
+      and only for multi-page files (one per extra page, max 3), fanning out on hover. One-page files
+      are a plain sheet. PDF scrollbar clipped off the sheet
+- [x] `pdf-lib@1.17.1` added (approved) — `countUploadedPages` in `lib/uploadthing/api.ts` parses the
+      PDF via a signed URL at upload; failures leave `page_count` null rather than failing the upload
+- [x] `documents.page_count` (nullable) — migration `0023_add_document_page_count.sql`.
+      Applied to the dev DB 2026-10-21 together with `0022`; `bun run db:backfill:page-counts` run for existing documents
+- [x] Security can view but not download: `/api/documents/[id]/download` returns 403 for `SecurityStaff`.
+      Limit: viewing opens the file in the browser, whose own save button is not blocked
+- [x] Preview buttons removed for everyone (View and Download): the whole tile is the link with a
+      pointer cursor; on hover the document name swaps to an eye icon + "Preview" (no overlay on the PDF). Nothing in the UI links to the download
+      route any more; it stays (Security-blocked) in case a download is wanted back
+- [ ] Manual in-browser check — a 3-page PDF shows a right-side pile that fans on hover; an image and a
+      1-page PDF show a plain sheet; Security sees View only
+
+### Seed: second batch of submissions (2026-10-15) ✅
+- [x] `SUBMISSIONS` grew to 20 Foreign submissions — 10 more across all 7 liaison departments,
+      new nationalities (Dutch, Italian, Japanese, Kenyan, Filipino, Pakistani, Egyptian,
+      Indian, Chinese), all three access purposes, phone numbers validated against
+      `libphonenumber-js`
+- [x] The seed is **idempotent per submission**, not all-or-nothing. It used to bail whenever
+      *any* `@seed.gmc.local` invitation existed, so a second batch could never be added to a
+      database that already held the first; it now matches on the seed email and inserts only
+      what is missing
+- [x] Bug found and fixed in `seedDocuments`: converting a submission re-points its documents
+      from the invitation onto the engagement, so a converted invitation looks document-less and
+      every later run uploaded a second copy of every file. It now only seeds documents for
+      submissions whose `engagement_id` is still null. The 19 duplicate rows this produced on
+      first run were deleted from the database and from UploadThing storage
+- [x] Ran 2026-10-15: 10 new submissions, 19 documents uploaded (Visa on Arrival gets the
+      passport page only). 20 submissions total, 10 outstanding in Reception's queue; re-running
+      is now a no-op
+
 ### IT card type + Security access register (2026-10-13) ✅
 - [x] `ID_TYPES` (Passport / Ghana Card / Driver's Licence / Voter ID) replaced by `CARD_TYPES`
       = **Visitor Card**, **RFID Card** — IT issues a card, it doesn't record an identity
@@ -836,9 +974,29 @@ that is then abandoned or revoked (orphans, harmless but unreaped).
 
 ---
 
-## Slice 7 — Access Termination 🔲
+## Slice 7 — Access Revocation ✅ (2026-10-21)
 
-*Not started.*
+Revised from the original plan: **no System Admin approval step**. Reception requests, Security
+revokes. (Original plan: Reception → System Admin approves → IT revokes.)
+- [x] `requestTermination` (Reception): only `Active` access (effective state, so a lapsed card is
+      refused); inside a row lock sets `access_state = TerminationRequested`, inserts the
+      `termination_requests` row, writes a `workflow_transitions` audit row, notifies Security. The
+      state flip is what blocks a duplicate request
+- [x] `revokeAccess` (Security): requires `TerminationRequested`; marks the request `Revoked`
+      (`decided_by/at`), sets `access_state = Terminated`, audit row, notifies Receptionists
+- [x] Security: third tab **Revocation Requests** (count pill) with Name, Passport, Card No., Reason,
+      Requested By, Requested and a "Revoke Access" button (`RevokeAccessButton`, confirm first;
+      hidden for Guests). Register badges: Revocation Requested (warning), Revoked (danger)
+- [x] Reception row action is now "Request Revocation" and only appears for `Active` access
+      (it used to appear for everything *not* Completed/Cancelled, i.e. records with no access yet)
+- [x] Migration `0024` adds `termination_requests.requested_at`; applied to the dev DB.
+      `ACCESS_STATE_LABELS` added ("Terminated" shows as "Revoked")
+- [x] `tsc --noEmit`, `biome check src/`, `bun run build` clean
+- [ ] Manual in-browser check - as Reception request revocation on an Active record, confirm the
+      row action disappears and Security's Revocation Requests tab shows it with the reason; as
+      Security revoke it and confirm the register shows Revoked and Reception is notified
+- Not built: reactivating revoked access; System Admins are no longer notified of requests
+- `TerminationStatus` is now `Pending | Revoked` (the Approved/Rejected values are gone)
 
 ---
 

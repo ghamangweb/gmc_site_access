@@ -18,13 +18,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DocumentSelector } from "@/components/workflow/document-selector";
-import { CARD_TYPES, type CardType } from "@/lib/domain/types";
+import {
+  CARD_TYPES,
+  type CardType,
+  getEffectiveAccessState,
+  isoToday,
+} from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 import type { AccessProvisioning } from "@/lib/services/workflow-service";
 
-const REQUIRED_DOCS = ["biometric_image", "passport_photo"] as const;
+const REQUIRED_DOCS = ["passport_photo"] as const;
 
-export function ItForm({
+export function AccessActivationForm({
   engagementId,
   uploadedDocuments,
   departureDate,
@@ -54,13 +59,15 @@ export function ItForm({
   // Mirrors the server-side rule so the problem is visible before submitting
   // rather than coming back as an error.
   const expiryTooLate = cardExpiry !== "" && cardExpiry > departureDate;
+  const expiryInPast = cardExpiry !== "" && cardExpiry < isoToday();
 
   const canSubmit =
     !disabled &&
     missingDocs.length === 0 &&
     cardNumber.trim().length > 0 &&
     cardExpiry !== "" &&
-    !expiryTooLate;
+    !expiryTooLate &&
+    !expiryInPast;
 
   function handleSubmit() {
     startTransition(async () => {
@@ -83,9 +90,9 @@ export function ItForm({
         toast.success("Site access activated");
       }
 
-      // Back to IT's queue, where the activated record now shows under
-      // "Access Activated".
-      router.push("/dashboard/it");
+      // Back to Security's queue, where the activated record now shows under
+      // "Site Access Granted".
+      router.push("/dashboard/security");
     });
   }
 
@@ -93,7 +100,10 @@ export function ItForm({
     return (
       <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="mb-4 font-semibold text-foreground text-lg">
-          Access Active
+          {getEffectiveAccessState("Active", provisioning.accessCardExpiry) ===
+          "Expired"
+            ? "Access Expired"
+            : "Access Active"}
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
@@ -127,7 +137,7 @@ export function ItForm({
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Label>Biometric & Photo *</Label>
+          <Label>Passport Photograph *</Label>
           <DocumentSelector
             engagementId={engagementId}
             mode="required"
@@ -182,6 +192,8 @@ export function ItForm({
               <p className="text-destructive text-xs">
                 Cannot be later than the departure date ({departureDate}).
               </p>
+            ) : expiryInPast ? (
+              <p className="text-destructive text-xs">Cannot be in the past.</p>
             ) : (
               <p className="text-muted-foreground text-xs">
                 Departure date is {departureDate}.
@@ -222,8 +234,7 @@ export function ItForm({
             </Button>
             {missingDocs.length > 0 && (
               <p className="text-muted-foreground text-xs">
-                Upload the biometric capture and passport photograph to
-                continue.
+                Upload the passport photograph to continue.
               </p>
             )}
           </div>

@@ -4,7 +4,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { HospitalForm } from "@/components/workflow/hospital-form";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import type { HospitalClearanceStatus } from "@/lib/domain/types";
-import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import {
   getEngagementDetail,
   getLatestHospitalClearance,
@@ -27,7 +26,6 @@ export default async function HospitalDetailPage({
     notFound();
   }
   const { engagement, person } = detail;
-  const documents = await getDocumentsForEngagement(engagementId);
   const latestClearance = await getLatestHospitalClearance(engagementId);
 
   const isHospitalStaff =
@@ -47,7 +45,6 @@ export default async function HospitalDetailPage({
       <div className="flex flex-col gap-6">
         <HospitalForm
           engagementId={engagementId}
-          uploadedDocuments={documents}
           latestClearance={
             latestClearance
               ? {
