@@ -1189,6 +1189,29 @@ Copy says **"your registration has been submitted"** — "registration" is GMC's
 name for this workflow stage; the visitor just filled in a registration form, so that is what
 it is called to them. The old dictionary key was replaced, not kept as an alias.
 
+### CookieConsentBanner + PrivacyPolicyContent (2026-10-22)
+
+Files: `src/components/workflow/cookie-consent-banner.tsx`, `privacy-policy-link.tsx`,
+`privacy-policy-content.tsx`, `src/app/privacy-policy/page.tsx`, `src/lib/consent.ts`
+
+| Property | Class |
+|---|---|
+| Banner | `fixed inset-x-4 bottom-4 z-50 rounded-xl border border-border bg-card p-4 shadow-lg`, then `sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-sm` (bottom-right card on desktop, full-width on a phone) |
+| Title / body | `text-sm font-semibold text-foreground` / `text-xs text-muted-foreground` |
+| Buttons | shadcn `Button`, `variant="outline"` Deny + default Accept, each `flex-1` |
+| Policy page | `mx-auto max-w-3xl px-5 py-8 sm:px-8 lg:py-12`; h1 `text-3xl`, section h2 `text-xl`, body `text-sm` |
+
+**Pattern notes:**
+Public pages only (`/register`, `/privacy-policy`); both are wrapped in `RegistrationLanguageProvider`,
+so the banner and policy are English ⇄ 简体中文 through the existing `t()` and dictionary.
+The banner copy is deliberately accurate: the only thing stored is the language choice, so it says
+no analytics/marketing cookies. **If analytics is ever added, change the copy and add real
+categories.** Consent lives in `localStorage` (`gmc-cookie-consent`), not a cookie, to match how the
+locale is already stored. The language is persisted **only after Accept**; Deny (or no choice yet)
+keeps the switch for the current visit and `writeConsent("denied")` removes any stored locale.
+The banner renders nothing until mounted, for the same hydration reason as the locale provider.
+Policy text is a draft for GMC legal review (retention period and contact route are unspecified).
+
 ### Staff user lifecycle: revoke and deactivate (2026-10-12)
 
 Files: `system-admin/users/user-row.tsx`, `users/page.tsx`, `actions/admin.ts`,

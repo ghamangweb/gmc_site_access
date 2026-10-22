@@ -7,7 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-
+import { LOCALE_STORAGE_KEY, readConsent } from "@/lib/consent";
 import type { ActionErrorCode, DocType } from "@/lib/domain/types";
 import {
   type RegistrationLocale,
@@ -21,8 +21,6 @@ type ActionFailure = {
   errorCode?: ActionErrorCode;
   missingDocTypes?: DocType[];
 };
-
-const STORAGE_KEY = "gmc-registration-locale";
 
 type RegistrationLanguage = {
   locale: RegistrationLocale;
@@ -45,7 +43,9 @@ const RegistrationLanguageContext = createContext<RegistrationLanguage>({
 
 function readStoredLocale(): RegistrationLocale {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === "zh" ? "zh" : "en";
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY) === "zh"
+      ? "zh"
+      : "en";
   } catch {
     return "en";
   }
@@ -63,14 +63,22 @@ export function RegistrationLanguageProvider({
   const [locale, setLocaleState] = useState<RegistrationLocale>("en");
 
   useEffect(() => {
-    setLocaleState(readStoredLocale());
+    if (readConsent() === "accepted") {
+      setLocaleState(readStoredLocale());
+    }
   }, []);
 
   const setLocale = useCallback((next: RegistrationLocale) => {
     setLocaleState(next);
 
+    // The language is only remembered once the visitor has accepted storage;
+    // before that (or after Deny) the switch lasts for this visit only.
+    if (readConsent() !== "accepted") {
+      return;
+    }
+
     try {
-      window.localStorage.setItem(STORAGE_KEY, next);
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
     } catch {
       // Private windows and blocked site data throw here. The switch still
       // works for this visit; it just won't be remembered.
