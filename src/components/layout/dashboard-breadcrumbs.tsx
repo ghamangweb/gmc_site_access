@@ -24,7 +24,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   hospital: "Hospital",
   training: "Training School",
   security: "Security",
-  it: "IT",
   department: "Department",
 };
 

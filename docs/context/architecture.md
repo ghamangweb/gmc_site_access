@@ -72,7 +72,7 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   └── api/
     │       ├── auth/[...nextauth]/       → NextAuth catch-all route
     │       ├── uploadthing/              → UploadThing file router (core.ts) + route handler — ALL uploads, both staff and public
-    │       ├── documents/[documentId]/   → staff view (signed URL) + delete; /download streams it back with an attachment disposition
+    │       ├── documents/[documentId]/   → staff view (signed URL) + delete; /file streams bytes for the in-app viewer (inline, no-store, refuses navigations via Sec-Fetch-Dest); /download streams an attachment (unlinked from the UI, blocked for Security)
     │       └── register/documents/       → PUBLIC view + delete, authorized by invitation token only
     ├── actions/
     │   ├── auth.ts                       → requestAccess, verifyPin, setupPin, refreshSession
@@ -359,12 +359,24 @@ Created via `src/lib/services/registration-service.ts`'s `createRegistrationRequ
 a transaction with `invitations.consumed_at` being set — a reused, revoked, or already-consumed
 token makes the whole submission fail before any row is written.
 
+### Encryption (2026-10-21)
+
+Sensitive columns are encrypted by the app before they reach Postgres (see `library-docs.md`).
+Encrypted: every `persons` field except `id`, `engagements.reception_data`,
+`registration_requests.form_data`, `hospital_clearances.clearance_status` + `doctor_comments`,
+`induction_records.trainer_comments`, `termination_requests.reason`, `invitations.email`,
+`notifications.message`, `workflow_transitions.comments`. Not encrypted: staff users, dates/states,
+ids. The table notes below show the logical type; the database column is `text`.
+`hospital_clearances_clearance_status_check` was dropped (ciphertext cannot satisfy it).
+
 ### `persons`
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| passport_no | text | Unique lookup key |
+| passport_no | text | Encrypted. Not the lookup key |
+| passport_no_hash | text | Unique lookup key: HMAC of the normalised passport number |
+| search_tokens | text[] | Hashed word prefixes of name + passport number, for the queue search |
 | full_name | text | |
 | date_of_birth | date | |
 | gender | text | |
@@ -404,6 +416,7 @@ token makes the whole submission fail before any row is written.
 | file_url | text | UploadThing file URL (`ufsUrl`); not publicly readable, every view goes through a 15-minute signed URL |
 | file_name | text | Nullable — the original filename, captured at upload. Names the download and is what the UI shows |
 | content_type | text | Nullable — the uploaded MIME type. Decides whether a preview renders as an image or a PDF frame |
+| page_count | int | Nullable — counted at upload (`pdf-lib` for PDFs, 1 for images). Drives the leaf pile on previews; null = unknown, shown as one page |
 | uploaded_by | uuid | Nullable FK → staff_users — **null means the visitor uploaded it themselves** |
 | uploaded_at | timestamptz | |
 
@@ -442,7 +455,7 @@ guard, SAS viewing and delete all stay in one place instead of every downstream 
 | id | uuid | PK |
 | workflow_cycle_id | uuid | FK |
 | clearance_status | text | Fit \| Unfit \| FitWithConditions |
-| doctor_comments | text | Mandatory |
+| doctor_comments | text | Optional — stored as an empty string when none given (column stays `NOT NULL`, no migration; changed 2026-10-21) |
 | clearance_date | timestamptz | |
 
 ### `induction_records`
@@ -453,7 +466,7 @@ guard, SAS viewing and delete all stay in one place instead of every downstream 
 | workflow_cycle_id | uuid | FK — cycle-scoped, not engagement-scoped, so a record that returns to Hospital (Slice 9's 3-month rule) keeps its earlier induction history |
 | general_site_induction | boolean | |
 | other_inductions | boolean | |
-| trainer_comments | text | Mandatory |
+| trainer_comments | text | Optional — stored as an empty string when none given (column stays `NOT NULL`) |
 | completed_at | timestamptz | |
 
 Added 2026-10-12 with Slice 4. The build plan said "no new tables", but `workflow_transitions`
@@ -509,9 +522,10 @@ ID type have nowhere else to live — same reasoning as `induction_records` in S
 | engagement_id | uuid | FK |
 | requested_by | uuid | FK → staff_users |
 | reason | text | |
-| status | text | Pending \| Approved \| Rejected |
-| decided_by | uuid | Nullable |
-| decided_at | timestamptz | |
+| requested_at | timestamptz | Added 2026-10-21 (migration `0024`) |
+| status | text | Pending \| Revoked. No approval step: Reception requests, Security revokes (2026-10-21) |
+| decided_by | uuid | Nullable. The Security user who revoked |
+| decided_at | timestamptz | When access was revoked |
 
 ---
 
@@ -586,7 +600,7 @@ otherwise show GMC's internal staffing problems to a visitor.
 
 Defined as typed string unions in `src/lib/domain/types.ts`.
 
-**workflow_state:** `Draft`, `AtReception`, `AtHospital`, `AtTraining`, `AtSecurity`, `AwaitingProvisioning`, `Completed`, `Cancelled` (Receptionist-initiated soft-cancel of a still-unapproved Reception record — distinct from `access_state`'s termination path, which applies to records that have already progressed; added during Slice 2's build)
+**workflow_state:** `Draft`, `AtReception`, `AtHospital`, `AtTraining`, `AtSecurity`, `Completed`, `Cancelled` (`AwaitingProvisioning` was removed 2026-10-21 with the IT stage; migration `0022` moves any such rows to `AtSecurity`.) (Receptionist-initiated soft-cancel of a still-unapproved Reception record — distinct from `access_state`'s termination path, which applies to records that have already progressed; added during Slice 2's build)
 
 **access_state:** `Pending`, `Active`, `Expired`, `TerminationRequested`, `Terminated`
 

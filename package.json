@@ -17,6 +17,8 @@
     "db:migrate": "dotenvx run -f .env.development -- drizzle-kit migrate",
     "db:seed": "dotenvx run -f .env.development -- tsx src/lib/db/seed.ts",
     "db:seed:registrations": "dotenvx run -f .env.development -- tsx src/lib/db/seed-registrations.ts",
+    "db:backfill:page-counts": "dotenvx run -f .env.development -- tsx src/lib/db/backfill-page-counts.ts",
+    "db:backfill:encryption": "dotenvx run -f .env.development -- tsx src/lib/db/backfill-encryption.ts",
     "db:seed:approvals": "dotenvx run -f .env.development -- tsx src/lib/db/seed-approvals.ts"
   },
   "overrides": {
@@ -41,6 +43,8 @@
     "lucide-react": "^1.23.0",
     "next": "16.2.9",
     "next-auth": "5.0.0-beta.31",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
     "perfect-freehand": "^1.2.3",
     "postgres": "^3.4.9",
     "radix-ui": "^1.6.2",

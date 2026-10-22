@@ -39,7 +39,6 @@ export const WORKFLOW_STATE_BADGE: Record<WorkflowState, string> = {
   AtHospital: "bg-status-info-bg text-status-info-fg",
   AtTraining: "bg-status-info-bg text-status-info-fg",
   AtSecurity: "bg-status-info-bg text-status-info-fg",
-  AwaitingProvisioning: "bg-status-neutral-bg text-status-neutral-fg",
   Completed: "bg-status-success-bg text-status-success-fg",
   Cancelled: "bg-status-danger-bg text-status-danger-fg",
 };
@@ -50,6 +49,7 @@ type ReceptionRowProps = {
   passportNo: string;
   accessPurpose: string;
   workflowState: WorkflowState;
+  accessState: string;
   canManage: boolean;
 };
 
@@ -59,6 +59,7 @@ export function ReceptionRow({
   passportNo,
   accessPurpose,
   workflowState,
+  accessState,
   canManage,
 }: ReceptionRowProps) {
   const router = useRouter();
@@ -66,8 +67,10 @@ export function ReceptionRow({
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const eligibleForTermination =
-    workflowState !== "Cancelled" && workflowState !== "Completed";
+  // Only live access can be revoked. Anything still moving through the
+  // workflow is cancelled instead, and an expired or already-revoked card has
+  // nothing left to switch off. The server re-checks this against the card.
+  const eligibleForTermination = accessState === "Active";
 
   function handleSubmit() {
     startTransition(async () => {
@@ -78,7 +81,7 @@ export function ReceptionRow({
         if (result.warning) {
           toast.warning(result.warning);
         } else {
-          toast.success("Termination requested");
+          toast.success("Revocation requested");
         }
       } else {
         toast.error(result.error);
@@ -121,7 +124,7 @@ export function ReceptionRow({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => setOpen(true)}>
-                      Request Termination
+                      Request Revocation
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -140,10 +143,9 @@ export function ReceptionRow({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Request Termination</DialogTitle>
+            <DialogTitle>Request Access Revocation</DialogTitle>
             <DialogDescription>
-              Notifies the System Administrator to review and approve access
-              revocation for {personName}.
+              Asks Security to revoke site access for {personName}.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">

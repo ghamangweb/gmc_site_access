@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import { blindIndex, personSearchTokens } from "@/lib/crypto";
 import { type DbClient, db as defaultDb } from "@/lib/db/client";
 import { persons } from "@/lib/db/schema";
 
@@ -17,6 +18,15 @@ export type PersonInput = {
   emergencyContactPhone: string;
 };
 
+// What the encrypted columns cannot do for themselves: the lookup key and the
+// search tokens, derived from the plaintext at the moment it is written.
+function blindColumns(input: PersonInput) {
+  return {
+    passportNoHash: blindIndex(input.passportNo),
+    searchTokens: personSearchTokens(input.fullName, input.passportNo),
+  };
+}
+
 export async function findPersonByPassport(
   passportNo: string,
   db: DbClient = defaultDb,
@@ -24,7 +34,7 @@ export async function findPersonByPassport(
   const [person] = await db
     .select()
     .from(persons)
-    .where(eq(persons.passportNo, passportNo));
+    .where(eq(persons.passportNoHash, blindIndex(passportNo)));
   return person;
 }
 
@@ -32,7 +42,10 @@ export async function createPerson(
   input: PersonInput,
   db: DbClient = defaultDb,
 ): Promise<Person> {
-  const [person] = await db.insert(persons).values(input).returning();
+  const [person] = await db
+    .insert(persons)
+    .values({ ...input, ...blindColumns(input) })
+    .returning();
   return person;
 }
 
@@ -43,7 +56,7 @@ export async function updatePerson(
 ): Promise<Person | undefined> {
   const [person] = await db
     .update(persons)
-    .set(input)
+    .set({ ...input, ...blindColumns(input) })
     .where(eq(persons.id, personId))
     .returning();
   return person;

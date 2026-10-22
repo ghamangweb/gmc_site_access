@@ -191,6 +191,43 @@ authoritative. Directory-exclude jobs (`end-of-file-fixer`,
 staged files matching a job's `glob`, passing `{staged_files}` straight to a
 command like `grep` (no filename args) makes it block reading stdin forever.
 
+## Application-level encryption (`node:crypto`, no library)
+
+Added 2026-10-21 so the database holds ciphertext and a developer with Neon access cannot read
+visitor data. AES-256-GCM, random 12-byte IV per value, value format `enc1.<iv>.<tag>.<body>`.
+- **Key:** `ENCRYPTION_KEY` (32 bytes, base64) in the encrypted `.env.development`, read **only**
+  through `getMasterKey()` in `src/lib/crypto/key.ts`. It is an env var today, so the developer can
+  still read it; it is **not** going to Azure Key Vault (decided 2026-10-21). To keep it from the developer, whoever owns the hosting sets it as a sensitive environment variable in the host project, and the developer gets no access to it. Any other source of the key means changing that one function. Separate
+  encryption and hashing keys are derived from it with HKDF.
+- **Server only.** `src/lib/crypto` must never be imported by a client component.
+- **Columns:** `encryptedText()` / `encryptedJson()` (`src/lib/db/encrypted-columns.ts`) are Drizzle
+  custom types; services keep reading and writing plain values. The DB column is `text`.
+- **No SQL on encrypted columns.** They cannot be filtered, sorted or compared. Lookups use a blind
+  index beside them: `persons.passport_no_hash` (unique key) and `persons.search_tokens` (hashed
+  2+ character word prefixes of name and passport number). Search therefore matches word *starts*
+  only ("men" finds "Mensah", "ensah" does not).
+- **Legacy rows:** `decrypt()` passes through any value without the `enc1.` prefix, so un-backfilled
+  rows still read. `bun run db:backfill:encryption` (idempotent) encrypts them and rebuilds the
+  blind columns; run it straight after migration `0025`.
+- **Losing the key loses the data.** Back it up outside the repo.
+
+## pdf.js (`pdfjs-dist` v6)
+
+Added 2026-10-21 (approved) for the in-app document viewer. It draws PDF pages onto canvases so
+the browser's own PDF viewer — and its save button — never opens. Rules:
+- **Client only, loaded on demand.** `import("pdfjs-dist")` inside an effect (see
+  `protected-document-pages.tsx`); it touches the DOM on import, so it must never run during SSR.
+- **Worker** is `new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url)` — bundled as an
+  asset by Turbopack (`bun run build` verified).
+- Destroy the **loading task** (`task.destroy()`), not the document proxy, when unmounting.
+- The bytes come from `/api/documents/[id]/file` (same origin, no-store); never pass pdf.js a
+  signed UploadThing URL, which would put it in the page.
+
+## pdf-lib
+
+Server-only, used for one thing: `countUploadedPages` (`lib/uploadthing/api.ts`) reads a PDF's
+page count at upload. A parse failure returns `null` and must never fail the upload.
+
 ## Oxlint + anti-slop plugin
 
 Added 2026-10-09 via the `install-anti-slop` Claude Code skill — vendored

@@ -170,7 +170,7 @@ export default async function ApprovalsQueuePage({
                       <TableCell className="text-muted-foreground">
                         {engagement.approvalRequestedAt
                           ? daysWaiting(engagement.approvalRequestedAt)
-                          : "—"}
+                          : "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button asChild size="sm">

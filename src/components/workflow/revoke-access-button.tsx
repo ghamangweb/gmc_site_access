@@ -4,22 +4,28 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { forwardToITAction } from "@/actions/engagements";
+import { revokeAccessAction } from "@/actions/engagements";
 import { Button } from "@/components/ui/button";
 
-export function ForwardToITButton({ engagementId }: { engagementId: string }) {
+export function RevokeAccessButton({
+  engagementId,
+  personName,
+}: {
+  engagementId: string;
+  personName: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function handleForward() {
+  function handleRevoke() {
     const confirmed = window.confirm(
-      "Forward this record to IT for access setup? Security's review is complete once you do.",
+      `Revoke site access for ${personName}? Their access card stops working and this cannot be undone.`,
     );
 
     if (!confirmed) return;
 
     startTransition(async () => {
-      const result = await forwardToITAction(engagementId);
+      const result = await revokeAccessAction(engagementId);
 
       if (!result.success) {
         toast.error(result.error);
@@ -30,16 +36,21 @@ export function ForwardToITButton({ engagementId }: { engagementId: string }) {
       if (result.warning) {
         toast.warning(result.warning);
       } else {
-        toast.success("Forwarded to IT");
+        toast.success("Access revoked");
       }
 
-      router.push("/dashboard/security");
+      router.refresh();
     });
   }
 
   return (
-    <Button type="button" onClick={handleForward} loading={isPending}>
-      Forward to IT
+    <Button
+      variant="destructive"
+      size="sm"
+      loading={isPending}
+      onClick={handleRevoke}
+    >
+      Revoke Access
     </Button>
   );
 }

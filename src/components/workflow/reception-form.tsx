@@ -329,12 +329,12 @@ export function ReceptionForm({
             shouldValidate: false,
           });
         }
-        toast.success("Existing visitor found — fields pre-filled");
+        toast.success("Existing visitor found. Fields pre-filled");
       } else {
         toast.warning("No visitor found for this passport");
       }
     } catch {
-      toast.error("Lookup failed — try again");
+      toast.error("Lookup failed. Try again");
     } finally {
       setIsLookingUp(false);
     }
@@ -459,7 +459,7 @@ export function ReceptionForm({
 
     if (failed.length > 0) {
       toast.warning(
-        `Some documents failed to upload (${failed.join(", ")}) — add them from the record page.`,
+        `Some documents failed to upload (${failed.join(", ")}). Add them from the record page.`,
       );
     }
   }

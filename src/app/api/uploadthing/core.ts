@@ -53,7 +53,7 @@ export const uploadRouter = {
 
       if (existing.some((doc) => doc.docType === input.docType)) {
         throw new UploadThingError(
-          "That document is already uploaded — remove it first",
+          "That document is already uploaded. Remove it first",
         );
       }
 

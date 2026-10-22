@@ -1,11 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { DocumentPreview } from "@/components/workflow/document-preview";
 import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
 } from "@/lib/domain/types";
-import type { Document } from "@/lib/services/document-service";
 import type { HospitalClearance } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
 
@@ -16,16 +14,14 @@ const CLEARANCE_BADGE: Record<HospitalClearanceStatus, string> = {
   Unfit: "bg-status-danger-bg text-status-danger-fg",
 };
 
-// What Hospital hands Training: the decision, the doctor's comments, and the
-// fitness form itself. Training was signing off inductions without ever
-// seeing the medical it depends on — "Fit with Conditions" in particular is
-// meaningless without the conditions.
+// What Hospital hands Training: the decision and any doctor's comments.
+// Training was signing off inductions without ever seeing the medical it
+// depends on — "Fit with Conditions" in particular is meaningless without the
+// conditions. Hospital records the outcome only; no fitness form is uploaded.
 export function HospitalHandoff({
   clearance,
-  documents,
 }: {
   clearance: HospitalClearance;
-  documents: { document: Document; previewUrl: string | null }[];
 }) {
   // SAFETY: clearance_status is a text column written only from the
   // HospitalClearanceStatus union by `recordHospitalClearance`, and the
@@ -46,35 +42,13 @@ export function HospitalHandoff({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1 border-border border-b pb-4">
+      <div className="flex flex-col gap-1">
         <span className="font-medium text-muted-foreground text-xs">
           Doctor&apos;s Comments
         </span>
         <span className="text-foreground text-sm">
-          {clearance.doctorComments || "—"}
+          {clearance.doctorComments || "-"}
         </span>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <span className="font-medium text-muted-foreground text-xs">
-          Fitness Form
-        </span>
-        {documents.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            Hospital recorded the clearance but the fitness form is not attached
-            to this record.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-6">
-            {documents.map(({ document, previewUrl }) => (
-              <DocumentPreview
-                key={document.id}
-                document={document}
-                previewUrl={previewUrl}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </Card>
   );

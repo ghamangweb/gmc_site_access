@@ -33,6 +33,28 @@ type SeedSubmission = {
   formData: ReceptionFormInput;
 };
 
+// Names for the contact fields, so a seeded record never shows a value that
+// just repeats its own label ("Emergency Contact: Emergency Contact"). Picked
+// from the passport number so a re-run gives the same submission the same
+// names.
+const CONTACT_NAMES = [
+  "Grace Mensah",
+  "Daniel Owusu",
+  "Abena Boateng",
+  "Kwame Asante",
+  "Efua Appiah",
+  "Samuel Tetteh",
+] as const;
+
+function contactName(passportNo: string, offset: number): string {
+  const seed = [...passportNo].reduce(
+    (sum, char) => sum + char.charCodeAt(0),
+    0,
+  );
+
+  return CONTACT_NAMES[(seed + offset) % CONTACT_NAMES.length];
+}
+
 function foreignSubmission(input: {
   email: string;
   department: string;
@@ -70,7 +92,7 @@ function foreignSubmission(input: {
         nationality: input.nationality,
         email: input.email,
         phone: input.phone,
-        emergencyContactName: "Emergency Contact",
+        emergencyContactName: contactName(input.passportNo, 0),
         emergencyContactPhone: "+233 244000111",
       },
       accessPurpose: input.accessPurpose,
@@ -80,9 +102,9 @@ function foreignSubmission(input: {
         employmentStatus: input.employmentStatus,
         telephoneOnSite: "+233 244000222",
         companyName: input.companyName,
-        contactNameMonthly: "Monthly Reporting Contact",
+        contactNameMonthly: contactName(input.passportNo, 1),
         contactEmail: `reports${SEED_EMAIL_DOMAIN}`,
-        companyEmergencyName: "Company Emergency Contact",
+        companyEmergencyName: contactName(input.passportNo, 2),
         companyEmergencyTel: "+233 244000333",
         gmcLiaisonPerson: input.liaisonPerson,
         gmcLiaisonDept: input.department,
@@ -335,6 +357,225 @@ const SUBMISSIONS: SeedSubmission[] = [
     reasonForRequest:
       "Pre-contract site familiarisation for the drilling tender.",
   }),
+  foreignSubmission({
+    email: `chen.jian${SEED_EMAIL_DOMAIN}`,
+    department: "Mining",
+    passportNo: "EK2290187",
+    fullName: "Chen Jian",
+    dateOfBirth: "1982-08-19",
+    gender: "Male",
+    nationality: "Chinese",
+    phone: "+86 13700137000",
+    employmentStatus: "Contractor",
+    companyName: "Ningxia Tianyuan Engineering Ltd",
+    liaisonPerson: "Kwame Mensah",
+    accessPurpose: "Work",
+    arrivalDate: "2026-11-10",
+    departureDate: "2027-04-30",
+    visaType: "Work Visa",
+    accessLevel: "Operational Employee Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Rebuild of the primary crusher drive train.",
+  }),
+  foreignSubmission({
+    email: `wang.fang${SEED_EMAIL_DOMAIN}`,
+    department: "Assay Lab",
+    passportNo: "EL8830442",
+    fullName: "Wang Fang",
+    dateOfBirth: "1990-03-07",
+    gender: "Female",
+    nationality: "Chinese",
+    phone: "+86 13611112222",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Tianyuan Quality Assurance Group",
+    liaisonPerson: "Esi Darko",
+    accessPurpose: "VisitMine",
+    arrivalDate: "2026-11-02",
+    departureDate: "2026-11-13",
+    visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Sampling and assay cross-check with the lab team.",
+  }),
+  foreignSubmission({
+    email: `a.hassan${SEED_EMAIL_DOMAIN}`,
+    department: "Carbonate Plant",
+    passportNo: "A23994501",
+    fullName: "Ahmed Hassan",
+    dateOfBirth: "1985-12-11",
+    gender: "Male",
+    nationality: "Egyptian",
+    phone: "+20 1223334444",
+    employmentStatus: "Contractor",
+    companyName: "Nile Industrial Services",
+    liaisonPerson: "Abena Owusu",
+    accessPurpose: "Work",
+    arrivalDate: "2026-12-05",
+    departureDate: "2027-03-20",
+    visaType: "Work Visa",
+    accessLevel: "Contractor/Service Personnel Access",
+    airportPickup: true,
+    accommodationLocation: "Takoradi",
+    itAccessRequired: true,
+    reasonForRequest: "Kiln refractory replacement.",
+  }),
+  foreignSubmission({
+    email: `p.nair${SEED_EMAIL_DOMAIN}`,
+    department: "Information Technology",
+    passportNo: "Z7761203",
+    fullName: "Priya Nair",
+    dateOfBirth: "1992-05-23",
+    gender: "Female",
+    nationality: "Indian",
+    phone: "+91 9823344556",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Sierra Systems Consulting",
+    liaisonPerson: "Nana Adjei",
+    accessPurpose: "Visit",
+    arrivalDate: "2026-10-27",
+    departureDate: "2026-10-30",
+    visaType: "Business Visa",
+    accessLevel: "Standard Employee Access",
+    airportPickup: true,
+    accommodationLocation: "Accra",
+    itAccessRequired: true,
+    reasonForRequest: "ERP integration workshop with the IT team.",
+  }),
+  foreignSubmission({
+    email: `j.devries${SEED_EMAIL_DOMAIN}`,
+    department: "Mine Maintenance (EME)",
+    passportNo: "NL7742118",
+    fullName: "Johan de Vries",
+    dateOfBirth: "1978-07-02",
+    gender: "Male",
+    nationality: "Dutch",
+    phone: "+31 612345678",
+    employmentStatus: "Contractor",
+    companyName: "Rotterdam Mining Hydraulics BV",
+    liaisonPerson: "Yaw Boateng",
+    accessPurpose: "Work",
+    arrivalDate: "2026-11-23",
+    departureDate: "2027-01-31",
+    visaType: "Work Visa",
+    accessLevel: "Contractor/Service Personnel Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Hydraulic shovel pump overhaul.",
+  }),
+  foreignSubmission({
+    email: `m.rossi${SEED_EMAIL_DOMAIN}`,
+    department: "Carbonate Plant",
+    passportNo: "YA9043311",
+    fullName: "Marco Rossi",
+    dateOfBirth: "1986-01-26",
+    gender: "Male",
+    nationality: "Italian",
+    phone: "+39 3331234567",
+    employmentStatus: "Contractor",
+    companyName: "Rossi Process Automation Srl",
+    liaisonPerson: "Abena Owusu",
+    accessPurpose: "Work",
+    arrivalDate: "2026-12-14",
+    departureDate: "2027-02-28",
+    visaType: "Work Visa",
+    accessLevel: "Operational Employee Access",
+    airportPickup: false,
+    accommodationLocation: "Takoradi",
+    itAccessRequired: true,
+    reasonForRequest: "Control system upgrade on the carbonate line.",
+  }),
+  foreignSubmission({
+    email: `k.tanaka${SEED_EMAIL_DOMAIN}`,
+    department: "Mining",
+    passportNo: "TK6610294",
+    fullName: "Kenji Tanaka",
+    dateOfBirth: "1980-10-05",
+    gender: "Male",
+    nationality: "Japanese",
+    phone: "+81 9012345678",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Komatsu Technical Support Asia",
+    liaisonPerson: "Kwame Mensah",
+    accessPurpose: "VisitMine",
+    arrivalDate: "2026-11-18",
+    departureDate: "2026-11-25",
+    visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Haul fleet performance review with the mining team.",
+  }),
+  foreignSubmission({
+    email: `g.mwangi${SEED_EMAIL_DOMAIN}`,
+    department: "Human Capital",
+    passportNo: "BK4428816",
+    fullName: "Grace Mwangi",
+    dateOfBirth: "1989-04-14",
+    gender: "Female",
+    nationality: "Kenyan",
+    phone: "+254 712345678",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "East Africa Safety Institute",
+    liaisonPerson: "Esi Darko",
+    accessPurpose: "VisitMine",
+    arrivalDate: "2026-12-01",
+    departureDate: "2026-12-09",
+    visaType: "Visa on Arrival",
+    accessLevel: "Visitor Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Occupational safety audit of the mine site.",
+  }),
+  foreignSubmission({
+    email: `r.santos${SEED_EMAIL_DOMAIN}`,
+    department: "Mine Maintenance (EME)",
+    passportNo: "P8871002",
+    fullName: "Reynaldo Santos",
+    dateOfBirth: "1984-09-08",
+    gender: "Male",
+    nationality: "Filipino",
+    phone: "+63 9201234567",
+    employmentStatus: "Contractor",
+    companyName: "Manila Heavy Fabrication Inc",
+    liaisonPerson: "Yaw Boateng",
+    accessPurpose: "Work",
+    arrivalDate: "2026-11-27",
+    departureDate: "2027-05-15",
+    visaType: "Work Visa",
+    accessLevel: "Contractor/Service Personnel Access",
+    airportPickup: true,
+    accommodationLocation: "Tarkwa",
+    itAccessRequired: false,
+    reasonForRequest: "Structural steel repairs at the wash plant.",
+  }),
+  foreignSubmission({
+    email: `f.iqbal${SEED_EMAIL_DOMAIN}`,
+    department: "Social Responsibility & External Relations",
+    passportNo: "PK5520983",
+    fullName: "Faisal Iqbal",
+    dateOfBirth: "1991-02-02",
+    gender: "Male",
+    nationality: "Pakistani",
+    phone: "+92 3001234567",
+    employmentStatus: "Visitor(Expatriate)",
+    companyName: "Indus Community Development Partners",
+    liaisonPerson: "Nana Adjei",
+    accessPurpose: "Visit",
+    arrivalDate: "2026-10-23",
+    departureDate: "2026-10-26",
+    visaType: "Business Visa",
+    accessLevel: "Visitor Access",
+    airportPickup: false,
+    itAccessRequired: false,
+    reasonForRequest: "Review of the host community water project.",
+  }),
 ];
 
 async function seedRegistrations() {
@@ -351,13 +592,24 @@ async function seedRegistrations() {
 
   const existing = await db.select().from(invitations);
 
-  const alreadySeeded = existing.filter((invitation) =>
-    invitation.email.endsWith(SEED_EMAIL_DOMAIN),
+  // Idempotent per submission rather than all-or-nothing: the original check
+  // bailed out whenever *any* seeded invitation existed, so a second batch
+  // could never be added to a database that already had the first. Matching
+  // on the seed email means re-running only fills in what is missing —
+  // including after Reception has converted everything already there.
+  const seededEmails = new Set(
+    existing
+      .filter((invitation) => invitation.email.endsWith(SEED_EMAIL_DOMAIN))
+      .map((invitation) => invitation.email),
   );
 
-  if (alreadySeeded.length > 0) {
+  const pending = SUBMISSIONS.filter(
+    (submission) => !seededEmails.has(submission.email),
+  );
+
+  if (pending.length === 0) {
     console.log(
-      `${alreadySeeded.length} seeded submission(s) already present — leaving them as they are.`,
+      `All ${SUBMISSIONS.length} seeded submission(s) already present — leaving them as they are.`,
     );
 
     // Documents are seeded separately and per-invitation, so an existing set
@@ -367,7 +619,7 @@ async function seedRegistrations() {
     return;
   }
 
-  for (const submission of SUBMISSIONS) {
+  for (const submission of pending) {
     // Hashed like a real token, and marked consumed: a submitted invitation
     // is spent, and its link must not still open the form.
     const tokenHash = createHash("sha256")
@@ -397,7 +649,11 @@ async function seedRegistrations() {
     });
   }
 
-  console.log(`Seeded ${SUBMISSIONS.length} registration submissions.`);
+  console.log(
+    `Seeded ${pending.length} registration submission(s)${
+      seededEmails.size > 0 ? ` (${seededEmails.size} already present)` : ""
+    }.`,
+  );
 
   await seedDocuments();
 }
@@ -415,9 +671,23 @@ async function seedDocuments() {
   const hasToken = Boolean(process.env.UPLOADTHING_TOKEN);
 
   const seeded = await db.select().from(invitations);
+  const requests = await db.select().from(registrationRequests);
 
-  const seededInvitations = seeded.filter((invitation) =>
-    invitation.email.endsWith(SEED_EMAIL_DOMAIN),
+  // Only submissions Reception has not picked up yet. Converting one
+  // re-points the visitor's documents from the invitation onto the
+  // engagement (`attachInvitationDocumentsToEngagement`), which leaves the
+  // invitation looking document-less — seeding by invitation alone therefore
+  // uploaded a second copy of every file on every later run.
+  const outstandingInvitationIds = new Set(
+    requests
+      .filter((request) => request.engagementId === null)
+      .map((request) => request.invitationId),
+  );
+
+  const seededInvitations = seeded.filter(
+    (invitation) =>
+      invitation.email.endsWith(SEED_EMAIL_DOMAIN) &&
+      outstandingInvitationIds.has(invitation.id),
   );
 
   const existingDocuments = await db.select().from(documents);

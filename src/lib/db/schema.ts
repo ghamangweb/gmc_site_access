@@ -4,13 +4,14 @@ import {
   check,
   date,
   integer,
-  jsonb,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import { encryptedJson, encryptedText } from "@/lib/db/encrypted-columns";
 
 export const staffUsers = pgTable("staff_users", {
   id: uuid().defaultRandom().primaryKey(),
@@ -34,17 +35,24 @@ export const staffUsers = pgTable("staff_users", {
   createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
+// Everything identifying is encrypted (see lib/db/encrypted-columns.ts), so
+// the database holds ciphertext. What has to be findable lives in two blind
+// columns beside it: `passportNoHash` is the unique lookup key, and
+// `searchTokens` are hashed name/passport prefixes for the queue search. Both
+// are written by person-registry-service, the only writer of this table.
 export const persons = pgTable("persons", {
   id: uuid().defaultRandom().primaryKey(),
-  passportNo: text().notNull().unique(),
-  fullName: text().notNull(),
-  dateOfBirth: date().notNull(),
-  gender: text().notNull(),
-  nationality: text().notNull(),
-  email: text(),
-  phone: text().notNull(),
-  emergencyContactName: text().notNull(),
-  emergencyContactPhone: text().notNull(),
+  passportNo: encryptedText().notNull(),
+  passportNoHash: text().notNull().unique(),
+  searchTokens: text().array().notNull().default([]),
+  fullName: encryptedText().notNull(),
+  dateOfBirth: encryptedText().notNull(),
+  gender: encryptedText().notNull(),
+  nationality: encryptedText().notNull(),
+  email: encryptedText(),
+  phone: encryptedText().notNull(),
+  emergencyContactName: encryptedText().notNull(),
+  emergencyContactPhone: encryptedText().notNull(),
 });
 
 export const engagements = pgTable(
@@ -60,7 +68,7 @@ export const engagements = pgTable(
     workflowState: text().notNull().default("AtReception"),
     accessState: text().notNull().default("Pending"),
     isVisaFlagged: boolean().notNull().default(false),
-    receptionData: jsonb().notNull(),
+    receptionData: encryptedJson().notNull(),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     // Stamped when Reception sends the engagement for sign-off. Before this
     // existed the request left no trace on the record at all — only
@@ -113,6 +121,11 @@ export const documents = pgTable(
     // UploadThing key carries neither.
     fileName: text(),
     contentType: text(),
+    // Pages in the file, counted once at upload so a preview can show a pile
+    // of leaves only when there really are several. Null means unknown
+    // (older rows, or a PDF that could not be parsed) and previews treat it
+    // as a single page.
+    pageCount: integer(),
     // Null when the visitor uploaded it themselves (no staff user involved)
     uploadedBy: uuid().references(() => staffUsers.id),
     uploadedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
@@ -155,11 +168,11 @@ export const inductionRecords = pgTable("induction_records", {
     .references(() => workflowCycles.id),
   generalSiteInduction: boolean().notNull().default(false),
   otherInductions: boolean().notNull().default(false),
-  trainerComments: text().notNull(),
+  trainerComments: encryptedText().notNull(),
   completedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
-// What IT issued. Cycle-scoped for consistency with `hospital_clearances` and
+// What Security issued. Cycle-scoped for consistency with `hospital_clearances` and
 // `induction_records`, so a record that ever re-runs a cycle keeps its history
 // rather than overwriting it.
 export const accessProvisionings = pgTable("access_provisionings", {
@@ -191,27 +204,21 @@ export const workflowTransitions = pgTable("workflow_transitions", {
     .notNull()
     .references(() => staffUsers.id),
   performedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
-  comments: text(),
+  comments: encryptedText(),
 });
 
-export const hospitalClearances = pgTable(
-  "hospital_clearances",
-  {
-    id: uuid().defaultRandom().primaryKey(),
-    workflowCycleId: uuid()
-      .notNull()
-      .references(() => workflowCycles.id),
-    clearanceStatus: text().notNull(),
-    doctorComments: text().notNull(),
-    clearanceDate: timestamp({ withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    check(
-      "hospital_clearances_clearance_status_check",
-      sql`${table.clearanceStatus} in ('Fit', 'FitWithConditions', 'Unfit')`,
-    ),
-  ],
-);
+export const hospitalClearances = pgTable("hospital_clearances", {
+  id: uuid().defaultRandom().primaryKey(),
+  workflowCycleId: uuid()
+    .notNull()
+    .references(() => workflowCycles.id),
+  // Health information, so encrypted. That rules out the CHECK constraint
+  // that used to restrict it to Fit / FitWithConditions / Unfit: the
+  // HospitalClearanceStatus type is the only guard now.
+  clearanceStatus: encryptedText().notNull(),
+  doctorComments: encryptedText().notNull(),
+  clearanceDate: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
 
 export const terminationRequests = pgTable("termination_requests", {
   id: uuid().defaultRandom().primaryKey(),
@@ -221,7 +228,9 @@ export const terminationRequests = pgTable("termination_requests", {
   requestedBy: uuid()
     .notNull()
     .references(() => staffUsers.id),
-  reason: text().notNull(),
+  reason: encryptedText().notNull(),
+  requestedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  // "Pending" until Security revokes access, then "Revoked".
   status: text().notNull().default("Pending"),
   decidedBy: uuid().references(() => staffUsers.id),
   decidedAt: timestamp({ withTimezone: true }),
@@ -233,7 +242,7 @@ export const invitations = pgTable("invitations", {
   // "Local" | "Foreign" — determines which registration form renders at
   // /register for this token (see RegistrationType in lib/domain/types.ts)
   registrationType: text().notNull(),
-  email: text().notNull(),
+  email: encryptedText().notNull(),
   tokenHash: text().notNull().unique(),
   issuedBy: uuid()
     .notNull()
@@ -251,7 +260,7 @@ export const registrationRequests = pgTable("registration_requests", {
     .references(() => invitations.id),
   department: text().notNull(),
   registrationType: text().notNull(),
-  formData: jsonb().notNull(),
+  formData: encryptedJson().notNull(),
   // Set when Reception turns this submission into an Engagement. Null means
   // still outstanding — this is what keeps a submission from being converted
   // twice, and what the Reception queue reads to show Converted vs a button.
@@ -274,7 +283,7 @@ export const notifications = pgTable("notifications", {
   requestedDepartment: text(),
   engagementId: uuid().references(() => engagements.id),
   registrationRequestId: uuid().references(() => registrationRequests.id),
-  message: text().notNull(),
+  message: encryptedText().notNull(),
   readAt: timestamp({ withTimezone: true }),
   createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });

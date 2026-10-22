@@ -241,3 +241,4 @@ flex flex-col items-center justify-center py-16 text-center
 - Never use `position: fixed` for page content — use normal document flow
 - Never put business logic inside UI components
 - Never use `shadow-*` (box-shadow) on any shadcn/ui component — flat surfaces only, separation via `border-border`
+- Never use the em dash (—) in anything a user reads: UI copy, toasts, notifications, email subjects and bodies, errors. Use a comma, a full stop or a colon; use `-` for an empty table cell. (Removed project-wide 2026-10-21.) Code comments are exempt

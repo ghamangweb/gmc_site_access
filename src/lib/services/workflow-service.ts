@@ -1,18 +1,19 @@
 import {
   and,
+  arrayContains,
   arrayOverlaps,
   count,
   desc,
   eq,
-  ilike,
   inArray,
   isNotNull,
   isNull,
+  lt,
   notInArray,
-  or,
   type SQL,
 } from "drizzle-orm";
 import type { SessionUser } from "@/lib/auth/session";
+import { searchQueryTokens } from "@/lib/crypto";
 import { db } from "@/lib/db/client";
 import {
   accessProvisionings,
@@ -35,10 +36,13 @@ import {
 } from "@/lib/domain/pagination";
 import {
   type AccessPurpose,
+  type AccessState,
   type ApproverRole,
   DOCUMENT_LABELS,
   type DocType,
+  getEffectiveAccessState,
   type HospitalClearanceStatus,
+  isoToday,
   type ReceptionData,
   type WorkflowRole,
   type WorkflowState,
@@ -164,21 +168,21 @@ export type EngagementRow = {
   person: typeof persons.$inferSelect;
 };
 
-// Name or passport, case-insensitive and partial — the two things a
-// Receptionist has in front of them when someone is standing at the desk.
-// Matching happens in Postgres: these queues are expected to run to thousands
-// of rows, and fetching all of them to filter in JS would not survive that.
+// Name or passport, case-insensitive — the two things a Receptionist has in
+// front of them when someone is standing at the desk. Both are encrypted, so
+// the match is against hashed word prefixes (`persons.searchTokens`): each
+// word typed must start a word of the name or the passport number, two
+// characters or more. "men" finds "Mensah"; "ensah" does not. Matching still
+// happens in Postgres, because these queues are expected to run to thousands
+// of rows and fetching all of them to filter in JS would not survive that.
 function personSearchFilter(search: string | undefined): SQL | undefined {
-  if (!search) {
+  const tokens = search ? searchQueryTokens(search) : [];
+
+  if (tokens.length === 0) {
     return undefined;
   }
 
-  const pattern = `%${search}%`;
-
-  return or(
-    ilike(persons.fullName, pattern),
-    ilike(persons.passportNo, pattern),
-  );
+  return arrayContains(persons.searchTokens, tokens);
 }
 
 export async function listEngagementsWithPerson(
@@ -354,7 +358,7 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 const ACTIVE_ENGAGEMENT_ERROR = (workflowState: string) =>
-  `This passport already has an active engagement (currently ${workflowState}) — open that record instead of creating a new one.`;
+  `This passport already has an active engagement (currently ${workflowState}). Open that record instead of creating a new one.`;
 
 export async function createEngagement(
   input: ReceptionFormInput,
@@ -529,7 +533,7 @@ export async function submitForStakeholderApproval(
   await notifyStaff(
     recipients,
     engagementId,
-    "Stakeholder approval requested — HCM, GMM, or DMD sign-off needed.",
+    "Stakeholder approval requested. HCM, GMM, or DMD sign-off needed.",
   );
 
   return { recipients };
@@ -884,7 +888,7 @@ export async function requestDelegatedApproval(
   await notifyStaff(
     recipients,
     engagementId,
-    `Delegated approval requested — HCM, GMM, and DMD are unavailable. Reason: ${reason}`,
+    `Delegated approval requested. HCM, GMM, and DMD are unavailable. Reason: ${reason}`,
   );
 
   return { recipients };
@@ -945,32 +949,251 @@ export async function revokeDelegatedApproval(
     .where(eq(engagements.id, engagementId));
 }
 
+// Reception asks for access to be revoked; Security does it. There is no
+// approval step in between (changed 2026-10-21): the request moves the access
+// state to TerminationRequested, which is what puts the record in Security's
+// revocation queue. Only Active access can be revoked, and the state flip
+// inside the row lock is what stops a second request for the same record.
 export async function requestTermination(
   engagementId: string,
   requestedBy: string,
   reason: string,
 ): Promise<{ recipients: StaffUser[] }> {
-  await db
-    .insert(terminationRequests)
-    .values({ engagementId, requestedBy, reason });
+  const preCheck = await getEngagementById(engagementId);
 
-  const admins = await db
-    .select()
-    .from(staffUsers)
-    .where(
-      and(
-        eq(staffUsers.systemRole, "SystemAdmin"),
-        isNull(staffUsers.deactivatedAt),
-      ),
-    );
+  if (!preCheck) {
+    throw new Error("Engagement not found");
+  }
 
-  await notifyStaff(
-    admins,
-    engagementId,
-    `Access termination requested. Reason: ${reason}`,
-  );
+  const provisioning = await getAccessProvisioning(engagementId);
 
-  return { recipients: admins };
+  // An expired card is already dead access: nothing left to revoke.
+  if (
+    getEffectiveAccessState(
+      preCheck.accessState as AccessState,
+      provisioning?.accessCardExpiry,
+    ) !== "Active"
+  ) {
+    throw new Error("Only active access can be revoked");
+  }
+
+  const recipients = await getStaffByWorkflowRoles(["SecurityStaff"]);
+
+  await db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement || engagement.accessState !== "Active") {
+      throw new Error(
+        "Access is not active, or a revocation has already been requested",
+      );
+    }
+
+    const [cycle] = await tx
+      .select()
+      .from(workflowCycles)
+      .where(
+        and(
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      )
+      .orderBy(desc(workflowCycles.cycleNumber))
+      .limit(1);
+
+    if (!cycle) {
+      throw new Error("No active workflow cycle for this engagement");
+    }
+
+    await tx
+      .insert(terminationRequests)
+      .values({ engagementId, requestedBy, reason });
+
+    await tx
+      .update(engagements)
+      .set({ accessState: "TerminationRequested" })
+      .where(eq(engagements.id, engagementId));
+
+    // The workflow state does not change; the row is the audit record.
+    await tx.insert(workflowTransitions).values({
+      engagementId,
+      workflowCycleId: cycle.id,
+      fromState: engagement.workflowState,
+      toState: engagement.workflowState,
+      performedBy: requestedBy,
+      comments: `Access revocation requested: ${reason}`,
+    });
+
+    if (recipients.length > 0) {
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: `Access revocation requested. Reason: ${reason}`,
+        })),
+      );
+    }
+  });
+
+  return { recipients };
+}
+
+// Security's half: switches the access off. Reception is told it is done.
+export async function revokeAccess(
+  engagementId: string,
+  performedBy: string,
+): Promise<{ recipients: StaffUser[] }> {
+  const preCheck = await getEngagementById(engagementId);
+
+  if (!preCheck) {
+    throw new Error("Engagement not found");
+  }
+
+  if (preCheck.accessState !== "TerminationRequested") {
+    throw new Error("No revocation has been requested for this record");
+  }
+
+  const recipients = await getStaffByWorkflowRoles(["Receptionist"]);
+
+  await db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement || engagement.accessState !== "TerminationRequested") {
+      throw new Error("No revocation has been requested for this record");
+    }
+
+    const [cycle] = await tx
+      .select()
+      .from(workflowCycles)
+      .where(
+        and(
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      )
+      .orderBy(desc(workflowCycles.cycleNumber))
+      .limit(1);
+
+    if (!cycle) {
+      throw new Error("No active workflow cycle for this engagement");
+    }
+
+    await tx
+      .update(terminationRequests)
+      .set({ status: "Revoked", decidedBy: performedBy, decidedAt: new Date() })
+      .where(
+        and(
+          eq(terminationRequests.engagementId, engagementId),
+          eq(terminationRequests.status, "Pending"),
+        ),
+      );
+
+    await tx
+      .update(engagements)
+      .set({ accessState: "Terminated" })
+      .where(eq(engagements.id, engagementId));
+
+    await tx.insert(workflowTransitions).values({
+      engagementId,
+      workflowCycleId: cycle.id,
+      fromState: engagement.workflowState,
+      toState: engagement.workflowState,
+      performedBy,
+      comments: "Access revoked",
+    });
+
+    if (recipients.length > 0) {
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: "Site access has been revoked.",
+        })),
+      );
+    }
+  });
+
+  return { recipients };
+}
+
+// Security's revocation queue: requests still waiting to be carried out.
+export type RevocationRow = {
+  request: typeof terminationRequests.$inferSelect;
+  engagement: Engagement;
+  person: typeof persons.$inferSelect;
+  requestedByName: string;
+  accessCardNumber: string | null;
+};
+
+export async function countPendingRevocations(): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(terminationRequests)
+    .where(eq(terminationRequests.status, "Pending"));
+
+  return row?.value ?? 0;
+}
+
+export async function listPendingRevocations(
+  request: PageRequest = {},
+): Promise<Page<RevocationRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const search = personSearchFilter(request.search);
+  const where = search
+    ? and(eq(terminationRequests.status, "Pending"), search)
+    : eq(terminationRequests.status, "Pending");
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        request: terminationRequests,
+        engagement: engagements,
+        person: persons,
+        requestedByName: staffUsers.displayName,
+        accessCardNumber: accessProvisionings.accessCardNumber,
+      })
+      .from(terminationRequests)
+      .innerJoin(
+        engagements,
+        eq(terminationRequests.engagementId, engagements.id),
+      )
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .innerJoin(staffUsers, eq(terminationRequests.requestedBy, staffUsers.id))
+      .leftJoin(
+        workflowCycles,
+        and(
+          eq(workflowCycles.engagementId, engagements.id),
+          isNull(workflowCycles.archivedAt),
+        ),
+      )
+      .leftJoin(
+        accessProvisionings,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .where(where)
+      .orderBy(desc(terminationRequests.requestedAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(terminationRequests)
+      .innerJoin(
+        engagements,
+        eq(terminationRequests.engagementId, engagements.id),
+      )
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
 export async function getLatestHospitalClearance(
@@ -1010,16 +1233,6 @@ export async function recordHospitalClearance(
     preCheck.accessPurpose !== "Work"
   ) {
     throw new Error("Engagement is not awaiting Hospital clearance");
-  }
-
-  const uploaded = await getDocumentsForEngagement(engagementId);
-  const hasFitnessForm = uploaded.some(
-    (doc) => doc.docType === "hospital_fitness_form",
-  );
-  if (!hasFitnessForm) {
-    throw new Error(
-      "Upload the fitness form before recording a clearance decision",
-    );
   }
 
   const outcome: "Cleared" | "Unfit" =
@@ -1079,7 +1292,7 @@ export async function recordHospitalClearance(
     await tx.insert(hospitalClearances).values({
       workflowCycleId: cycle.id,
       clearanceStatus: input.clearanceStatus,
-      doctorComments: input.doctorComments,
+      doctorComments: input.doctorComments.trim(),
     });
 
     let updatedEngagement = engagement;
@@ -1103,8 +1316,8 @@ export async function recordHospitalClearance(
     // Each audience is told what it has to act on, not one shared sentence.
     const receptionMessage =
       outcome === "Unfit"
-        ? "Hospital marked this record Unfit — it remains at Hospital."
-        : "Hospital cleared this record Fit with Conditions — it has moved to Training School.";
+        ? "Hospital marked this record Unfit. It remains at Hospital."
+        : "Hospital cleared this record Fit with Conditions. It has moved to Training School.";
 
     const dashboardNotices = [
       ...trainingRecipients.map((recipient) => ({
@@ -1215,11 +1428,6 @@ export async function getLatestInductionRecord(
   return record;
 }
 
-const REQUIRED_INDUCTION_DOCS: DocType[] = [
-  "induction_declaration_form",
-  "induction_registration_form",
-];
-
 // Training's worked-on tab. Per induction record rather than per engagement:
 // a work-path record whose medical lapses returns to Hospital and inducts
 // again, and both sign-offs are history.
@@ -1288,19 +1496,6 @@ export async function recordInductionCompletion(
     throw new Error("Engagement is not awaiting induction");
   }
 
-  const uploaded = await getDocumentsForEngagement(engagementId);
-  const missing = REQUIRED_INDUCTION_DOCS.filter(
-    (docType) => !uploaded.some((doc) => doc.docType === docType),
-  );
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Upload both induction forms before signing off: ${missing
-        .map((docType) => DOCUMENT_LABELS[docType])
-        .join(", ")}`,
-    );
-  }
-
   // The medical has to still be valid at sign-off, not merely at the moment
   // Hospital cleared them — otherwise a record can sit here for months and
   // reach Security on an expired clearance.
@@ -1308,7 +1503,7 @@ export async function recordInductionCompletion(
 
   if (clearance.applicable && clearance.expired) {
     throw new Error(
-      "Hospital clearance has expired — this record must return to the Hospital stage before induction can be signed off",
+      "Hospital clearance has expired. This record must return to the Hospital stage before induction can be signed off",
     );
   }
 
@@ -1351,7 +1546,7 @@ export async function recordInductionCompletion(
       workflowCycleId: cycle.id,
       generalSiteInduction: input.generalSiteInduction,
       otherInductions: input.otherInductions,
-      trainerComments: input.trainerComments,
+      trainerComments: input.trainerComments.trim(),
     });
 
     const [updatedEngagement] = await tx
@@ -1374,7 +1569,8 @@ export async function recordInductionCompletion(
         recipients.map((recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: "Induction completed — record forwarded to Security.",
+          message:
+            "Induction completed and the record was forwarded to Security.",
         })),
       );
     }
@@ -1386,145 +1582,6 @@ export async function recordInductionCompletion(
 }
 
 export type AccessProvisioning = typeof accessProvisionings.$inferSelect;
-
-// Security's only action: it audits what the earlier layers recorded and
-// hands the record to IT. Nothing is captured here, so there is no Security
-// table — the transition row is the record that it happened.
-// Security's worked-on tab. Unlike Hospital, Training and IT, Security
-// produces no record of its own — forwarding *is* its output — so the
-// workflow transition it performed is what gets listed.
-export type SecurityForwardRow = {
-  forwardedAt: Date;
-  forwardedByName: string;
-  engagement: Engagement;
-  person: typeof persons.$inferSelect;
-};
-
-export async function listRecentSecurityForwards(
-  request: PageRequest = {},
-): Promise<Page<SecurityForwardRow>> {
-  const page = request.page ?? 1;
-  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
-
-  const conditions = [
-    eq(workflowTransitions.fromState, "AtSecurity"),
-    eq(workflowTransitions.toState, "AwaitingProvisioning"),
-  ];
-
-  const search = personSearchFilter(request.search);
-
-  if (search) {
-    conditions.push(search);
-  }
-
-  const where = and(...conditions);
-
-  const [rows, [totals]] = await Promise.all([
-    db
-      .select({
-        forwardedAt: workflowTransitions.performedAt,
-        forwardedByName: staffUsers.displayName,
-        engagement: engagements,
-        person: persons,
-      })
-      .from(workflowTransitions)
-      .innerJoin(
-        engagements,
-        eq(workflowTransitions.engagementId, engagements.id),
-      )
-      .innerJoin(persons, eq(engagements.personId, persons.id))
-      .innerJoin(staffUsers, eq(workflowTransitions.performedBy, staffUsers.id))
-      .where(where)
-      .orderBy(desc(workflowTransitions.performedAt))
-      .limit(pageSize)
-      .offset(pageOffset(page, pageSize)),
-    db
-      .select({ value: count() })
-      .from(workflowTransitions)
-      .innerJoin(
-        engagements,
-        eq(workflowTransitions.engagementId, engagements.id),
-      )
-      .innerJoin(persons, eq(engagements.personId, persons.id))
-      .where(where),
-  ]);
-
-  return { rows, total: totals?.value ?? 0, page, pageSize };
-}
-
-export async function forwardToIT(
-  engagementId: string,
-  performedBy: string,
-): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
-  const preCheck = await getEngagementById(engagementId);
-
-  if (!preCheck) {
-    throw new Error("Engagement not found");
-  }
-
-  if (preCheck.workflowState !== "AtSecurity") {
-    throw new Error("Engagement is not awaiting Security review");
-  }
-
-  const recipients = await getStaffByWorkflowRoles(["ITStaff"]);
-
-  const updated = await db.transaction(async (tx) => {
-    const [engagement] = await tx
-      .select()
-      .from(engagements)
-      .where(eq(engagements.id, engagementId))
-      .for("update");
-
-    if (!engagement || engagement.workflowState !== "AtSecurity") {
-      throw new Error("Engagement is not awaiting Security review");
-    }
-
-    const [cycle] = await tx
-      .select()
-      .from(workflowCycles)
-      .where(
-        and(
-          eq(workflowCycles.engagementId, engagementId),
-          isNull(workflowCycles.archivedAt),
-        ),
-      )
-      .orderBy(desc(workflowCycles.cycleNumber))
-      .limit(1);
-
-    if (!cycle) {
-      throw new Error("No active workflow cycle for this engagement");
-    }
-
-    const [updatedEngagement] = await tx
-      .update(engagements)
-      .set({ workflowState: "AwaitingProvisioning" })
-      .where(eq(engagements.id, engagementId))
-      .returning();
-
-    await tx.insert(workflowTransitions).values({
-      engagementId,
-      workflowCycleId: cycle.id,
-      fromState: "AtSecurity",
-      toState: "AwaitingProvisioning",
-      performedBy,
-      comments: "Security review complete — forwarded to IT",
-    });
-
-    if (recipients.length > 0) {
-      await tx.insert(notifications).values(
-        recipients.map((recipient) => ({
-          recipientStaffUserId: recipient.id,
-          engagementId,
-          message: "Security cleared this record — ready for access setup.",
-        })),
-      );
-    }
-
-    return updatedEngagement;
-  });
-
-  return { engagement: updated, recipients };
-}
 
 export async function getAccessProvisioning(
   engagementId: string,
@@ -1555,13 +1612,44 @@ export async function getAccessProvisioning(
   return record;
 }
 
-const REQUIRED_IT_DOCS: DocType[] = ["biometric_image", "passport_photo"];
+const REQUIRED_ACTIVATION_DOCS: DocType[] = ["passport_photo"];
 
-// The last step: access becomes live. Both the workflow and the access state
-// move here — they are separate columns because a Completed engagement can
-// later have its access terminated without the workflow being rewritten.
-// IT's worked-on tab: access that has actually been switched on, with the
-// card it was issued against.
+// Moves Active records whose card has lapsed to Expired, so the stored state
+// catches up with the date. Nothing runs on a timer yet, so Security's register
+// calls this when it loads; the display derives the same answer
+// (`getEffectiveAccessState`) so it is right even before this has run.
+export async function expireLapsedAccess(): Promise<number> {
+  const expired = await db
+    .update(engagements)
+    .set({ accessState: "Expired" })
+    .where(
+      and(
+        eq(engagements.accessState, "Active"),
+        inArray(
+          engagements.id,
+          db
+            .select({ id: workflowCycles.engagementId })
+            .from(accessProvisionings)
+            .innerJoin(
+              workflowCycles,
+              eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+            )
+            .where(
+              and(
+                isNull(workflowCycles.archivedAt),
+                lt(accessProvisionings.accessCardExpiry, isoToday()),
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({ id: engagements.id });
+
+  return expired.length;
+}
+
+// Security's worked-on tab: access that has actually been switched on, with
+// the card it was issued against.
 export type ProvisioningRow = {
   provisioning: AccessProvisioning;
   engagement: Engagement;
@@ -1608,6 +1696,10 @@ export async function listRecentProvisionings(
   return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
+// The last step, taken by Security: access becomes live. Both the workflow and
+// the access state move here — they are separate columns because a Completed
+// engagement can later have its access terminated without the workflow being
+// rewritten.
 export async function activateAccess(
   engagementId: string,
   input: {
@@ -1624,21 +1716,27 @@ export async function activateAccess(
     throw new Error("Engagement not found");
   }
 
-  if (preCheck.workflowState !== "AwaitingProvisioning") {
-    throw new Error("Engagement is not awaiting access provisioning");
+  if (preCheck.workflowState !== "AtSecurity") {
+    throw new Error("Engagement is not awaiting Security review");
   }
 
   const uploaded = await getDocumentsForEngagement(engagementId);
-  const missing = REQUIRED_IT_DOCS.filter(
+  const missing = REQUIRED_ACTIVATION_DOCS.filter(
     (docType) => !uploaded.some((doc) => doc.docType === docType),
   );
 
   if (missing.length > 0) {
     throw new Error(
-      `Upload both before activating access: ${missing
+      `Upload the passport photograph before activating access: ${missing
         .map((docType) => DOCUMENT_LABELS[docType])
         .join(", ")}`,
     );
+  }
+
+  // A card that is already expired is not access. Valid through its expiry
+  // date, so today is the earliest it can be.
+  if (input.accessCardExpiry < isoToday()) {
+    throw new Error("Access card expiry cannot be in the past");
   }
 
   // Business rule from project-overview.md. The visa/permit half of it cannot
@@ -1649,11 +1747,8 @@ export async function activateAccess(
     );
   }
 
-  // Security and Reception both want to know access went live.
-  const recipients = await getStaffByWorkflowRoles([
-    "SecurityStaff",
-    "Receptionist",
-  ]);
+  // Security did this themselves, so only Reception needs telling.
+  const recipients = await getStaffByWorkflowRoles(["Receptionist"]);
 
   const updated = await db.transaction(async (tx) => {
     const [engagement] = await tx
@@ -1662,8 +1757,8 @@ export async function activateAccess(
       .where(eq(engagements.id, engagementId))
       .for("update");
 
-    if (!engagement || engagement.workflowState !== "AwaitingProvisioning") {
-      throw new Error("Engagement is not awaiting access provisioning");
+    if (!engagement || engagement.workflowState !== "AtSecurity") {
+      throw new Error("Engagement is not awaiting Security review");
     }
 
     const [cycle] = await tx
@@ -1699,10 +1794,10 @@ export async function activateAccess(
     await tx.insert(workflowTransitions).values({
       engagementId,
       workflowCycleId: cycle.id,
-      fromState: "AwaitingProvisioning",
+      fromState: "AtSecurity",
       toState: "Completed",
       performedBy,
-      comments: `Access activated — card ${input.accessCardNumber}`,
+      comments: `Access activated, card ${input.accessCardNumber}`,
     });
 
     if (recipients.length > 0) {

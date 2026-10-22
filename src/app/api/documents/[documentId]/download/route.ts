@@ -15,7 +15,17 @@ export async function GET(
   { params }: { params: Promise<{ documentId: string }> },
 ) {
   try {
-    await requirePinConfirmed();
+    const session = await requirePinConfirmed();
+
+    // Security reviews documents on screen but may not take copies away. The
+    // View link stays available; this route is the only one that serves a
+    // file as an attachment.
+    if (session.workflowRoles.includes("SecurityStaff")) {
+      return NextResponse.json(
+        { success: false, error: "Downloads are not permitted for Security" },
+        { status: 403 },
+      );
+    }
   } catch {
     return NextResponse.json(
       { success: false, error: "Not authorized" },

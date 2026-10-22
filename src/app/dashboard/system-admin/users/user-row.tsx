@@ -54,7 +54,6 @@ const WORKFLOW_ROLES: WorkflowRole[] = [
   "HospitalStaff",
   "TrainingStaff",
   "SecurityStaff",
-  "ITStaff",
   "DepartmentHead",
 ];
 const NO_WORKFLOW_ROLE = "none";
@@ -196,7 +195,7 @@ export function UserRow({
 
       if (result.success) {
         toast.success("User reactivated", {
-          description: `${user.displayName} can sign in again — provision them to restore roles.`,
+          description: `${user.displayName} can sign in again. Provision them to restore roles.`,
         });
       } else {
         toast.error("Couldn't reactivate user", { description: result.error });
@@ -240,7 +239,7 @@ export function UserRow({
         <TableCell>{user.displayName}</TableCell>
         <TableCell>{user.email}</TableCell>
         <TableCell>{user.systemRole}</TableCell>
-        <TableCell>{user.workflowRoles.join(", ") || "—"}</TableCell>
+        <TableCell>{user.workflowRoles.join(", ") || "-"}</TableCell>
         <TableCell>
           {user.deactivatedAt ? (
             <Badge className="bg-status-danger-bg text-status-danger-fg">

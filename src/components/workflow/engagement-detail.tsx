@@ -15,7 +15,6 @@ import type {
 } from "@/lib/domain/types";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import { getEngagementDetail } from "@/lib/services/workflow-service";
-import { getSignedFileUrl } from "@/lib/uploadthing/api";
 
 // transportTo/transportFrom/otherInductions were free-text strings before
 // 2026-07-23's switch to Yes/No — records created before that change still
@@ -113,29 +112,12 @@ export async function EngagementDetail({
     ...receptionData,
   };
 
-  // Signed server-side so each document renders as a page preview. Failures
-  // are per-document: that one falls back to an icon, the page is fine.
-  const previewDocuments = await Promise.all(
-    documents.map(async (document) => {
-      try {
-        return {
-          document,
-          previewUrl: await getSignedFileUrl(document.fileKey),
-        };
-      } catch (error) {
-        console.error("[reception/:engagementId] preview url", error);
-
-        return { document, previewUrl: null };
-      }
-    }),
-  );
-
   const preview = (
     <ReceptionDetailsPreview
       values={defaultValues}
       showAdministration
       documentsTitle="Documents"
-      documents={previewDocuments}
+      documents={documents}
     />
   );
 

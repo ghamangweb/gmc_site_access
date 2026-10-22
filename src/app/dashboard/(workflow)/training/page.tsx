@@ -18,12 +18,7 @@ import {
 } from "@/components/ui/table";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { toPageRequest } from "@/lib/domain/pagination";
-import {
-  ACCESS_PURPOSE_LABELS,
-  type AccessPurpose,
-  WORKFLOW_STATE_LABELS,
-  type WorkflowState,
-} from "@/lib/domain/types";
+import { ACCESS_PURPOSE_LABELS, type AccessPurpose } from "@/lib/domain/types";
 import {
   countEngagementsForLayer,
   listEngagementsForLayer,
@@ -160,7 +155,7 @@ export default async function TrainingQueuePage({
             <EmptyState
               icon={ClipboardListIcon}
               title="No inductions recorded yet"
-              description="Every induction you sign off appears here, with the stage the record has since reached."
+              description="Every induction you sign off appears here."
             />
           ) : (
             <Table>
@@ -170,12 +165,10 @@ export default async function TrainingQueuePage({
                   <TableHead>Passport No.</TableHead>
                   <TableHead>Inductions</TableHead>
                   <TableHead>Completed</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recorded.rows.map(({ induction, engagement, person }) => (
+                {recorded.rows.map(({ induction, person }) => (
                   <TableRow key={induction.id} className="hover:bg-muted/50">
                     <TableCell>{person.fullName}</TableCell>
                     <TableCell>{person.passportNo}</TableCell>
@@ -185,26 +178,10 @@ export default async function TrainingQueuePage({
                         induction.otherInductions ? "Other" : null,
                       ]
                         .filter((label) => label !== null)
-                        .join(", ") || "—"}
+                        .join(", ") || "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatQueueDate(induction.completedAt)}
-                    </TableCell>
-                    <TableCell>
-                      {
-                        // SAFETY: workflow_state is a text column the state
-                        // machine alone writes, always a WorkflowState.
-                        WORKFLOW_STATE_LABELS[
-                          engagement.workflowState as WorkflowState
-                        ]
-                      }
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/dashboard/training/${engagement.id}`}>
-                          View
-                        </Link>
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
