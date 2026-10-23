@@ -60,12 +60,8 @@
           "name": "access_provisionings_workflow_cycle_id_workflow_cycles_id_fk",
           "tableFrom": "access_provisionings",
           "tableTo": "workflow_cycles",
-          "columnsFrom": [
-            "workflow_cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -161,12 +157,8 @@
           "name": "documents_engagement_id_engagements_id_fk",
           "tableFrom": "documents",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -174,12 +166,8 @@
           "name": "documents_invitation_id_invitations_id_fk",
           "tableFrom": "documents",
           "tableTo": "invitations",
-          "columnsFrom": [
-            "invitation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invitation_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -187,12 +175,8 @@
           "name": "documents_workflow_cycle_id_workflow_cycles_id_fk",
           "tableFrom": "documents",
           "tableTo": "workflow_cycles",
-          "columnsFrom": [
-            "workflow_cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -200,12 +184,8 @@
           "name": "documents_uploaded_by_staff_users_id_fk",
           "tableFrom": "documents",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "uploaded_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["uploaded_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -344,12 +324,8 @@
           "name": "engagements_person_id_persons_id_fk",
           "tableFrom": "engagements",
           "tableTo": "persons",
-          "columnsFrom": [
-            "person_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["person_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -357,12 +333,8 @@
           "name": "engagements_delegated_approver_id_staff_users_id_fk",
           "tableFrom": "engagements",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "delegated_approver_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["delegated_approver_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -370,12 +342,8 @@
           "name": "engagements_delegation_granted_by_staff_users_id_fk",
           "tableFrom": "engagements",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "delegation_granted_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["delegation_granted_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -429,12 +397,8 @@
           "name": "hospital_clearances_workflow_cycle_id_workflow_cycles_id_fk",
           "tableFrom": "hospital_clearances",
           "tableTo": "workflow_cycles",
-          "columnsFrom": [
-            "workflow_cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -496,12 +460,8 @@
           "name": "induction_records_workflow_cycle_id_workflow_cycles_id_fk",
           "tableFrom": "induction_records",
           "tableTo": "workflow_cycles",
-          "columnsFrom": [
-            "workflow_cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -579,12 +539,8 @@
           "name": "invitations_issued_by_staff_users_id_fk",
           "tableFrom": "invitations",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "issued_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["issued_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -594,9 +550,7 @@
         "invitations_tokenHash_unique": {
           "name": "invitations_tokenHash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token_hash"
-          ]
+          "columns": ["token_hash"]
         }
       },
       "policies": {},
@@ -676,12 +630,8 @@
           "name": "notifications_recipient_staff_user_id_staff_users_id_fk",
           "tableFrom": "notifications",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "recipient_staff_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recipient_staff_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -689,12 +639,8 @@
           "name": "notifications_requester_staff_user_id_staff_users_id_fk",
           "tableFrom": "notifications",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "requester_staff_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requester_staff_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -702,12 +648,8 @@
           "name": "notifications_engagement_id_engagements_id_fk",
           "tableFrom": "notifications",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -715,12 +657,8 @@
           "name": "notifications_registration_request_id_registration_requests_id_fk",
           "tableFrom": "notifications",
           "tableTo": "registration_requests",
-          "columnsFrom": [
-            "registration_request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["registration_request_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -817,9 +755,7 @@
         "persons_passportNoHash_unique": {
           "name": "persons_passportNoHash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "passport_no_hash"
-          ]
+          "columns": ["passport_no_hash"]
         }
       },
       "policies": {},
@@ -901,12 +837,8 @@
           "name": "registration_requests_invitation_id_invitations_id_fk",
           "tableFrom": "registration_requests",
           "tableTo": "invitations",
-          "columnsFrom": [
-            "invitation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invitation_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -914,12 +846,8 @@
           "name": "registration_requests_engagement_id_engagements_id_fk",
           "tableFrom": "registration_requests",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -927,12 +855,8 @@
           "name": "registration_requests_approved_by_staff_users_id_fk",
           "tableFrom": "registration_requests",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "approved_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approved_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -942,9 +866,7 @@
         "registration_requests_invitationId_unique": {
           "name": "registration_requests_invitationId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "invitation_id"
-          ]
+          "columns": ["invitation_id"]
         }
       },
       "policies": {},
@@ -1051,9 +973,7 @@
         "staff_users_entraObjectId_unique": {
           "name": "staff_users_entraObjectId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "entra_object_id"
-          ]
+          "columns": ["entra_object_id"]
         }
       },
       "policies": {},
@@ -1140,12 +1060,8 @@
           "name": "stakeholder_approvals_engagement_id_engagements_id_fk",
           "tableFrom": "stakeholder_approvals",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1153,12 +1069,8 @@
           "name": "stakeholder_approvals_approver_staff_user_id_staff_users_id_fk",
           "tableFrom": "stakeholder_approvals",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "approver_staff_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approver_staff_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1166,12 +1078,8 @@
           "name": "stakeholder_approvals_delegated_by_staff_users_id_fk",
           "tableFrom": "stakeholder_approvals",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "delegated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["delegated_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1181,9 +1089,7 @@
         "stakeholder_approvals_engagementId_unique": {
           "name": "stakeholder_approvals_engagementId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "engagement_id"
-          ]
+          "columns": ["engagement_id"]
         }
       },
       "policies": {},
@@ -1252,12 +1158,8 @@
           "name": "termination_requests_engagement_id_engagements_id_fk",
           "tableFrom": "termination_requests",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1265,12 +1167,8 @@
           "name": "termination_requests_requested_by_staff_users_id_fk",
           "tableFrom": "termination_requests",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "requested_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requested_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1278,12 +1176,8 @@
           "name": "termination_requests_decided_by_staff_users_id_fk",
           "tableFrom": "termination_requests",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "decided_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["decided_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1330,12 +1224,8 @@
           "name": "workflow_cycles_engagement_id_engagements_id_fk",
           "tableFrom": "workflow_cycles",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1407,12 +1297,8 @@
           "name": "workflow_transitions_engagement_id_engagements_id_fk",
           "tableFrom": "workflow_transitions",
           "tableTo": "engagements",
-          "columnsFrom": [
-            "engagement_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["engagement_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1420,12 +1306,8 @@
           "name": "workflow_transitions_workflow_cycle_id_workflow_cycles_id_fk",
           "tableFrom": "workflow_transitions",
           "tableTo": "workflow_cycles",
-          "columnsFrom": [
-            "workflow_cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workflow_cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1433,12 +1315,8 @@
           "name": "workflow_transitions_performed_by_staff_users_id_fk",
           "tableFrom": "workflow_transitions",
           "tableTo": "staff_users",
-          "columnsFrom": [
-            "performed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["performed_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
