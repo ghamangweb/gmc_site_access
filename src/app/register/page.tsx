@@ -1,7 +1,9 @@
 import Image from "next/image";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { CookieConsentBanner } from "@/components/workflow/cookie-consent-banner";
 import { LocalRegistrationForm } from "@/components/workflow/local-registration-form";
+import { PrivacyPolicyLink } from "@/components/workflow/privacy-policy-link";
 import { ReceptionForm } from "@/components/workflow/reception-form";
 import { RegistrationHeadline } from "@/components/workflow/registration-headline";
 import { RegistrationInvalidLink } from "@/components/workflow/registration-invalid-link";
@@ -61,7 +63,8 @@ export default async function RegisterPage({
 
         <ScrollArea className="w-full min-w-0 bg-background lg:h-screen lg:w-1/2">
           <main className="px-5 py-8 sm:px-8 lg:p-10">
-            <div className="mb-6 flex justify-end">
+            <div className="mb-6 flex items-center justify-between">
+              <PrivacyPolicyLink />
               <RegistrationLanguageToggle />
             </div>
 
@@ -90,6 +93,7 @@ export default async function RegisterPage({
           </main>
         </ScrollArea>
       </div>
+      <CookieConsentBanner />
     </RegistrationLanguageProvider>
   );
 }

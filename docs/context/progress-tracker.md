@@ -1000,6 +1000,17 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Public cookie consent + privacy policy (2026-10-22)
+
+- [x] `CookieConsentBanner` (Accept / Deny, bottom-right) on `/register` and `/privacy-policy`, EN + 简体中文
+- [x] `/privacy-policy` page (draft copy, EN + 中文) and a Privacy Policy link on `/register`
+- [x] Language preference only remembered after Accept (`src/lib/consent.ts`)
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual in-browser check - banner shows once, Accept remembers language across reload, Deny does not, phone width
+- [ ] GMC legal review of policy text (retention period, data-rights contact)
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

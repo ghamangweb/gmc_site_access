@@ -185,6 +185,62 @@ const ZH_ENTRIES = {
   "You can only upload 1 file": "一次只能上传 1 个文件",
   "Couldn't load the document": "无法打开该文件",
   "Failed to remove document": "删除文件失败",
+
+  // --- Cookie consent and privacy policy ---------------------------------
+  "Your cookie choices": "您的 Cookie 选择",
+  "By clicking “Accept”, you agree to this site remembering your language choice on your device. We do not use cookies for analytics or marketing. The details you submit are used only to process your site-access request.":
+    "点击“接受”，即表示您同意本网站在您的设备上记住您的语言选择。我们不使用 Cookie 进行分析或营销。您提交的信息仅用于处理您的矿区准入申请。",
+  "Privacy Policy": "隐私政策",
+  Deny: "拒绝",
+  Accept: "接受",
+  "Our Commitment to Privacy": "我们对隐私的承诺",
+  "Your privacy is important to us. This policy explains how Ghana Manganese Company collects, uses and protects your personal information when you register for site access.":
+    "我们重视您的隐私。本政策说明加纳锰业公司在您登记矿区准入时如何收集、使用和保护您的个人信息。",
+  "The Information We Collect": "我们收集的信息",
+  "This notice applies to the information you submit through the Ghana Manganese Company (GMC) site-access registration form. The types of personal information we collect include:":
+    "本通知适用于您通过加纳锰业公司（GMC）矿区准入登记表提交的信息。我们收集的个人信息类型包括：",
+  "Your name, date of birth, gender and nationality":
+    "您的姓名、出生日期、性别和国籍",
+  "Passport or Ghana Card number, and copies of the identity, visa, permit and medical or training documents you upload":
+    "护照或加纳身份证号码，以及您上传的身份、签证、许可、医疗或培训文件副本",
+  "Your email address and telephone numbers": "您的电子邮箱和电话号码",
+  "Emergency contact details": "紧急联系人信息",
+  "Your employer or company details and the purpose of your visit":
+    "您的雇主或公司信息以及来访目的",
+  "Any additional information you choose to provide in the form":
+    "您在表格中自愿提供的其他信息",
+  "How We Use Your Information": "我们如何使用您的信息",
+  "We use the information you provide only to:": "我们仅将您提供的信息用于：",
+  "Process your site-access request and decide whether access can be granted":
+    "处理您的矿区准入申请，并决定是否批准准入",
+  "Arrange the medical, induction and security requirements for your visit":
+    "安排您来访所需的体检、入场培训和安保手续",
+  "Contact you, or your emergency contact, about your visit":
+    "就您的来访事宜联系您或您的紧急联系人",
+  "Keep records of who was on site, for safety and legal compliance":
+    "出于安全和合规需要，留存人员入场记录",
+  "We do not use your information for marketing and we do not sell it.":
+    "我们不会将您的信息用于营销，也不会出售您的信息。",
+  "Who Can See Your Information": "谁可以查看您的信息",
+  "Your submission is visible only to GMC staff who need it to process your request, such as the Department Head who invited you, Reception, and the departments that clear you for site access.":
+    "您提交的内容仅供处理您申请所需的 GMC 员工查看，例如邀请您的部门主管、前台接待，以及负责审核您准入的各部门。",
+  "We use service providers to host our systems, store uploaded documents and send email. They process data on our behalf. We do not share your personal information with anyone else unless the law requires it.":
+    "我们使用服务提供商来托管系统、存储上传的文件和发送邮件，他们代表我们处理数据。除非法律要求，我们不会与其他任何方分享您的个人信息。",
+  "Cookies and Browser Storage": "Cookie 与浏览器存储",
+  "This form does not use cookies for analytics, advertising or marketing. If you click “Accept”, we store your language choice in your browser so the form opens in the same language next time. If you click “Deny”, the language you pick applies to this visit only and nothing is stored.":
+    "本表格不使用 Cookie 进行分析、广告或营销。如果您点击“接受”，我们会在浏览器中保存您的语言选择，下次打开时将使用相同语言。如果您点击“拒绝”，您选择的语言仅在本次访问中有效，不会保存任何内容。",
+  "Our Commitment to Data Security": "我们对数据安全的承诺",
+  "Sensitive information, including your personal details and submitted forms, is encrypted before it is stored. Access to it is limited to authorised GMC staff. No system is completely secure, but we take reasonable steps to protect your information from misuse, loss and unauthorised access.":
+    "包括您的个人资料和已提交表格在内的敏感信息在存储前会经过加密，仅限获授权的 GMC 员工访问。没有任何系统是绝对安全的，但我们会采取合理措施，防止您的信息被滥用、丢失或被未经授权访问。",
+  "How Long We Keep Your Information": "我们保留信息的时间",
+  "We keep your information for as long as it is needed to manage your site access and to meet GMC's safety, security and legal record-keeping obligations.":
+    "我们会在管理您的矿区准入以及履行 GMC 安全、保安和法定记录保存义务所需的期限内保留您的信息。",
+  "Your Rights": "您的权利",
+  "GMC handles personal information in line with the Data Protection Act, 2012 (Act 843) of Ghana. You may ask to see the information we hold about you, to have it corrected, or to have it deleted where the law allows. To do so, contact the GMC Department Head who invited you, and we will verify your identity before acting on your request.":
+    "GMC 依照加纳《2012 年数据保护法》（第 843 号法案）处理个人信息。您可以要求查看我们持有的您的信息、更正信息，或在法律允许的情况下要求删除。请联系邀请您的 GMC 部门主管，我们会先核实您的身份，再处理您的请求。",
+  "Changes to This Policy": "本政策的变更",
+  "We may update this policy from time to time. The version on this page is the current one.":
+    "我们可能会不时更新本政策，本页面显示的为现行版本。",
 } satisfies Record<string, string>;
 
 // A Map keeps the lookup honest: the literal above stays inferred (so a
