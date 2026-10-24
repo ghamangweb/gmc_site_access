@@ -1909,6 +1909,15 @@ each column lands around 290px, which the fields handle. Worth remembering befor
 this pane again: `ReceptionForm` is shared with the authenticated Reception page, so changing
 that grid needs a container query or a prop, not an edit to the shared class list.
 
+### NotFound page (2026-10-24)
+
+File: `src/app/not-found.tsx`. Root 404 for unmatched URLs and `notFound()` calls. Renders inside
+`PublicShell` (it sits outside `(auth)`, so it wraps itself). Small `Error 404` eyebrow
+(`text-sm font-medium uppercase tracking-wide text-muted-foreground`), `h1` and subtitle classes
+copied from the unauthorized page, single primary `<Button asChild size="lg">` linking to `/`.
+`/` sends the user to sign-in, PIN or dashboard, so one link serves every visitor. Deliberately no
+`DesktopOnlyGuard`.
+
 ### Entry format
 
 ```
