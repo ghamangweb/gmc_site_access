@@ -1011,6 +1011,15 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## 404 page (2026-10-24)
+
+- [x] `src/app/not-found.tsx`: root 404 in `PublicShell`, "Return home" links to `/` (which routes by session)
+- [x] No `DesktopOnlyGuard`, so a bad `/register` link is readable on a phone
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual in-browser check - unknown URL signed in and signed out, phone width
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
