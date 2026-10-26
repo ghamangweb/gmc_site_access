@@ -34,34 +34,37 @@ export default async function RegisterPage({
 
   return (
     <RegistrationLanguageProvider>
-      <div className="flex min-h-screen lg:h-screen lg:overflow-hidden">
-        <aside className="relative hidden h-screen w-1/2 shrink-0 overflow-hidden lg:block">
+      {/* Below xl the image pane stacks above the form as a short banner, so a
+          visitor on a phone still sees the logo and the page heading. */}
+      <div className="flex min-h-screen flex-col xl:h-screen xl:flex-row xl:overflow-hidden">
+        <aside className="relative h-56 w-full shrink-0 overflow-hidden xl:h-screen xl:w-1/2">
           <Image
             src="/bg-auth.jpg"
             alt=""
             fill
-            sizes="50vw"
+            sizes="(min-width: 1280px) 50vw, 100vw"
             priority
             className="object-cover brightness-50"
           />
           {/* Logo and headline read as one block. They were previously pinned
               to opposite ends of a full-height column by `justify-between`,
               which on a tall pane left them floating unrelated to each other. */}
-          <div className="relative z-10 flex h-full flex-col justify-end gap-6 p-12">
-            <div className="inline-flex self-start rounded-xl bg-card p-4">
+          <div className="relative z-10 flex h-full flex-col justify-end gap-4 p-5 sm:p-8 xl:gap-6 xl:p-12">
+            <div className="inline-flex self-start rounded-xl bg-card p-3 xl:p-4">
               <Image
                 src="/logo_whitebg.png"
                 alt="GMC logo"
                 width={120}
                 height={57}
                 priority
+                className="h-auto w-20 xl:w-24"
               />
             </div>
             <RegistrationHeadline />
           </div>
         </aside>
 
-        <ScrollArea className="w-full min-w-0 bg-background lg:h-screen lg:w-1/2">
+        <ScrollArea className="w-full min-w-0 bg-background xl:h-screen xl:w-1/2">
           <main className="px-5 py-8 sm:px-8 lg:p-10">
             <div className="mb-6 flex items-center justify-between">
               <PrivacyPolicyLink />

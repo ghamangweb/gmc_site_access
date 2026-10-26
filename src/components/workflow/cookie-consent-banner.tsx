@@ -1,5 +1,6 @@
 "use client";
 
+import { ExternalLinkIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -46,11 +47,16 @@ export function CookieConsentBanner() {
         {t(
           "By clicking “Accept”, you agree to this site remembering your language choice on your device. We do not use cookies for analytics or marketing. The details you submit are used only to process your site-access request.",
         )}{" "}
+        {/* New tab, as with PrivacyPolicyLink: leaving /register would lose the form. */}
         <Link
           href="/privacy-policy"
-          className="text-foreground underline underline-offset-2"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-foreground underline underline-offset-2"
         >
           {t("Privacy Policy")}
+          <ExternalLinkIcon aria-hidden="true" className="size-3" />
+          <span className="sr-only">{t("(opens in a new tab)")}</span>
         </Link>
       </p>
       <div className="flex gap-3">
