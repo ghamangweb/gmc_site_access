@@ -14,6 +14,7 @@ import {
   hospitalUnfitTemplate,
   inductionCompletedTemplate,
   stakeholderApprovalReceivedTemplate,
+  stakeholderApprovalRejectedTemplate,
   stakeholderApprovalRequestedTemplate,
   terminationRequestedTemplate,
 } from "@/lib/email/templates";
@@ -34,6 +35,7 @@ import {
   type ReceptionFormInput,
   recordHospitalClearance,
   recordInductionCompletion,
+  rejectStakeholderApproval,
   requestDelegatedApproval,
   requestTermination,
   revokeAccess,
@@ -220,14 +222,14 @@ export async function requestStakeholderApprovalAction(
     revalidatePath(`/dashboard/reception/${engagementId}`);
     revalidatePath("/dashboard/approvals");
 
-    // Nobody holding HCM/GMM/DMD means the request reached no one and the
+    // Nobody holding CSO/HCM/GMM/EM means the request reached no one and the
     // engagement now sits in a queue with no audience. That has to be said
     // out loud — reporting plain success here is how a record gets lost.
     if (recipients.length === 0) {
       return {
         success: true,
         warning:
-          "Approval requested, but no HCM, GMM or DMD user is provisioned, so nobody was notified. Ask a System Administrator to assign a stakeholder role.",
+          "Approval requested, but no CSO, HCM, GMM or EM user is provisioned, so nobody was notified. Ask a System Administrator to assign a stakeholder role.",
       };
     }
 
@@ -300,6 +302,80 @@ export async function applyStakeholderApprovalAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to approve",
+    };
+  }
+}
+
+export async function rejectStakeholderApprovalAction(
+  engagementId: string,
+  reason: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requirePinConfirmed();
+    if (session.systemRole === "Guest") {
+      return { success: false, error: "Read-only access: cannot reject" };
+    }
+
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      return { success: false, error: "Reason is required" };
+    }
+
+    const { rejection, receptionists, departmentHead } =
+      await rejectStakeholderApproval(engagementId, session, trimmedReason);
+    const detail = await getEngagementDetail(engagementId);
+
+    const recipients = [
+      ...receptionists
+        .filter((user) => user.id !== departmentHead?.id)
+        .map((user) => ({ user, audience: "Receptionist" as const })),
+      ...(departmentHead
+        ? [{ user: departmentHead, audience: "DepartmentHead" as const }]
+        : []),
+    ];
+
+    let allSent = true;
+    if (detail) {
+      for (const { user, audience } of recipients) {
+        const sent = await sendEmail({
+          to: user.email,
+          ...stakeholderApprovalRejectedTemplate({
+            personName: detail.person.fullName,
+            engagementId,
+            rejectedBy: rejection.approverName,
+            approverRole: rejection.approverRole,
+            reason: trimmedReason,
+            audience,
+          }),
+        });
+        if (!sent) allSent = false;
+      }
+    }
+
+    revalidatePath("/dashboard/approvals");
+    revalidatePath(`/dashboard/approvals/${engagementId}`);
+    revalidatePath("/dashboard/reception");
+    revalidatePath(`/dashboard/reception/${engagementId}`);
+
+    if (receptionists.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Rejected, but no Receptionist is provisioned, so Reception was not notified.",
+      };
+    }
+
+    return allSent
+      ? { success: true }
+      : {
+          success: true,
+          warning: "Rejected, but some notification emails may not have sent",
+        };
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to reject",
     };
   }
 }

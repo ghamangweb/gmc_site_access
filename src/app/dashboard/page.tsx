@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/session";
+import { STAKEHOLDER_ROLES } from "@/lib/domain/types";
 
 // Route to each role's workflow dashboard. Every workflow role now has one,
 // so the placeholder below is only reached by a provisioned user with no
@@ -15,11 +16,7 @@ export default async function DashboardPage() {
   }
   // Stakeholders land on their own queue — approving is their job; they keep
   // access to Reception's queue, it just isn't the first thing they see.
-  if (
-    (["HCM", "GMM", "DMD"] as const).some((role) =>
-      session.workflowRoles.includes(role),
-    )
-  ) {
+  if (STAKEHOLDER_ROLES.some((role) => session.workflowRoles.includes(role))) {
     redirect("/dashboard/approvals");
   }
 

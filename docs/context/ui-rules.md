@@ -47,9 +47,13 @@ Consequences for anything rendered on the public path:
   is shared with Reception's desktop page, so the two-column layout has to survive at `sm` up.
 - A full-width cell is `sm:col-span-2`, not `col-span-2` — the latter forces two columns back
   on a phone.
-- The image pane is `hidden lg:block`; below `lg` the form takes the full width, the page uses
-  the document scrollbar instead of the `ScrollArea`'s fixed viewport (`lg:h-screen`), and
-  padding steps down `px-5 py-8 → sm:px-8 → lg:p-10`.
+- Below `xl` the image pane stacks **above** the form as a short `h-56` banner (logo + `h1` on
+  the photo) rather than being hidden, so a phone visitor still sees who is asking and what the
+  page is (changed 2026-10-26; it was `hidden lg:block`). The 50/50 split starts at `xl`, not
+  `lg`: at ~1030px a half-width form leaves ~180px per field and the phone/select fields clip.
+  Below `xl` the form takes the full width, the page uses the document scrollbar instead of the
+  `ScrollArea`'s fixed viewport (`xl:h-screen`), and padding steps down
+  `px-5 py-8 → sm:px-8 → lg:p-10` (banner: `p-5 → sm:p-8 → xl:p-12`).
 - No fixed pixel widths on the public path.
 
 The root layout sets `viewport` explicitly and deliberately does **not** set `maximumScale` —

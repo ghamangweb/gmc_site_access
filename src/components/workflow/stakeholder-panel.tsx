@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import {
   applyStakeholderApprovalAction,
+  rejectStakeholderApprovalAction,
   requestDelegatedApprovalAction,
   requestStakeholderApprovalAction,
 } from "@/actions/engagements";
@@ -27,12 +28,19 @@ import {
   type SignatureValue,
 } from "@/components/workflow/signature-field";
 import type { ApproverRole } from "@/lib/domain/types";
-import type { StakeholderApproval } from "@/lib/services/workflow-service";
+import type {
+  StakeholderApproval,
+  StakeholderRejection,
+} from "@/lib/services/workflow-service";
 
 type StakeholderPanelProps = {
   engagementId: string;
   approvals: StakeholderApproval[];
   approveAs: ApproverRole | null;
+  /** Reception has asked and nobody has decided yet. */
+  approvalRequested: boolean;
+  /** The rejection that still stands, if the last decision was a rejection. */
+  rejection?: StakeholderRejection;
   canRequestApproval: boolean;
   /** Where to send the approver once they've signed. A stakeholder belongs
    * back in their own queue, not in Reception's. */
@@ -44,6 +52,8 @@ export function StakeholderPanel({
   returnHref = "/dashboard/reception",
   approvals,
   approveAs,
+  approvalRequested,
+  rejection,
   canRequestApproval,
 }: StakeholderPanelProps) {
   const router = useRouter();
@@ -52,6 +62,8 @@ export function StakeholderPanel({
   const [delegateReason, setDelegateReason] = useState("");
   const [approveOpen, setApproveOpen] = useState(false);
   const [signature, setSignature] = useState<SignatureValue | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -154,14 +166,64 @@ export function StakeholderPanel({
     });
   }
 
+  function handleReject() {
+    if (!rejectReason.trim()) {
+      toast.error("Give a reason for the rejection");
+      return;
+    }
+    startTransition(async () => {
+      const result = await rejectStakeholderApprovalAction(
+        engagementId,
+        rejectReason,
+      );
+      if (result.success) {
+        if (result.warning) {
+          toast.warning(result.warning);
+        } else {
+          toast.success("Approval rejected");
+        }
+        setRejectOpen(false);
+        redirectTimeoutRef.current = setTimeout(
+          () => router.push(returnHref),
+          2000,
+        );
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
   return (
     <Card className="flex flex-col gap-4 p-6">
       <h2 className="text-lg font-semibold text-foreground">
         Stakeholder Approval
       </h2>
-      <p className="text-sm text-muted-foreground">
-        Awaiting approval from HCM, GMM, or DMD.
-      </p>
+      {rejection ? (
+        <div className="flex flex-col gap-2">
+          <Badge className="w-fit bg-status-danger-bg text-status-danger-fg">
+            Rejected
+          </Badge>
+          <p className="text-sm text-foreground">
+            Rejected by {rejection.approverName} ({rejection.approverRole})
+          </p>
+          <p className="text-sm text-foreground">Reason: {rejection.reason}</p>
+          <p className="text-xs text-muted-foreground">
+            {new Date(rejection.rejectedAt).toLocaleString()}
+          </p>
+          {canRequestApproval && (
+            <p className="text-sm text-muted-foreground">
+              Update the record if needed and request approval again, or cancel
+              it.
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {approvalRequested
+            ? "Awaiting approval from CSO, HCM, GMM or EM."
+            : "Approval has not been requested yet."}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {canRequestApproval && (
@@ -179,7 +241,16 @@ export function StakeholderPanel({
           </>
         )}
         {approveAs && (
-          <Button onClick={() => setApproveOpen(true)}>Approve</Button>
+          <>
+            <Button onClick={() => setApproveOpen(true)}>Approve</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRejectOpen(true)}
+            >
+              Reject
+            </Button>
+          </>
         )}
       </div>
 
@@ -188,8 +259,8 @@ export function StakeholderPanel({
           <DialogHeader>
             <DialogTitle>Request Delegated Approval</DialogTitle>
             <DialogDescription>
-              Notifies HCM, GMM, DMD, and the System Administrator that all
-              three approvers are unavailable.
+              Notifies CSO, HCM, GMM, EM and the System Administrator that all
+              four approvers are unavailable.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">
@@ -246,6 +317,43 @@ export function StakeholderPanel({
               disabled={!hasSignature}
             >
               Confirm Approval
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Approval</DialogTitle>
+            <DialogDescription>
+              The record goes back to Reception, which is told why. Reception
+              and the Department Head who invited the visitor are notified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label>Reason *</Label>
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRejectOpen(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              loading={isPending}
+              disabled={!rejectReason.trim()}
+            >
+              Confirm Rejection
             </Button>
           </DialogFooter>
         </DialogContent>

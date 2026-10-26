@@ -21,6 +21,7 @@ import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
+  STAKEHOLDER_ROLES,
   WORKFLOW_STATE_LABELS,
   type WorkflowState,
 } from "@/lib/domain/types";
@@ -31,8 +32,6 @@ import {
   listRecentStakeholderApprovals,
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
-
-const STAKEHOLDER_ROLES = ["HCM", "GMM", "DMD"] as const;
 
 function daysWaiting(requestedAt: Date): string {
   const days = Math.floor(
@@ -113,7 +112,7 @@ export default async function ApprovalsQueuePage({
         title={`Welcome back, ${firstName}!`}
         subtitle={
           stakeholderRole
-            ? "Engagements waiting for stakeholder sign-off. Any one of HCM, GMM or DMD is enough."
+            ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM or EM is enough."
             : "Engagements delegated to you for sign-off."
         }
       />

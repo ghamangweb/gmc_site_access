@@ -274,6 +274,10 @@ export default async function ReceptionQueuePage({
                       accessPurpose={engagement.accessPurpose}
                       workflowState={workflowState}
                       accessState={engagement.accessState}
+                      approvalRejected={
+                        engagement.workflowState === "AtReception" &&
+                        engagement.approvalRejectedAt !== null
+                      }
                       canManage={canManage}
                     />
                   );

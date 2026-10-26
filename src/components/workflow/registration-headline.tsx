@@ -9,7 +9,7 @@ export function RegistrationHeadline() {
   const { t } = useRegistrationLanguage();
 
   return (
-    <h1 className="max-w-md text-3xl font-semibold leading-tight text-primary-foreground">
+    <h1 className="max-w-md text-2xl font-semibold xl:text-3xl leading-tight text-primary-foreground">
       {t("Ghana Manganese Company Mine Site Access Registration")}
     </h1>
   );

@@ -19,6 +19,11 @@ type PhoneInputProps = {
   ref?: Ref<HTMLInputElement>;
 };
 
+// Most visitors are Ghanaian. Applied only while the field is empty, so it is
+// a real starting value the visitor can change, and an untouched optional
+// field still submits empty rather than a bare "+233".
+const DEFAULT_DIAL_CODE = "+233";
+
 const DIAL_CODES = Array.from(
   new Set(COUNTRY_CALLING_CODES.map((country) => country.dialCode)),
 );
@@ -44,7 +49,10 @@ export function PhoneInput({
 }: PhoneInputProps) {
   const { t } = useRegistrationLanguage();
   const [open, setOpen] = useState(false);
-  const { code, number } = useMemo(() => splitValue(value), [value]);
+  const { code, number } = useMemo(
+    () => (value ? splitValue(value) : { code: DEFAULT_DIAL_CODE, number: "" }),
+    [value],
+  );
 
   function updateCode(newCode: string) {
     onChange(number ? `${newCode} ${number}` : newCode);
@@ -63,7 +71,6 @@ export function PhoneInput({
               value={code}
               onChange={(e) => updateCode(e.target.value.replace(/\s/g, ""))}
               disabled={disabled}
-              placeholder="+233"
               className="w-12 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
             />
             <PopoverTrigger asChild>

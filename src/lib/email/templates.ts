@@ -97,7 +97,7 @@ export function registrationSubmittedTemplate(opts: {
   const { path, cta } =
     opts.audience === "Receptionist"
       ? { path: "/dashboard/reception", cta: "Create the engagement" }
-      : { path: "/dashboard/department", cta: "Review it" };
+      : { path: "/dashboard/department", cta: "Visit dashboard" };
 
   return {
     subject: "GMC Site Access: new registration submission",
@@ -139,9 +139,10 @@ function layerEngagementLink(role: WorkflowRole, engagementId: string): string {
       return trainingEngagementLink(engagementId);
     case "SecurityStaff":
       return securityEngagementLink(engagementId);
+    case "CSO":
     case "HCM":
     case "GMM":
-    case "DMD":
+    case "EM":
       return approvalsEngagementLink(engagementId);
     default:
       return engagementLink(engagementId);
@@ -155,7 +156,7 @@ export function stakeholderApprovalRequestedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   return {
     subject: "GMC Site Access: stakeholder approval requested",
-    html: `<p>Stakeholder approval is requested for ${personName}'s Reception record.</p><p>Approval from any one of HCM, GMM, or DMD is sufficient.</p><p><a href="${approvalsEngagementLink(opts.engagementId)}">Review and approve</a>.</p>`,
+    html: `<p>Stakeholder approval is requested for ${personName}'s Reception record.</p><p>Approval from any one of CSO, HCM, GMM or EM is sufficient.</p><p><a href="${approvalsEngagementLink(opts.engagementId)}">Review and approve</a>.</p>`,
   };
 }
 
@@ -173,6 +174,33 @@ export function stakeholderApprovalReceivedTemplate(opts: {
   };
 }
 
+// Reception can act on the record, so its link opens it. The Department Head
+// cannot open a Reception record; they get their dashboard, where the
+// notification sits.
+export function stakeholderApprovalRejectedTemplate(opts: {
+  personName: string;
+  engagementId: string;
+  rejectedBy: string;
+  approverRole: string;
+  reason: string;
+  audience: "Receptionist" | "DepartmentHead";
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const rejectedBy = escapeHtml(opts.rejectedBy);
+  const approverRole = escapeHtml(opts.approverRole);
+  const reason = escapeHtml(opts.reason);
+
+  const link =
+    opts.audience === "Receptionist"
+      ? `<a href="${engagementLink(opts.engagementId)}">Review the record</a>`
+      : `<a href="${baseUrl()}/dashboard/department">Visit dashboard</a>`;
+
+  return {
+    subject: "GMC Site Access: stakeholder approval rejected",
+    html: `<p>Stakeholder approval for ${personName}'s Reception record was rejected by ${rejectedBy} (${approverRole}).</p><p>Reason: ${reason}</p><p>${link}.</p>`,
+  };
+}
+
 export function delegatedApprovalRequestedTemplate(opts: {
   personName: string;
   engagementId: string;
@@ -182,7 +210,7 @@ export function delegatedApprovalRequestedTemplate(opts: {
   const reason = escapeHtml(opts.reason);
   return {
     subject: "GMC Site Access: delegated approval requested",
-    html: `<p>HCM, GMM, and DMD are unavailable to approve ${personName}'s Reception record.</p><p>Reason: ${reason}</p><p>A System Administrator may grant the Receptionist a one-off delegated approval.</p><p><a href="${baseUrl()}/dashboard/system-admin/delegations">Grant the delegation</a>.</p>`,
+    html: `<p>CSO, HCM, GMM and EM are unavailable to approve ${personName}'s Reception record.</p><p>Reason: ${reason}</p><p>A System Administrator may grant the Receptionist a one-off delegated approval.</p><p><a href="${baseUrl()}/dashboard/system-admin/delegations">Grant the delegation</a>.</p>`,
   };
 }
 

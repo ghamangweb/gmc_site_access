@@ -1020,6 +1020,44 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Privacy Policy opens in a new tab (2026-10-26)
+
+- [x] Footer `PrivacyPolicyLink` and the cookie banner link open `/privacy-policy` in a new tab, so a
+      visitor mid-registration keeps the form and the invite token
+- [x] External-link icon + screen-reader "(opens in a new tab)" (EN + 中文)
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual in-browser check - open the policy mid-form, close the tab, form still filled; phone width
+- [x] `/register` below `lg`: image pane now a `h-56` banner (logo + heading) stacked above the form
+      instead of hidden; desktop split unchanged. `ui-rules.md` rule updated (approved exception)
+- [x] Logo 80px (`w-20`, plate `p-3`) below `xl`, 96px (`xl:w-24`) at `xl`+
+- [x] Split moved `lg` → `xl`: at ~1030px the half-width form clipped phone/select fields; banner,
+      logo and heading sizes switch at `xl` with it
+- [ ] Manual in-browser check - phone and tablet widths, banner text readable, desktop split unchanged
+
+---
+
+## Stakeholder rejection, new stakeholder roles, DH email, phone default (2026-10-26)
+
+- [x] Stakeholders (and a delegate) can **reject** with a required reason. First decision wins
+      (conditional updates on both approve and reject). The record stays `AtReception`, leaves the
+      stakeholder queue (`approval_requested_at` cleared), and reads as rejected
+      (`engagements.approval_rejected_at`) until Reception requests again, which clears it
+- [x] History in new `stakeholder_rejections` table (reason encrypted); delegation cleared on reject
+- [x] Notified (dashboard + email): all Receptionists (link to the record) and the inviting Department
+      Head via the invitation (link "Visit dashboard"); Reception-keyed records have no DH
+- [x] Stakeholder roles now CSO, HCM, GMM, EM (`STAKEHOLDER_ROLES` in `lib/domain/types.ts`
+      replaces 8 inline lists). DMD renamed to EM
+- [x] Migration `0026_stakeholder_rejections.sql`: table + column, plus hand-added
+      `DMD → EM` for `staff_users.workflow_roles` and pending access requests. **Written, NOT applied**
+- [x] Department Head "new registration submission" email link reads "Visit dashboard"
+- [x] Phone fields start with a real `+233` code (was a placeholder); an untouched field stays empty
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] **Apply `bun run db:migrate` (dev), then production.** Holders of DMD must sign out/in after
+- [ ] Manual check: request → reject → Reception sees badge + reason → request again → approve;
+      emails to Reception and DH; phone field saves `+233 …`
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

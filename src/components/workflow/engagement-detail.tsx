@@ -8,10 +8,11 @@ import type { ReceptionFormValues } from "@/components/workflow/reception-form";
 import { ReceptionForm } from "@/components/workflow/reception-form";
 import { StakeholderPanel } from "@/components/workflow/stakeholder-panel";
 import { requirePinConfirmed } from "@/lib/auth/guards";
-import type {
-  AccessPurpose,
-  ApproverRole,
-  ReceptionData,
+import {
+  type AccessPurpose,
+  type ApproverRole,
+  type ReceptionData,
+  STAKEHOLDER_ROLES,
 } from "@/lib/domain/types";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import { getEngagementDetail } from "@/lib/services/workflow-service";
@@ -54,7 +55,7 @@ export async function EngagementDetail({
     notFound();
   }
 
-  const { engagement, person, approvals } = detail;
+  const { engagement, person, approvals, latestRejection } = detail;
 
   // Reception's record is Reception's. The approvals route is for whoever
   // signs off: a stakeholder, or the delegate this one engagement was granted
@@ -62,7 +63,7 @@ export async function EngagementDetail({
   const canOpen =
     queueHref === "/dashboard/reception"
       ? session.workflowRoles.includes("Receptionist")
-      : (["HCM", "GMM", "DMD"] as const).some((role) =>
+      : STAKEHOLDER_ROLES.some((role) =>
           session.workflowRoles.includes(role),
         ) || engagement.delegatedApproverId === session.staffUserId;
 
@@ -84,16 +85,23 @@ export async function EngagementDetail({
   const isGuest = session.systemRole === "Guest";
   const directRole = isGuest
     ? undefined
-    : (["HCM", "GMM", "DMD"] as const).find((role) =>
-        session.workflowRoles.includes(role),
-      );
+    : STAKEHOLDER_ROLES.find((role) => session.workflowRoles.includes(role));
   const isDelegatedApprover =
     !isGuest &&
     engagement.delegatedApproverId !== null &&
     engagement.delegatedApproverId === session.staffUserId;
-  const approveAs: ApproverRole | null = noApprovalYet
-    ? (directRole ?? (isDelegatedApprover ? "Delegated" : null))
-    : null;
+  // A rejected request cannot be signed or rejected again until Reception
+  // asks again, which clears `approvalRejectedAt`.
+  const approvalRequested = engagement.approvalRequestedAt !== null;
+  const approveAs: ApproverRole | null =
+    noApprovalYet && !engagement.approvalRejectedAt
+      ? (directRole ?? (isDelegatedApprover ? "Delegated" : null))
+      : null;
+  // Shown while it still stands; a fresh request clears `approvalRejectedAt`.
+  const rejection =
+    noApprovalYet && engagement.approvalRejectedAt
+      ? latestRejection
+      : undefined;
   const canRequestApproval = noApprovalYet && isReceptionist;
 
   const defaultValues: Partial<ReceptionFormValues> = {
@@ -155,6 +163,8 @@ export async function EngagementDetail({
           engagementId={engagementId}
           approvals={approvals}
           approveAs={approveAs}
+          approvalRequested={approvalRequested}
+          rejection={rejection}
           canRequestApproval={canRequestApproval}
           // A stakeholder opened this from their own queue and belongs back
           // there; a Receptionist belongs in Reception's.

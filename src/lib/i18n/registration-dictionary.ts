@@ -191,6 +191,7 @@ const ZH_ENTRIES = {
   "By clicking “Accept”, you agree to this site remembering your language choice on your device. We do not use cookies for analytics or marketing. The details you submit are used only to process your site-access request.":
     "点击“接受”，即表示您同意本网站在您的设备上记住您的语言选择。我们不使用 Cookie 进行分析或营销。您提交的信息仅用于处理您的矿区准入申请。",
   "Privacy Policy": "隐私政策",
+  "(opens in a new tab)": "（在新标签页中打开）",
   Deny: "拒绝",
   Accept: "接受",
   "Our Commitment to Privacy": "我们对隐私的承诺",
