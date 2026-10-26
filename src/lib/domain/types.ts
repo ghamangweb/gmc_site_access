@@ -45,7 +45,7 @@ export type AccessPurpose = "Work" | "Visit" | "VisitMine";
 
 export const ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string> = {
   Work: "Require mine site access",
-  Visit: "Familiarization Visit",
+  Visit: "Familiarization Visit (no mine site access)",
   VisitMine: "Require Mine Tour",
 };
 
@@ -119,7 +119,6 @@ export const DOC_TYPES = [
   "ghana_card",
   "assignment_letter",
   "insurance_proof",
-  "hospital_fitness_form",
   "induction_declaration_form",
   "induction_registration_form",
   "biometric_image",
@@ -129,16 +128,32 @@ export const DOC_TYPES = [
 export type DocType = (typeof DOC_TYPES)[number];
 
 // Documents a layer owns and produces itself — never something Reception
-// marks "applicable" for a visitor to supply.
-export type LayerOwnedDocType =
-  | "hospital_fitness_form"
-  | "induction_declaration_form"
-  | "induction_registration_form"
-  | "biometric_image"
-  | "passport_photo";
+// marks "applicable" for a visitor to supply. Hospital owns none: it records
+// the clearance outcome only (its fitness form was removed 2026-10-26).
+const LAYER_OWNED_DOC_TYPES = [
+  "induction_declaration_form",
+  "induction_registration_form",
+  "biometric_image",
+  "passport_photo",
+] as const satisfies readonly DocType[];
+
+export type LayerOwnedDocType = (typeof LAYER_OWNED_DOC_TYPES)[number];
 
 // What Reception can require of a visitor.
 export type ApplicableDocType = Exclude<DocType, LayerOwnedDocType>;
+
+// Whether a stored `documents.doc_type` (plain text) is something Reception
+// can require of a visitor.
+export function isApplicableDocType(
+  docType: string,
+): docType is ApplicableDocType {
+  // SAFETY: widening the readonly tuples to `string[]` only to ask whether an
+  // arbitrary string is one of their members — the predicate is what narrows.
+  const known: readonly string[] = DOC_TYPES;
+  const layerOwned: readonly string[] = LAYER_OWNED_DOC_TYPES;
+
+  return known.includes(docType) && !layerOwned.includes(docType);
+}
 
 export const DOCUMENT_LABELS: Record<DocType, string> = {
   passport_biodata: "Passport biodata page",
@@ -148,7 +163,6 @@ export const DOCUMENT_LABELS: Record<DocType, string> = {
   ghana_card: "Ghana Card",
   assignment_letter: "Letter of assignment / contract",
   insurance_proof: "Proof of medical/travel insurance",
-  hospital_fitness_form: "Fitness form",
   induction_declaration_form: "Induction declaration form",
   induction_registration_form: "Induction registration form",
   biometric_image: "Biometric capture",
@@ -219,6 +233,20 @@ export const STAKEHOLDER_ROLES = ["CSO", "HCM", "GMM", "EM"] as const;
 export type StakeholderRole = (typeof STAKEHOLDER_ROLES)[number];
 
 export type ApproverRole = StakeholderRole | "Delegated";
+
+// What a new user can ask for on the "Access required" page. Shared by the
+// form and `requestAccessAction`, which rejects anything not listed here.
+export const REQUESTABLE_ROLES = [
+  "Guest",
+  "Receptionist",
+  ...STAKEHOLDER_ROLES,
+  "HospitalStaff",
+  "TrainingStaff",
+  "SecurityStaff",
+  "DepartmentHead",
+] as const;
+
+export type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
 // Runtime tuple like DOC_TYPES: the reception form and Reception's
 // completion form both render it, and `VisaType` derives from it so a new

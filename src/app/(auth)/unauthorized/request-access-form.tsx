@@ -15,25 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GMC_LIAISON_DEPARTMENTS } from "@/lib/domain/types";
-
-const ROLE_OPTIONS = [
-  "Guest",
-  "Receptionist",
-  "CSO",
-  "HCM",
-  "GMM",
-  "EM",
-  "HospitalStaff",
-  "TrainingStaff",
-  "SecurityStaff",
-  "DepartmentHead",
-];
+import { GMC_LIAISON_DEPARTMENTS, REQUESTABLE_ROLES } from "@/lib/domain/types";
 
 export function RequestAccessForm() {
   const [submitted, setSubmitted] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [requestedRole, setRequestedRole] = useState(ROLE_OPTIONS[0]);
+  // Nothing pre-selected: the user has to choose (issue #18). It used to
+  // default to Guest, so a request could go in without a real choice.
+  const [requestedRole, setRequestedRole] = useState("");
   const [requestedDepartment, setRequestedDepartment] = useState("");
 
   function handleSubmit(formData: FormData) {
@@ -72,7 +61,7 @@ export function RequestAccessForm() {
           aria-labelledby="requested-role-label"
           className="flex max-w-md flex-row flex-wrap justify-center gap-2"
         >
-          {ROLE_OPTIONS.map((role) => (
+          {REQUESTABLE_ROLES.map((role) => (
             <label key={role} htmlFor={role} className="cursor-pointer">
               <Badge
                 variant="outline"
@@ -117,11 +106,17 @@ export function RequestAccessForm() {
       <Button
         type="submit"
         loading={isPending}
+        disabled={!requestedRole}
         size="lg"
         className="w-full md:w-[220px]"
       >
         Request Access
       </Button>
+      {!requestedRole && (
+        <p className="text-xs text-muted-foreground">
+          Select a role to continue.
+        </p>
+      )}
     </form>
   );
 }

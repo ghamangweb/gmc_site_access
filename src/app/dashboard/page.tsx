@@ -14,8 +14,8 @@ export default async function DashboardPage() {
   if (session.systemRole === "SystemAdmin") {
     redirect("/dashboard/system-admin/users");
   }
-  // Stakeholders land on their own queue — approving is their job; they keep
-  // access to Reception's queue, it just isn't the first thing they see.
+  // Stakeholders land on their own queue — approving is their job. Reception's
+  // queue is Receptionist-only (the proxy shows them "No access" there).
   if (STAKEHOLDER_ROLES.some((role) => session.workflowRoles.includes(role))) {
     redirect("/dashboard/approvals");
   }

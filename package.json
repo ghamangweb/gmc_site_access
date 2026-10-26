@@ -19,7 +19,8 @@
     "db:seed:registrations": "dotenvx run -f .env.development -- tsx src/lib/db/seed-registrations.ts",
     "db:backfill:page-counts": "dotenvx run -f .env.development -- tsx src/lib/db/backfill-page-counts.ts",
     "db:backfill:encryption": "dotenvx run -f .env.development -- tsx src/lib/db/backfill-encryption.ts",
-    "db:seed:approvals": "dotenvx run -f .env.development -- tsx src/lib/db/seed-approvals.ts"
+    "db:seed:approvals": "dotenvx run -f .env.development -- tsx src/lib/db/seed-approvals.ts",
+    "db:cleanup:fitness-forms": "dotenvx run -f .env.development -- tsx src/lib/db/cleanup-fitness-forms.ts"
   },
   "overrides": {
     "@next/env": "npm:@dotenvx/next-env"

@@ -29,7 +29,6 @@ const DOC_TYPE_OWNERS: Record<DocType, WorkflowRole> = {
   ghana_card: "Receptionist",
   assignment_letter: "Receptionist",
   insurance_proof: "Receptionist",
-  hospital_fitness_form: "HospitalStaff",
   induction_declaration_form: "TrainingStaff",
   induction_registration_form: "TrainingStaff",
   biometric_image: "SecurityStaff",

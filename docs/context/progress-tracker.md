@@ -1058,6 +1058,83 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Hospital fitness form removed; no medical details to Reception (2026-10-26, issue #27)
+
+- [x] `hospital_fitness_form` removed from `DOC_TYPES`, `DOCUMENT_LABELS`, `DOC_TYPE_OWNERS` and the
+      dictionary. Hospital records the outcome only and uploads nothing
+- [x] `isApplicableDocType` (`lib/domain/types.ts`) replaces two filters that special-cased the
+      hospital form; it excludes every layer-owned type via `LAYER_OWNED_DOC_TYPES`
+- [x] Reception's Fit-with-Conditions email no longer includes the doctor's comments; Training's
+      clearance email no longer claims a fitness form is attached
+- [x] `bun run db:cleanup:fitness-forms` deletes legacy fitness-form files (UploadThing) and rows.
+      **Run on dev: 4 of 4 deleted.** Production not run yet
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Run the cleanup against production (script reads `.env.development`; needs production env)
+- [ ] Open question: Security's `PriorLayersSummary` still shows the doctor's comments
+
+---
+
+## Email links: return after sign-in, "No access" page (2026-10-26, issue #25)
+
+- [x] Signed out: the proxy sends `/sign-in?next=<requested path>`; sign-in passes it to Entra as
+      `redirectTo`; the proxy carries it to `/pin` or `/pin/setup`, which push to it after the PIN.
+      `safeNextPath` (`lib/auth/next-path.ts`) accepts only `/dashboard…` paths (no open redirect)
+- [x] Wrong role: the proxy redirects to the new `(auth)/no-access` page ("No access" + Return to
+      dashboard) instead of a bare `Forbidden` 403 text response
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual check: signed out, open an email link → sign in → PIN → lands on that record;
+      Hospital user opens a Reception link → "No access" page
+
+---
+
+## Familiarization Visit label (2026-10-26, issue #22)
+
+- [x] `ACCESS_PURPOSE_LABELS.Visit` is now "Familiarization Visit (no mine site access)" (+ 中文
+      "参观考察（不进入矿区）"), so the foreign form, Reception's form and every queue say what the local
+      form already did. Behaviour unchanged by decision: approval completes a visit-only record
+- [ ] Close #22 as working as intended once merged
+
+---
+
+## Reception "Rejected" tab (2026-10-26, issue #21)
+
+- [x] Third view on `/dashboard/reception` (`?view=rejected`) with a count pill: records at Reception
+      whose stakeholder rejection still stands. Name, passport, nature of visit, rejected by (role),
+      reason, date, Review. Leaves the tab when Reception requests again or cancels
+- [x] `listRejectedEngagements` / `countRejectedEngagements` (`workflow-service.ts`); latest
+      rejection per row fetched in one query
+- [x] Decided: the visitor is **not** told about a rejection (Reception + inviting DH only)
+- [x] Migration `0026` confirmed applied on dev (27 migrations). Production not checked
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual check: reject a request → appears under Rejected with reason → request again → gone
+
+---
+
+## Role changed while signed in (2026-10-26, issue #19)
+
+- [x] Proxy sends wrong-role requests to `/no-access?next=<requested>`. The page compares the
+      session's roles with the database; if they differ (an admin changed them since sign-in) it
+      renders the existing `SessionRefresher`, which updates the session, asks for the PIN again and
+      continues to the requested page. Otherwise it shows "No access" as before
+- [x] No loop: after the refresh the roles match, so a real lack of access shows the page
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual check: signed in as Hospital, admin adds Receptionist, open Reception → PIN → Reception
+
+---
+
+## Access request requires a real role choice (2026-10-26, issue #18)
+
+- [x] Access was already impossible without a role (unprovisioned users are held on `/unauthorized`
+      until a System Administrator provisions them)
+- [x] Request form no longer pre-selects Guest; Request Access is disabled with "Select a role to
+      continue." until a role is chosen
+- [x] `REQUESTABLE_ROLES` (`lib/domain/types.ts`) shared by the form and `requestAccessAction`, which
+      now rejects any role not on the list
+- [ ] Optional, not done: show full role names (e.g. "Chief Sustainability Officer (CSO)")
+- [x] `tsc --noEmit`, `biome check` clean
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

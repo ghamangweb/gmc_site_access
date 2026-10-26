@@ -613,6 +613,91 @@ export async function listEngagementsAwaitingApproval(
 // The other half of a stakeholder's dashboard: what has already been signed
 // off. Any one approval is enough, so this is deliberately everyone's, not
 // just the viewer's — a stakeholder needs to see that a colleague handled it.
+// Records a stakeholder has rejected and Reception has not yet dealt with:
+// still at Reception, rejection standing. Asking again or cancelling takes a
+// record off this list. Each row carries the rejection that put it here.
+export type RejectedEngagementRow = EngagementRow & {
+  rejection: StakeholderRejection | undefined;
+};
+
+function rejectedConditions(search?: string): SQL[] {
+  const conditions = [
+    eq(engagements.workflowState, "AtReception"),
+    isNotNull(engagements.approvalRejectedAt),
+  ];
+  const searchFilter = personSearchFilter(search);
+  if (searchFilter) {
+    conditions.push(searchFilter);
+  }
+  return conditions;
+}
+
+export async function listRejectedEngagements(
+  request: PageRequest = {},
+): Promise<Page<RejectedEngagementRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = and(...rejectedConditions(request.search));
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({ engagement: engagements, person: persons })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where)
+      .orderBy(desc(engagements.approvalRejectedAt))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(engagements)
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  // The latest rejection per record on this page, in one query.
+  const rejections =
+    rows.length > 0
+      ? await db
+          .select()
+          .from(stakeholderRejections)
+          .where(
+            inArray(
+              stakeholderRejections.engagementId,
+              rows.map((row) => row.engagement.id),
+            ),
+          )
+          .orderBy(desc(stakeholderRejections.rejectedAt))
+      : [];
+
+  const latestByEngagement = new Map<string, StakeholderRejection>();
+  for (const rejection of rejections) {
+    if (!latestByEngagement.has(rejection.engagementId)) {
+      latestByEngagement.set(rejection.engagementId, rejection);
+    }
+  }
+
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      rejection: latestByEngagement.get(row.engagement.id),
+    })),
+    total: totals?.value ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+// For the tab pill: every standing rejection, regardless of the search box.
+export async function countRejectedEngagements(): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(engagements)
+    .where(and(...rejectedConditions()));
+
+  return row?.value ?? 0;
+}
+
 // Outstanding sign-offs, for the tab pill — the same filter as
 // `listEngagementsAwaitingApproval` but without the search, so the pill
 // counts the work rather than what is on screen.

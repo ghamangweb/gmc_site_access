@@ -17,7 +17,7 @@ const CLEARANCE_BADGE: Record<HospitalClearanceStatus, string> = {
 // What Hospital hands Training: the decision and any doctor's comments.
 // Training was signing off inductions without ever seeing the medical it
 // depends on — "Fit with Conditions" in particular is meaningless without the
-// conditions. Hospital records the outcome only; no fitness form is uploaded.
+// conditions. Hospital records the outcome only; it uploads no documents.
 export function HospitalHandoff({
   clearance,
 }: {

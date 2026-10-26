@@ -14,6 +14,8 @@ import { getSession } from "@/lib/auth/session";
 import {
   type ActionResult,
   GMC_LIAISON_DEPARTMENTS,
+  REQUESTABLE_ROLES,
+  type RequestableRole,
   type SystemRole,
   type WorkflowRole,
 } from "@/lib/domain/types";
@@ -38,7 +40,12 @@ export async function requestAccessAction(
     }
 
     const requestedRole = formData.get("requestedRole");
-    if (typeof requestedRole !== "string" || !requestedRole) {
+    // Checked against the list, not just for presence: the form is only a
+    // convenience, and a made-up role must not reach the admins' queue.
+    if (
+      typeof requestedRole !== "string" ||
+      !REQUESTABLE_ROLES.includes(requestedRole as RequestableRole)
+    ) {
       return { success: false, error: "Select a role to request" };
     }
 

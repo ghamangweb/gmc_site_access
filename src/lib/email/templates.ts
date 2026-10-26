@@ -232,7 +232,7 @@ export function hospitalClearedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   return {
     subject: "GMC Site Access: hospital clearance recorded",
-    html: `<p>${personName} has been cleared by Hospital and routed to Training School.</p><p>The fitness form is attached to the record.</p><p><a href="${trainingEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
+    html: `<p>${personName} has been cleared by Hospital and routed to Training School.</p><p>The clearance outcome and any doctor's comments are on the record.</p><p><a href="${trainingEngagementLink(opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 
@@ -259,21 +259,18 @@ export function hospitalUnfitTemplate(opts: {
   };
 }
 
-// Reception's half of a conditional clearance: the record has moved on, but
-// the conditions are theirs to manage, so they are told as well as Training.
+// Reception's half of a conditional clearance: they are told the record has
+// moved on, but not the conditions. The doctor's comments are medical data and
+// stay with Hospital and Training School (issue #27).
 export function hospitalFitWithConditionsTemplate(opts: {
   personName: string;
   engagementId: string;
-  doctorComments: string;
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
-  const doctorComments = opts.doctorComments.trim()
-    ? `<p>Doctor's comments: ${escapeHtml(opts.doctorComments)}</p>`
-    : "";
 
   return {
     subject: "GMC Site Access: hospital clearance recorded with conditions",
-    html: `<p>${personName} was cleared Fit with Conditions at Hospital and has moved on to Training School.</p>${doctorComments}<p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
+    html: `<p>${personName} was cleared Fit with Conditions at Hospital and has moved on to Training School.</p><p>The medical details are shared with Training School only.</p><p><a href="${engagementLink(opts.engagementId)}">View the record</a>.</p>`,
   };
 }
 

@@ -1937,6 +1937,21 @@ copied from the unauthorized page, single primary `<Button asChild size="lg">` l
 `/` sends the user to sign-in, PIN or dashboard, so one link serves every visitor. Deliberately no
 `DesktopOnlyGuard`.
 
+### NoAccess page (2026-10-26)
+
+File: `src/app/(auth)/no-access/page.tsx`. Inside `(auth)`, so it gets `PublicShell` and
+`DesktopOnlyGuard` from that layout. Same heading/subtitle classes as the unauthorized page, single
+`<Button asChild size="lg">` "Return to dashboard". The proxy redirects here when a signed-in user's
+role does not cover the requested `/dashboard/<layer>` or `/dashboard/system-admin` route.
+
+### Reception "Rejected" view (2026-10-26)
+
+File: `src/app/dashboard/(workflow)/reception/page.tsx`. Third `QueueViewTabs` entry ("Rejected",
+`count` pill like Security's "Revocation Requests"). Table follows Security's revocations table:
+plain `TableRow className="hover:bg-muted/50"` with a `Link` on the name, reason cell
+`max-w-xs whitespace-normal`, date cell `text-muted-foreground` via `formatQueueDate`, and a `size="sm"`
+"Review" button. Empty state uses Lucide `CircleXIcon`.
+
 ### Entry format
 
 ```

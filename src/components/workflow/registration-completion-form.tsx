@@ -23,6 +23,7 @@ import { NATIONALITIES } from "@/lib/domain/nationalities";
 import {
   type ApplicableDocType,
   type DocType,
+  isApplicableDocType,
   VISA_TYPES,
   type VisaType,
 } from "@/lib/domain/types";
@@ -75,10 +76,7 @@ export function RegistrationCompletionForm({
           nationality: isLocal ? nationality : undefined,
           ghanaVisaRequired: isLocal ? ghanaVisaRequired : undefined,
           visaType: isLocal ? visaType : undefined,
-          applicableDocuments: applicableDocuments.filter(
-            (docType): docType is ApplicableDocType =>
-              docType !== "hospital_fitness_form",
-          ),
+          applicableDocuments: applicableDocuments.filter(isApplicableDocType),
           accommodationConfirmed,
           itineraryAttached,
           inflightUpdated,

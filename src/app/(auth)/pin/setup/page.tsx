@@ -8,6 +8,7 @@ import { setupPinAction } from "@/actions/auth";
 import { PinInput } from "@/components/auth/pin-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 export default function PinSetupPage() {
   const router = useRouter();
@@ -29,7 +30,12 @@ export default function PinSetupPage() {
     startTransition(async () => {
       const result = await setupPinAction(pinValue, confirmValue);
       if (result.success) {
-        router.push("/dashboard");
+        // Back to the page they originally asked for, if the proxy sent
+        // them here from one. Read at submit time, so the page stays static.
+        const next = safeNextPath(
+          new URLSearchParams(window.location.search).get("next"),
+        );
+        router.push(next ?? "/dashboard");
       } else {
         toast.error("Couldn't set PIN", { description: result.error });
         setPin(["", "", "", ""]);
