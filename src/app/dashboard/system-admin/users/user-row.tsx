@@ -48,9 +48,10 @@ import {
 const SYSTEM_ROLES: SystemRole[] = ["Guest", "Admin", "SystemAdmin"];
 const WORKFLOW_ROLES: WorkflowRole[] = [
   "Receptionist",
+  "CSO",
   "HCM",
   "GMM",
-  "DMD",
+  "EM",
   "HospitalStaff",
   "TrainingStaff",
   "SecurityStaff",

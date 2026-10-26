@@ -50,6 +50,8 @@ type ReceptionRowProps = {
   accessPurpose: string;
   workflowState: WorkflowState;
   accessState: string;
+  /** A stakeholder rejected it and Reception has not asked again. */
+  approvalRejected: boolean;
   canManage: boolean;
 };
 
@@ -60,6 +62,7 @@ export function ReceptionRow({
   accessPurpose,
   workflowState,
   accessState,
+  approvalRejected,
   canManage,
 }: ReceptionRowProps) {
   const router = useRouter();
@@ -105,9 +108,15 @@ export function ReceptionRow({
           {ACCESS_PURPOSE_LABELS[accessPurpose as AccessPurpose]}
         </TableCell>
         <TableCell>
-          <Badge className={WORKFLOW_STATE_BADGE[workflowState]}>
-            {WORKFLOW_STATE_LABELS[workflowState]}
-          </Badge>
+          {approvalRejected ? (
+            <Badge className="bg-status-danger-bg text-status-danger-fg">
+              Approval Rejected
+            </Badge>
+          ) : (
+            <Badge className={WORKFLOW_STATE_BADGE[workflowState]}>
+              {WORKFLOW_STATE_LABELS[workflowState]}
+            </Badge>
+          )}
         </TableCell>
         {canManage && (
           <TableCell className="text-right">

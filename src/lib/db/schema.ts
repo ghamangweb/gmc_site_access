@@ -75,6 +75,11 @@ export const engagements = pgTable(
     // notifications — so a stakeholder queue had no way to tell "waiting for
     // me" from "Reception is still preparing it".
     approvalRequestedAt: timestamp({ withTimezone: true }),
+    // Stamped when a stakeholder rejects the request, cleared when Reception
+    // asks again. A rejection also clears `approvalRequestedAt`, so the record
+    // leaves the stakeholder queue instead of waiting there for a sign-off
+    // that will never come. The details live in `stakeholder_rejections`.
+    approvalRejectedAt: timestamp({ withTimezone: true }),
     delegatedApproverId: uuid().references(() => staffUsers.id),
     delegationGrantedBy: uuid().references(() => staffUsers.id),
     delegationGrantedAt: timestamp({ withTimezone: true }),
@@ -155,6 +160,24 @@ export const stakeholderApprovals = pgTable("stakeholder_approvals", {
   delegatedBy: uuid().references(() => staffUsers.id),
   delegatedAt: timestamp({ withTimezone: true }),
   delegationReason: text(),
+});
+
+// One row per rejection, kept as history: a record can be rejected, fixed by
+// Reception, requested again and rejected again. Unlike an approval there is
+// no unique constraint on the engagement for that reason.
+export const stakeholderRejections = pgTable("stakeholder_rejections", {
+  id: uuid().defaultRandom().primaryKey(),
+  engagementId: uuid()
+    .notNull()
+    .references(() => engagements.id),
+  approverRole: text().notNull(),
+  approverStaffUserId: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  approverName: text().notNull(),
+  reason: encryptedText().notNull(),
+  isDelegated: boolean().notNull().default(false),
+  rejectedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
 // Mirrors `hospital_clearances`: one row per induction sign-off, hung off the

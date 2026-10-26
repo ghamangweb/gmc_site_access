@@ -2,9 +2,7 @@ export type SystemRole = "User" | "Guest" | "Admin" | "SystemAdmin";
 
 export type WorkflowRole =
   | "Receptionist"
-  | "HCM"
-  | "GMM"
-  | "DMD"
+  | StakeholderRole
   | "HospitalStaff"
   | "TrainingStaff"
   | "SecurityStaff"
@@ -211,7 +209,16 @@ export function getRegistrationDocTypes(
   ];
 }
 
-export type ApproverRole = "HCM" | "GMM" | "DMD" | "Delegated";
+// The stakeholders who sign off a Reception record. Any one of them is
+// enough, and any one of them can reject it back to Reception. Chief
+// Sustainability Officer, Human Capital Manager, General Mine Manager,
+// Engineering Manager. EM replaced DMD (2026-10-26); approvals signed before
+// then still read "DMD" in `stakeholder_approvals.approver_role`.
+export const STAKEHOLDER_ROLES = ["CSO", "HCM", "GMM", "EM"] as const;
+
+export type StakeholderRole = (typeof STAKEHOLDER_ROLES)[number];
+
+export type ApproverRole = StakeholderRole | "Delegated";
 
 // Runtime tuple like DOC_TYPES: the reception form and Reception's
 // completion form both render it, and `VisaType` derives from it so a new

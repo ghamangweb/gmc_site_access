@@ -63,7 +63,7 @@ The system features both **system roles** and **workflow responsibilities**.
 |---|---|
 | **Department Head** | Issues and revokes invitation links for their GMC Liaison Department |
 | **Receptionist** | Creates and manages Engagements and coordinates the access process |
-| **HCM / GMM / DMD** | Provides stakeholder approval |
+| **CSO / HCM / GMM / EM** | Provides or rejects stakeholder approval |
 | **Hospital Staff** | Handles medical fitness clearance |
 | **Training School Staff** | Handles induction clearance |
 | **Security Staff** | Reviews site-access requirements, issues the access card, activates access, and revokes it after an approved termination |
@@ -104,8 +104,9 @@ The Receptionist:
 Reception can request for a delegated approval.
 Reception can also request that active access be revoked when required.
 
-The HCM/GMM/DMD:
+The CSO/HCM/GMM/EM:
 - Only handles stakeholder approval (one stakeholder approval is enough to get the engagement moving to the next stage)
+- Can reject instead, with a reason: the record goes back to Reception marked rejected, and Reception and the inviting Department Head are notified
 
 
 
@@ -189,13 +190,17 @@ Each stage must be completed before the Engagement can move to the next required
 
 Reception coordinates stakeholder approval from:
 
-- HCM
-- GMM
-- DMD
+- Chief Sustainability Officer (CSO)
+- Human Capital Manager (HCM)
+- General Mine Manager (GMM)
+- Engineering Manager (EM), which replaced DMD on 2026-10-26
 
 The stakeholders are notified together when their approval is required.
 
 Approval from any one of the designated stakeholders is sufficient to advance the Engagement.
+Any one of them can instead reject it with a reason. The first decision wins: a rejected request
+leaves the stakeholder queue and returns to Reception, which can update it and request approval
+again, or cancel it.
 
 The system also supports delegated approval where an approved delegate is authorised to act on behalf of the relevant stakeholder.
 

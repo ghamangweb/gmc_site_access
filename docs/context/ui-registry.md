@@ -533,7 +533,15 @@ changes after a successful upload" before this pass.
 ### StakeholderPanel
 
 File: `src/components/workflow/stakeholder-panel.tsx`
-Last updated: 2026-07-14
+Last updated: 2026-10-26
+
+Update 2026-10-26 (reject): next to Approve sits an `outline` **Reject** button opening a third
+`Dialog` (required `Textarea` reason, Cancel + `destructive` "Confirm Rejection"). New props
+`approvalRequested` and `rejection`. A standing rejection renders a `bg-status-danger-bg
+text-status-danger-fg` "Rejected" badge, "Rejected by Name (Role)", the reason and timestamp,
+plus a hint for Reception to update and request again; otherwise the status line reads "Awaiting
+approval from CSO, HCM, GMM or EM." or "Approval has not been requested yet." Reception's queue
+row shows a danger "Approval Rejected" badge in place of the state badge for the same records.
 
 **Pattern notes:**
 Branches on whether `approvals[0]` exists: an approval summary card if so,
@@ -1211,6 +1219,12 @@ locale is already stored. The language is persisted **only after Accept**; Deny 
 keeps the switch for the current visit and `writeConsent("denied")` removes any stored locale.
 The banner renders nothing until mounted, for the same hydration reason as the locale provider.
 Policy text is a draft for GMC legal review (retention period and contact route are unspecified).
+Both Privacy Policy links (footer `PrivacyPolicyLink` and the banner) open in a **new tab**
+(`target="_blank" rel="noopener noreferrer"`, 2026-10-26): the form keeps no draft and the invite
+token lives only in the `/register` URL, so a same-tab visit or a back button would lose the visitor's
+input. Link is `inline-flex items-center gap-1` with a Lucide `ExternalLinkIcon` (`aria-hidden`,
+`size-3.5` footer / `size-3` banner) and `sr-only` text `t("(opens in a new tab)")`. No back button
+on the policy page.
 
 ### Staff user lifecycle: revoke and deactivate (2026-10-12)
 
@@ -1856,16 +1870,16 @@ scope for this change and still reads "Access Purpose".
 ### `/register` split layout (2026-10-11)
 
 File: `src/app/register/page.tsx`
-Last updated: 2026-10-11
+Last updated: 2026-10-26
 
 | Property | Class |
 |---|---|
-| Outer | `flex h-screen overflow-hidden` — the page itself never scrolls |
-| Image pane (left) | `relative hidden h-screen w-1/2 shrink-0 overflow-hidden lg:block` |
-| Image | `/bg-auth.jpg`, `fill sizes="50vw" priority`, `object-cover brightness-50` — same treatment as `PublicShell` |
-| Image pane inner | `relative z-10 flex h-full flex-col justify-between p-12` — logo top, heading bottom |
-| Logo plate | `inline-flex self-start rounded-xl bg-card p-4`, logo 120×57 |
-| Hero heading | `max-w-md text-3xl font-semibold leading-tight text-primary-foreground` |
+| Outer | `flex min-h-screen flex-col xl:h-screen xl:flex-row xl:overflow-hidden` — stacked below `xl`, split at `xl`+ |
+| Image pane | `relative h-56 w-full shrink-0 overflow-hidden xl:h-screen xl:w-1/2` — banner on top below `xl`, left half at `xl`+ |
+| Image | `/bg-auth.jpg`, `fill sizes="(min-width: 1280px) 50vw, 100vw" priority`, `object-cover brightness-50` — same treatment as `PublicShell` |
+| Image pane inner | `relative z-10 flex h-full flex-col justify-end gap-4 p-5 sm:p-8 xl:gap-6 xl:p-12` — logo and heading as one block at the bottom |
+| Logo plate | `inline-flex self-start rounded-xl bg-card p-3 xl:p-4`, logo `h-auto w-20 xl:w-24` (80px below `xl`, 96px at `xl`+, reduced from 120px 2026-10-26; intrinsic 120×57) |
+| Hero heading | `max-w-md text-2xl font-semibold xl:text-3xl leading-tight text-primary-foreground` |
 | Form pane (right) | `ScrollArea` — `h-screen w-full min-w-0 bg-background lg:w-1/2`, inner `<main className="p-10">` |
 | Shadow | none — this system never uses `shadow-*` |
 
@@ -1900,8 +1914,13 @@ the pane so Next doesn't serve a full-viewport-width asset.
 Panes split `w-1/2` / `w-1/2` (first drafted 2/3 image + 1/3 form, widened to an even split
 the same day because the forms' fixed `grid-cols-2` field rows were too cramped at a third);
 the form pane needs `min-w-0` or those grid rows push the flex child wider than its half.
-Below `lg` the image pane is hidden and the form goes full width — academic in practice,
-since `DesktopOnlyGuard` blocks `max-lg` viewports app-wide.
+Below `xl` the image pane is a `h-56` banner stacked above the full-width form (2026-10-26;
+previously `hidden`, which left phone visitors with no logo and no `h1`). The split starts at
+`xl` rather than `lg` because at ~1030px a half-width pane left ~180px per field and the phone
+(`+233` picker + number), nationality and nature-of-visit fields clipped; at 1280px each field
+gets ~240px. Form padding stays `lg:p-10`. The banner scrolls away
+with the document; it keeps an explicit height because `fill` needs one. `/register` has no
+`DesktopOnlyGuard`, so this is the real phone layout.
 
 `reception-form.tsx` (Foreign path) and `local-registration-form.tsx` use non-responsive
 `grid grid-cols-2 gap-x-8` field rows, left untouched here — at half of a 1440px viewport

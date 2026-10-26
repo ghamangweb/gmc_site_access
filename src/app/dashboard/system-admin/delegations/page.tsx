@@ -41,7 +41,7 @@ export default async function DelegationsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Delegated Approvals"
-        subtitle="Grant a one-off stakeholder approval privilege when HCM, GMM, and DMD are all unavailable."
+        subtitle="Grant a one-off stakeholder approval privilege when CSO, HCM, GMM and EM are all unavailable."
       />
 
       <div className="flex flex-col gap-2">

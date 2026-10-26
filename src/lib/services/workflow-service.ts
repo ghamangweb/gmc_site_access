@@ -20,10 +20,13 @@ import {
   engagements,
   hospitalClearances,
   inductionRecords,
+  invitations,
   notifications,
   persons,
+  registrationRequests,
   staffUsers,
   stakeholderApprovals,
+  stakeholderRejections,
   terminationRequests,
   workflowCycles,
   workflowTransitions,
@@ -44,6 +47,7 @@ import {
   type HospitalClearanceStatus,
   isoToday,
   type ReceptionData,
+  STAKEHOLDER_ROLES,
   type WorkflowRole,
   type WorkflowState,
 } from "@/lib/domain/types";
@@ -61,6 +65,7 @@ import {
 
 export type Engagement = typeof engagements.$inferSelect;
 export type StakeholderApproval = typeof stakeholderApprovals.$inferSelect;
+export type StakeholderRejection = typeof stakeholderRejections.$inferSelect;
 export type WorkflowCycle = typeof workflowCycles.$inferSelect;
 export type HospitalClearance = typeof hospitalClearances.$inferSelect;
 
@@ -87,7 +92,7 @@ export async function getStaffByWorkflowRoles(
 }
 
 async function getStakeholdersAndSystemAdmins(): Promise<StaffUser[]> {
-  const stakeholders = await getStaffByWorkflowRoles(["HCM", "GMM", "DMD"]);
+  const stakeholders = await getStaffByWorkflowRoles([...STAKEHOLDER_ROLES]);
   const admins = await db
     .select()
     .from(staffUsers)
@@ -299,6 +304,9 @@ export async function getEngagementDetail(engagementId: string): Promise<
       engagement: Engagement;
       person: typeof persons.$inferSelect;
       approvals: StakeholderApproval[];
+      /** The most recent rejection, if any. Whether it still stands is
+       * `engagement.approvalRejectedAt`, which a fresh request clears. */
+      latestRejection: StakeholderRejection | undefined;
     }
   | undefined
 > {
@@ -312,12 +320,20 @@ export async function getEngagementDetail(engagementId: string): Promise<
     return undefined;
   }
 
-  const approvals = await db
-    .select()
-    .from(stakeholderApprovals)
-    .where(eq(stakeholderApprovals.engagementId, engagementId));
+  const [approvals, [latestRejection]] = await Promise.all([
+    db
+      .select()
+      .from(stakeholderApprovals)
+      .where(eq(stakeholderApprovals.engagementId, engagementId)),
+    db
+      .select()
+      .from(stakeholderRejections)
+      .where(eq(stakeholderRejections.engagementId, engagementId))
+      .orderBy(desc(stakeholderRejections.rejectedAt))
+      .limit(1),
+  ]);
 
-  return { ...row, approvals };
+  return { ...row, approvals, latestRejection };
 }
 
 const TERMINAL_WORKFLOW_STATES: WorkflowState[] = ["Completed", "Cancelled"];
@@ -526,22 +542,25 @@ export async function submitForStakeholderApproval(
   // emails can never disagree about what was sent.
   await db
     .update(engagements)
-    .set({ approvalRequestedAt: new Date() })
+    // Asking again after a rejection clears it: the record is back in the
+    // stakeholder queue and no longer reads as rejected.
+    .set({ approvalRequestedAt: new Date(), approvalRejectedAt: null })
     .where(eq(engagements.id, engagementId));
 
-  const recipients = await getStaffByWorkflowRoles(["HCM", "GMM", "DMD"]);
+  const recipients = await getStaffByWorkflowRoles([...STAKEHOLDER_ROLES]);
   await notifyStaff(
     recipients,
     engagementId,
-    "Stakeholder approval requested. HCM, GMM, or DMD sign-off needed.",
+    "Stakeholder approval requested. CSO, HCM, GMM or EM sign-off needed.",
   );
 
   return { recipients };
 }
 
 // Engagements Reception has sent for sign-off and nobody has signed yet. A
-// delegated approver sees only the engagement they were granted; HCM, GMM and
-// DMD see every outstanding one, since any single approval is enough.
+// delegated approver sees only the engagement they were granted; CSO, HCM, GMM
+// and EM see every outstanding one, since any single approval is enough. A
+// rejected request has `approvalRequestedAt` cleared, so it drops out here.
 export async function listEngagementsAwaitingApproval(
   delegatedApproverId?: string,
   request: PageRequest = {},
@@ -762,8 +781,14 @@ export async function applyStakeholderApproval(
   if (engagement.workflowState !== "AtReception") {
     throw new Error("Engagement is not awaiting Reception approval");
   }
+  // Rejected stands until Reception asks again, which clears it.
+  if (engagement.approvalRejectedAt) {
+    throw new Error(
+      "This request was rejected. Reception must request approval again",
+    );
+  }
 
-  const directRole = (["HCM", "GMM", "DMD"] as const).find((role) =>
+  const directRole = STAKEHOLDER_ROLES.find((role) =>
     session.workflowRoles.includes(role),
   );
   const isDelegatedApprover =
@@ -844,8 +869,20 @@ export async function applyStakeholderApproval(
         delegationGrantedAt: null,
         delegationReason: null,
       })
-      .where(eq(engagements.id, engagementId))
+      // Conditional, so a rejection that commits first wins: this then
+      // matches nothing and the approval insert above rolls back with it.
+      .where(
+        and(
+          eq(engagements.id, engagementId),
+          eq(engagements.workflowState, "AtReception"),
+          isNull(engagements.approvalRejectedAt),
+        ),
+      )
       .returning();
+
+    if (!updatedEngagement) {
+      throw new Error("This request has already been decided");
+    }
 
     await tx.insert(workflowTransitions).values({
       engagementId,
@@ -872,6 +909,139 @@ export async function applyStakeholderApproval(
   return { engagement: updated, recipients, nextRole };
 }
 
+// The Department Head who invited the visitor, when the record came from a
+// registration link. Records Reception keyed in directly have none.
+async function getInvitingDepartmentHead(
+  engagementId: string,
+): Promise<StaffUser | undefined> {
+  const [row] = await db
+    .select({ staffUser: staffUsers })
+    .from(registrationRequests)
+    .innerJoin(
+      invitations,
+      eq(registrationRequests.invitationId, invitations.id),
+    )
+    .innerJoin(staffUsers, eq(invitations.issuedBy, staffUsers.id))
+    .where(
+      and(
+        eq(registrationRequests.engagementId, engagementId),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    )
+    .limit(1);
+
+  return row?.staffUser;
+}
+
+// A stakeholder turns the request down. The record stays at Reception (this is
+// not a workflow_state move, so no transition row), leaves the stakeholder
+// queue, and reads as rejected until Reception asks again or cancels it. Like
+// approval, the first decision wins.
+export async function rejectStakeholderApproval(
+  engagementId: string,
+  session: SessionUser,
+  reason: string,
+): Promise<{
+  rejection: StakeholderRejection;
+  receptionists: StaffUser[];
+  departmentHead: StaffUser | undefined;
+}> {
+  const engagement = await getEngagementById(engagementId);
+  if (!engagement) {
+    throw new Error("Engagement not found");
+  }
+  if (engagement.workflowState !== "AtReception") {
+    throw new Error("Engagement is not awaiting Reception approval");
+  }
+  if (engagement.approvalRejectedAt) {
+    throw new Error("This request has already been rejected");
+  }
+
+  const directRole = STAKEHOLDER_ROLES.find((role) =>
+    session.workflowRoles.includes(role),
+  );
+  const isDelegatedApprover =
+    !directRole &&
+    engagement.delegatedApproverId !== null &&
+    engagement.delegatedApproverId === session.staffUserId;
+
+  if (!directRole && !isDelegatedApprover) {
+    throw new Error("Not authorized to reject this engagement");
+  }
+
+  const approverRole: ApproverRole = directRole ?? "Delegated";
+  const approverName = session.displayName ?? "";
+
+  const [receptionists, departmentHead] = await Promise.all([
+    getStaffByWorkflowRoles(["Receptionist"]),
+    getInvitingDepartmentHead(engagementId),
+  ]);
+
+  const rejection = await db.transaction(async (tx) => {
+    // Conditional for the same reason as the approval's update: whichever
+    // decision commits first wins, and the other matches nothing.
+    const [updated] = await tx
+      .update(engagements)
+      .set({
+        approvalRequestedAt: null,
+        approvalRejectedAt: new Date(),
+        delegatedApproverId: null,
+        delegationGrantedBy: null,
+        delegationGrantedAt: null,
+        delegationReason: null,
+      })
+      .where(
+        and(
+          eq(engagements.id, engagementId),
+          eq(engagements.workflowState, "AtReception"),
+          isNull(engagements.approvalRejectedAt),
+        ),
+      )
+      .returning({ id: engagements.id });
+
+    if (!updated) {
+      throw new Error("This request has already been decided");
+    }
+
+    const [inserted] = await tx
+      .insert(stakeholderRejections)
+      .values({
+        engagementId,
+        approverRole,
+        approverStaffUserId: session.staffUserId,
+        approverName,
+        reason,
+        isDelegated: isDelegatedApprover,
+      })
+      .returning();
+
+    const recipients = departmentHead
+      ? [
+          ...receptionists.filter((user) => user.id !== departmentHead.id),
+          departmentHead,
+        ]
+      : receptionists;
+
+    if (recipients.length > 0) {
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: `Stakeholder approval rejected by ${approverName} (${approverRole}). Reason: ${reason}`,
+        })),
+      );
+    }
+
+    return inserted;
+  });
+
+  if (!rejection) {
+    throw new Error("Failed to record the rejection");
+  }
+
+  return { rejection, receptionists, departmentHead };
+}
+
 export async function requestDelegatedApproval(
   engagementId: string,
   reason: string,
@@ -888,7 +1058,7 @@ export async function requestDelegatedApproval(
   await notifyStaff(
     recipients,
     engagementId,
-    `Delegated approval requested. HCM, GMM, and DMD are unavailable. Reason: ${reason}`,
+    `Delegated approval requested. CSO, HCM, GMM and EM are unavailable. Reason: ${reason}`,
   );
 
   return { recipients };

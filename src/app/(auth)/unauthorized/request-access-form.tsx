@@ -20,9 +20,10 @@ import { GMC_LIAISON_DEPARTMENTS } from "@/lib/domain/types";
 const ROLE_OPTIONS = [
   "Guest",
   "Receptionist",
+  "CSO",
   "HCM",
   "GMM",
-  "DMD",
+  "EM",
   "HospitalStaff",
   "TrainingStaff",
   "SecurityStaff",

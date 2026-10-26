@@ -61,7 +61,7 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   │   ├── layout.tsx                → shared shell: session + unread count → DashboardShell + auto breadcrumbs
     │   │   ├── page.tsx                  → role router (SystemAdmin → system-admin/users; others → placeholder)
     │   │   ├── (workflow)/               → route group — workflow-layer queues (no URL segment)
-    │   │   │   ├── approvals/            → HCM/GMM/DMD queue + /[engagementId] detail route (same EngagementDetail component as Reception's, different breadcrumb)
+    │   │   │   ├── approvals/            → CSO/HCM/GMM/EM queue + /[engagementId] detail route (same EngagementDetail component as Reception's, different breadcrumb)
     │   │   │   ├── department/           → Department Head invitation console: send invite, log sent invitations, revoke
     │   │   │   ├── reception/
     │   │   │   ├── hospital/
@@ -433,11 +433,29 @@ guard, SAS viewing and delete all stay in one place instead of every downstream 
 |---|---|---|
 | id | uuid | PK |
 | engagement_id | uuid | FK |
-| approver_role | text | HCM \| GMM \| DMD |
+| approver_role | text | CSO \| HCM \| GMM \| EM \| Delegated (rows before 2026-10-26 may read DMD) |
 | approver_staff_user_id | uuid | FK |
 | approver_name | text | |
 | signature | text | |
 | approved_at | timestamptz | |
+
+### `stakeholder_rejections` (2026-10-26)
+
+History, one row per rejection (no unique constraint: a record can be rejected, re-requested and
+rejected again). The live state is `engagements.approval_rejected_at`; a rejection also clears
+`approval_requested_at` so the record leaves the stakeholder queue. Reception asking again clears
+`approval_rejected_at`. Not a workflow_state move, so no `workflow_transitions` row.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| engagement_id | uuid | FK |
+| approver_role | text | CSO \| HCM \| GMM \| EM \| Delegated |
+| approver_staff_user_id | uuid | FK |
+| approver_name | text | |
+| reason | text | Encrypted |
+| is_delegated | boolean | |
+| rejected_at | timestamptz | |
 
 ### `workflow_cycles`
 
@@ -559,7 +577,8 @@ so a mail outage can never roll back a workflow transition.
 | Access/role requested | ✅ | ✅ | All System Administrators |
 | User provisioned | — | ✅ | The provisioned user |
 | PIN reset | — | ✅ | The affected user |
-| Stakeholder approval requested | ✅ | ✅ | HCM, GMM, DMD (all three) |
+| Stakeholder approval requested | ✅ | ✅ | CSO, HCM, GMM, EM (all four) |
+| Stakeholder approval rejected | ✅ | ✅ | All Receptionists (link to the record) + the Department Head who issued the invitation, if any ("Visit dashboard") |
 | Approval received | ✅ | ✅ | Next layer per access path |
 | Delegated approval requested / granted | ✅ | ✅ | Stakeholders + System Admin / the delegate |
 | Hospital cleared / Unfit | ✅ | ✅ | Training School / Reception |
@@ -567,7 +586,7 @@ so a mail outage can never roll back a workflow transition.
 | Termination requested | ✅ | ✅ | System Administrators |
 
 **A role with no holders is reported, not swallowed.** `notifyStaff` and the email loops no-op
-on an empty recipient list, so before 2026-10-12 requesting approval with no HCM/GMM/DMD
+on an empty recipient list, so before 2026-10-12 requesting approval with no stakeholder
 provisioned returned plain success while telling nobody — the engagement then sat in a queue
 with no audience. Those actions now return a `warning` naming the missing role. The public
 submission action is the exception: it **logs** the gap instead, because that warning would
@@ -650,7 +669,7 @@ Rules the AI agent must never violate:
 - All auth logic in `lib/auth/` — no scattered auth checks
 - A staff user holds at most one workflow role at a time — the Provision UI is
   single-select (`workflow_roles` stays `text[]` in the schema, but the UI never lets a
-  System Admin pick more than one). Temporary coverage for an absent HCM/GMM/DMD goes
+  System Admin pick more than one). Temporary coverage for an absent CSO/HCM/GMM/EM goes
   through Delegated Approval (Slice 2's one-off, audited, revocable grant) — never by
   permanently assigning someone a second workflow role
 - `/register` is never wrapped by `src/proxy.ts` and never reads session/JWT state

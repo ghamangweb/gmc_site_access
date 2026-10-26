@@ -183,6 +183,13 @@
       "when": 1792604714363,
       "tag": "0025_encrypt_sensitive_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793007887393,
+      "tag": "0026_stakeholder_rejections",
+      "breakpoints": true
     }
   ]
 }
