@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth/entra";
+import { withNext } from "@/lib/auth/next-path";
 import type { WorkflowRole } from "@/lib/domain/types";
 
 const LAYER_ROLES: Record<string, WorkflowRole[]> = {
@@ -15,10 +16,15 @@ const LAYER_ROLES: Record<string, WorkflowRole[]> = {
 
 export default auth((req) => {
   const session = req.auth;
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
+  // The page asked for, e.g. a record opened from an email. Carried through
+  // sign-in and PIN so the user lands on it, not on their default dashboard.
+  const requested = `${pathname}${search}`;
 
   if (!session?.user) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+    return NextResponse.redirect(
+      new URL(withNext("/sign-in", requested), req.url),
+    );
   }
 
   if (session.user.systemRole === "User") {
@@ -27,12 +33,16 @@ export default auth((req) => {
 
   if (!session.user.pinConfirmed) {
     const pinPath = session.user.hasPinSet ? "/pin" : "/pin/setup";
-    return NextResponse.redirect(new URL(pinPath, req.url));
+    return NextResponse.redirect(
+      new URL(withNext(pinPath, requested), req.url),
+    );
   }
 
   if (pathname.startsWith("/dashboard/system-admin")) {
     if (session.user.systemRole !== "SystemAdmin") {
-      return new NextResponse("Forbidden", { status: 403 });
+      return NextResponse.redirect(
+        new URL(withNext("/no-access", requested), req.url),
+      );
     }
     return NextResponse.next();
   }
@@ -43,7 +53,11 @@ export default auth((req) => {
     requiredRoles &&
     !requiredRoles.some((role) => session.user.workflowRoles.includes(role))
   ) {
-    return new NextResponse("Forbidden", { status: 403 });
+    // A page, not a bare "Forbidden": the user is told what happened and
+    // given a way back (issue #25).
+    return NextResponse.redirect(
+      new URL(withNext("/no-access", requested), req.url),
+    );
   }
 
   return NextResponse.next();

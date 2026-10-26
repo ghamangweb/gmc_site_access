@@ -3,12 +3,21 @@ import { redirect } from "next/navigation";
 
 import { SubmitButton } from "@/components/ui/submit-button";
 import { signIn } from "@/lib/auth/entra";
+import { safeNextPath } from "@/lib/auth/next-path";
 import { getSession } from "@/lib/auth/session";
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  // The page that sent them here, if any. After Microsoft sign-in they go
+  // straight to it; the proxy then asks for the PIN and keeps it along.
+  const next = safeNextPath((await searchParams).next);
+
   const session = await getSession();
   if (session) {
-    redirect("/");
+    redirect(next ?? "/");
   }
 
   return (
@@ -24,7 +33,7 @@ export default async function SignInPage() {
       <form
         action={async () => {
           "use server";
-          await signIn("microsoft-entra-id");
+          await signIn("microsoft-entra-id", { redirectTo: next ?? "/" });
         }}
       >
         <SubmitButton size="lg" className="w-full md:w-[220px]">

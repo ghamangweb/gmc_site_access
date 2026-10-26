@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { verifyPinAction } from "@/actions/auth";
 import { PinInput } from "@/components/auth/pin-input";
+import { safeNextPath } from "@/lib/auth/next-path";
 
 export default function PinPage() {
   const router = useRouter();
@@ -17,7 +18,12 @@ export default function PinPage() {
     startTransition(async () => {
       const result = await verifyPinAction(pin);
       if (result.success) {
-        router.push("/dashboard");
+        // Back to the page they originally asked for, if the proxy sent
+        // them here from one. Read at submit time, so the page stays static.
+        const next = safeNextPath(
+          new URLSearchParams(window.location.search).get("next"),
+        );
+        router.push(next ?? "/dashboard");
       } else {
         toast.error("Incorrect PIN", { description: result.error });
         setDigits(["", "", "", ""]);

@@ -1,4 +1,4 @@
-import { InboxIcon, UsersRound } from "lucide-react";
+import { CircleXIcon, InboxIcon, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -13,19 +13,29 @@ import { EmptyState } from "@/components/ui/empty-state";
 import {
   Table,
   TableBody,
+  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { toPageRequest } from "@/lib/domain/pagination";
-import type { WorkflowState } from "@/lib/domain/types";
+import {
+  ACCESS_PURPOSE_LABELS,
+  type AccessPurpose,
+  type WorkflowState,
+} from "@/lib/domain/types";
 import {
   countOutstandingRegistrationRequests,
   countRegistrationRequestsByType,
   listRegistrationRequests,
 } from "@/lib/services/registration-service";
-import { listEngagementsWithPerson } from "@/lib/services/workflow-service";
+import {
+  countRejectedEngagements,
+  listEngagementsWithPerson,
+  listRejectedEngagements,
+} from "@/lib/services/workflow-service";
+import { formatQueueDate } from "@/lib/utils";
 
 // Switching Local/Foreign keeps whatever is in the search box but drops the
 // page — page 4 of the old filter means nothing under the new one.
@@ -84,7 +94,8 @@ export default async function ReceptionQueuePage({
   // the same information as two views of one page, so only the active one is
   // queried and rendered. Submissions is the default: it is where the
   // workflow starts.
-  const activeView = view === "engagements" ? "engagements" : "submissions";
+  const activeView =
+    view === "engagements" || view === "rejected" ? view : "submissions";
 
   // Anything other than a known registration type falls back to "All" rather
   // than showing an empty table for a typo'd URL.
@@ -95,9 +106,10 @@ export default async function ReceptionQueuePage({
 
   // Counts drive the view tabs and must reflect everything, not the page on
   // screen, so they are their own queries.
-  const [typeCounts, outstandingCount] = await Promise.all([
+  const [typeCounts, outstandingCount, rejectedCount] = await Promise.all([
     countRegistrationRequestsByType(),
     countOutstandingRegistrationRequests(),
+    countRejectedEngagements(),
   ]);
 
   const submissions =
@@ -113,6 +125,13 @@ export default async function ReceptionQueuePage({
       ? await listEngagementsWithPerson(request)
       : undefined;
 
+  // Rejected by a stakeholder and waiting on Reception: request approval
+  // again, or cancel. Leaves this view as soon as either happens.
+  const rejected =
+    activeView === "rejected"
+      ? await listRejectedEngagements(request)
+      : undefined;
+
   const firstName = session.displayName?.split(" ")[0] ?? "there";
 
   const views = [
@@ -126,6 +145,12 @@ export default async function ReceptionQueuePage({
       label: "Engagements",
       value: "engagements",
       href: "/dashboard/reception?view=engagements",
+    },
+    {
+      label: "Rejected",
+      value: "rejected",
+      href: "/dashboard/reception?view=rejected",
+      count: rejectedCount,
     },
   ];
 
@@ -151,7 +176,9 @@ export default async function ReceptionQueuePage({
           placeholder={
             activeView === "submissions"
               ? "Search submissions"
-              : "Search engagements"
+              : activeView === "rejected"
+                ? "Search rejected records"
+                : "Search engagements"
           }
         />
       </div>
@@ -291,6 +318,78 @@ export default async function ReceptionQueuePage({
             total={engagements.total}
             pageParam="page"
             searchParams={{ q, view: "engagements" }}
+          />
+        </div>
+      )}
+
+      {activeView === "rejected" && rejected && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {rejected.rows.length === 0 ? (
+            <EmptyState
+              icon={CircleXIcon}
+              title="No rejected records"
+              description="When a stakeholder rejects an approval request, the record appears here until it is requested again or cancelled."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Passport No.</TableHead>
+                  <TableHead>Nature of Visit</TableHead>
+                  <TableHead>Rejected By</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead>Rejected</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rejected.rows.map(({ engagement, person, rejection }) => (
+                  <TableRow key={engagement.id} className="hover:bg-muted/50">
+                    <TableCell>
+                      <Link href={`/dashboard/reception/${engagement.id}`}>
+                        {person.fullName}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{person.passportNo}</TableCell>
+                    <TableCell>
+                      {/* SAFETY: access_purpose is written only from the
+                          AccessPurpose union by `createEngagement`. */}
+                      {ACCESS_PURPOSE_LABELS[
+                        engagement.accessPurpose as AccessPurpose
+                      ] ?? engagement.accessPurpose}
+                    </TableCell>
+                    <TableCell>
+                      {rejection
+                        ? `${rejection.approverName} (${rejection.approverRole})`
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="max-w-xs whitespace-normal">
+                      {rejection?.reason ?? "-"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {engagement.approvalRejectedAt
+                        ? formatQueueDate(engagement.approvalRejectedAt)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild size="sm">
+                        <Link href={`/dashboard/reception/${engagement.id}`}>
+                          Review
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <QueuePagination
+            page={rejected.page}
+            pageSize={rejected.pageSize}
+            total={rejected.total}
+            pageParam="page"
+            searchParams={{ q, view: "rejected" }}
           />
         </div>
       )}

@@ -7,19 +7,9 @@ import { ReceptionForm } from "@/components/workflow/reception-form";
 import { RegistrationCompletionForm } from "@/components/workflow/registration-completion-form";
 import { requireWriteAccess } from "@/lib/auth/guards";
 import { registrationRequestToFormValues } from "@/lib/domain/registration-prefill";
-import { type ApplicableDocType, DOC_TYPES } from "@/lib/domain/types";
+import { isApplicableDocType } from "@/lib/domain/types";
 import { getDocumentsForInvitation } from "@/lib/services/document-service";
 import { getRegistrationRequest } from "@/lib/services/registration-service";
-
-function isApplicableDocType(docType: string): docType is ApplicableDocType {
-  // SAFETY: widening the readonly tuple to `string[]` only to ask whether an
-  // arbitrary `documents.doc_type` (a plain text column) is one of its
-  // members — the predicate is what narrows, to the tuple's own member type
-  // minus the hospital form, which is never a registration upload.
-  const known: readonly string[] = DOC_TYPES;
-
-  return docType !== "hospital_fitness_form" && known.includes(docType);
-}
 
 export default async function NewReceptionPage({
   searchParams,

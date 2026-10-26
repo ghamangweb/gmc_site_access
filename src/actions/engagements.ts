@@ -466,7 +466,6 @@ export async function submitHospitalClearanceAction(
             : hospitalFitWithConditionsTemplate({
                 personName: detail.person.fullName,
                 engagementId,
-                doctorComments: input.doctorComments,
               })),
         });
 

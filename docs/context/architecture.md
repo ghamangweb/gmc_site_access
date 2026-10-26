@@ -410,7 +410,7 @@ ids. The table notes below show the logical type; the database column is `text`.
 | engagement_id | uuid | Nullable FK → engagements — a staff upload against a real Engagement |
 | invitation_id | uuid | Nullable FK → invitations — a visitor's registration upload, made before any Engagement exists |
 | workflow_cycle_id | uuid | Nullable — only set for engagement-parented uploads |
-| doc_type | text | passport_biodata, hospital_fitness_form, etc. |
+| doc_type | text | passport_biodata, valid_visa, etc. (see `DOC_TYPES`; Hospital uploads none, `hospital_fitness_form` removed 2026-10-26) |
 | blob_url | text | |
 | file_key | text | UploadThing file key — what delete and signed-URL generation address |
 | file_url | text | UploadThing file URL (`ufsUrl`); not publicly readable, every view goes through a 15-minute signed URL |
