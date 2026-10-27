@@ -341,7 +341,6 @@ export async function rejectStakeholderApprovalAction(
           to: user.email,
           ...stakeholderApprovalRejectedTemplate({
             personName: detail.person.fullName,
-            engagementId,
             rejectedBy: rejection.approverName,
             approverRole: rejection.approverRole,
             reason: trimmedReason,
@@ -385,7 +384,7 @@ export async function requestDelegatedApprovalAction(
   reason: string,
 ): Promise<ActionResult> {
   try {
-    await requireWriteAccess("Receptionist");
+    const session = await requireWriteAccess("Receptionist");
     if (!reason) {
       return { success: false, error: "Reason is required" };
     }
@@ -400,8 +399,8 @@ export async function requestDelegatedApprovalAction(
           to: recipient.email,
           ...delegatedApprovalRequestedTemplate({
             personName: detail.person.fullName,
-            engagementId,
-            reason,
+            receptionistName:
+              session.displayName ?? session.email ?? "A receptionist",
           }),
         });
         if (!sent) allSent = false;
@@ -466,6 +465,7 @@ export async function submitHospitalClearanceAction(
             : hospitalFitWithConditionsTemplate({
                 personName: detail.person.fullName,
                 engagementId,
+                doctorComments: input.doctorComments.trim(),
               })),
         });
 
@@ -604,7 +604,6 @@ export async function requestTerminationAction(
           to: recipient.email,
           ...terminationRequestedTemplate({
             personName: detail.person.fullName,
-            engagementId,
             reason,
           }),
         });

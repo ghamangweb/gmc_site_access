@@ -564,9 +564,12 @@ once the production key is set by the client in the host's sensitive env setting
       `bun run db:backfill:encryption` **written, NOT run**
 - [ ] **Apply: `bun run db:migrate` then immediately `bun run db:backfill:encryption`.** The running
       app errors between them (and the dev server must be restarted after)
+- [x] (2026-10-27) Also encrypted: approval signature, access card number, delegation reason
+      (engagements + approvals). Already `text`, so no migration. Backfill list covers them and the
+      missed `stakeholder_rejections.reason`
 - [ ] Step 4, documents: server-side upload route, per-file key, encrypted file name, 4MB cap, image
       downscaling, viewer decrypts
-- Not encrypted: staff users, dates and states, ids. Add `ENCRYPTION_KEY` to every other environment
+- Not encrypted: staff users, access purpose (Work/Visit/VisitMine), dates and states, ids. Add `ENCRYPTION_KEY` to every other environment
   before deploying, or the app will not start
 
 ### Access expiry: validation + effective state (2026-10-21) ✅
@@ -1132,6 +1135,25 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
       now rejects any role not on the list
 - [ ] Optional, not done: show full role names (e.g. "Chief Sustainability Officer (CSO)")
 - [x] `tsc --noEmit`, `biome check` clean
+
+---
+
+## Fit with Conditions requires doctor's comments + agreed email copy (2026-10-27)
+
+- [x] `recordHospitalClearance` rejects Fit with Conditions with empty doctor's comments; the
+      Hospital form marks the field required (`*`) and disables Submit until comments are entered
+- [x] Reception's Fit with Conditions email now carries the doctor's comments and uses the agreed
+      copy (`docs/email-templates.md` #11). Reverses the issue #27 decision for this email only
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual check: Hospital selects Fit with Conditions → Submit stays disabled until comments
+      entered; Reception email shows the comments
+- [x] All emails rewritten to the agreed plain-language copy in `docs/email-templates.md`:
+      privacy link on the invitation, company name in Reception's registration email,
+      receptionist's name in the delegated-approval request, one "due for induction" email to
+      Training School (from management approval or Hospital), "due for medicals" to Hospital
+- [x] `ROLE_LABELS` / `SYSTEM_ROLE_LABELS` (`lib/domain/types.ts`) so emails never show code
+      values like `HospitalStaff`
+- [ ] Manual check: trigger a few emails and read them in the inbox
 
 ---
 

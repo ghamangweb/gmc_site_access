@@ -1489,6 +1489,14 @@ export async function recordHospitalClearance(
   ) {
     throw new Error("Engagement is not awaiting Hospital clearance");
   }
+  // The conditions are what Reception and Training School act on, so a
+  // conditional clearance without them tells nobody anything.
+  if (
+    input.clearanceStatus === "FitWithConditions" &&
+    !input.doctorComments.trim()
+  ) {
+    throw new Error("Doctor's comments are required for Fit with Conditions");
+  }
 
   const outcome: "Cleared" | "Unfit" =
     input.clearanceStatus === "Unfit" ? "Unfit" : "Cleared";
