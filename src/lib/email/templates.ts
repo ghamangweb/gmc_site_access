@@ -6,8 +6,6 @@ import {
   type WorkflowRole,
 } from "@/lib/domain/types";
 
-// Wording agreed in docs/email-templates.md — change the copy there first.
-
 export type EmailTemplate = {
   to: string;
   subject: string;
@@ -42,6 +40,8 @@ function button(href: string, label: string): string {
   return `<p><a href="${href}">${label}</a></p>`;
 }
 
+const HELLO = "<p>Hello,</p>";
+
 // Approver roles are stored as text and include values no longer in the
 // list ("Delegated", the retired "DMD"), so an unknown one shows as stored.
 function roleLabel(role: string): string {
@@ -58,11 +58,11 @@ export function accessRequestedTemplate(opts: {
   const requesterEmail = escapeHtml(opts.requesterEmail);
   const requestedRole = escapeHtml(roleLabel(opts.requestedRole));
   const departmentLine = opts.department
-    ? `<p>Department: ${escapeHtml(opts.department)}</p>`
+    ? `<br>Department: ${escapeHtml(opts.department)}`
     : "";
   return {
-    subject: subject(`${opts.requesterName} has requested an account`),
-    html: `<p>${requesterName} (${requesterEmail}) has asked for an account as <strong>${requestedRole}</strong>.</p>${departmentLine}${button(`${baseUrl()}/dashboard/system-admin/users`, "Review and set up the account")}`,
+    subject: subject(`New Staff Account Request - ${opts.requesterName}`),
+    html: `${HELLO}<p>A new staff account request has been submitted with the following details:</p><p>Name: ${requesterName}<br>Email Address: ${requesterEmail}<br>Requested Role: ${requestedRole}${departmentLine}</p><p>Please review the request and take the appropriate action regarding account approval.</p>${button(`${baseUrl()}/dashboard/system-admin/users`, "Review Account Request")}`,
   };
 }
 
@@ -84,8 +84,8 @@ export function accessApprovedTemplate(opts: {
     ? `<br>Department: ${escapeHtml(opts.department)}`
     : "";
   return {
-    subject: subject("your account is ready"),
-    html: `<p>Hi ${recipientName},</p><p>Your GMC Site Access account has been approved.</p><p>Your role: ${roles}${departmentLine}</p><p>To get started, sign in and create your PIN.</p>${button(baseUrl(), "Sign in")}`,
+    subject: subject("Your Account Has Been Approved"),
+    html: `<p>Hi ${recipientName},</p><p>Your GMC Site Access account has been approved. Your account details are as follows:</p><p>Your role: ${roles}${departmentLine}</p><p>To get started, sign in to the system and follow the instructions to create your PIN.</p>${button(baseUrl(), "Sign In to GMC Site Access")}<p>If you experience any difficulty accessing your account, please contact your System Administrator.</p>`,
   };
 }
 
@@ -94,20 +94,18 @@ export function pinResetTemplate(opts: {
 }): MessageTemplate {
   const recipientName = escapeHtml(opts.recipientName);
   return {
-    subject: subject("your PIN has been reset"),
-    html: `<p>Hi ${recipientName},</p><p>A System Administrator has reset your PIN. The next time you sign in, you will be asked to create a new one.</p>${button(baseUrl(), "Sign in")}<p>If you did not ask for this, please contact your System Administrator.</p>`,
+    subject: subject("PIN Reset Notification"),
+    html: `<p>Hi ${recipientName},</p><p>Your GMC Site Access PIN has been reset by the System Administrator. You will be prompted to create a new PIN the next time you sign in.</p>${button(baseUrl(), "Sign In to GMC Site Access")}<p>If you did not expect this change, please contact your System Administrator promptly.</p>`,
   };
 }
 
 export function departmentInvitationTemplate(opts: {
   token: string;
-  department: string;
 }): MessageTemplate {
-  const department = escapeHtml(opts.department);
   const link = `${baseUrl()}/register?token=${encodeURIComponent(opts.token)}`;
   return {
-    subject: subject("you're invited to register for a site visit"),
-    html: `<p>Hello,</p><p>The ${department} department at Ghana Manganese Company has invited you to register for a site visit.</p>${button(link, "Start your registration")}<p>To learn how we use your information, read our <a href="${baseUrl()}/privacy-policy">Privacy Policy</a>.</p><p>If you were not expecting this invitation, you can ignore this email.</p>`,
+    subject: subject("Invitation to Register for a Site Visit"),
+    html: `${HELLO}<p>Ghana Manganese Company (GMC) has invited you to register for a site visit.</p><p>Please use the link below to complete your registration.</p>${button(link, "Complete Your Registration")}<p>For information about how your personal information is collected and used, please review our <a href="${baseUrl()}/privacy-policy">Privacy Policy</a>.</p><p>If you were not expecting this invitation, you may disregard this email.</p>`,
   };
 }
 
@@ -123,8 +121,8 @@ export function registrationSubmittedTemplate(opts: {
 
   if (opts.audience === "DepartmentHead") {
     return {
-      subject: subject(`${visitorName} has completed their registration`),
-      html: `<p>${visitor} has completed the registration form for site access.</p>`,
+      subject: subject(`Registration Submitted for ${visitorName}`),
+      html: `${HELLO}<p>${visitor} has successfully submitted their registration form for site access at Ghana Manganese Company (GMC).</p><p>This notification is for your information.</p>`,
     };
   }
 
@@ -132,8 +130,8 @@ export function registrationSubmittedTemplate(opts: {
     ? ` from ${escapeHtml(opts.companyName)}`
     : "";
   return {
-    subject: subject("new visitor registration"),
-    html: `<p>${visitor}${company} has registered for site access.</p>${button(`${baseUrl()}/dashboard/reception`, "Go to dashboard")}`,
+    subject: subject("New Visitor Registration"),
+    html: `${HELLO}<p>A new site-access registration has been submitted by ${visitor}${company}.</p><p>Please access the Site Access dashboard to review the registration and proceed with the necessary processing.</p>${button(`${baseUrl()}/dashboard/reception`, "Go To Dashboard")}`,
   };
 }
 
@@ -168,8 +166,8 @@ export function stakeholderApprovalRequestedTemplate(opts: {
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   return {
-    subject: subject(`your approval is needed for ${opts.personName}`),
-    html: `<p>Reception has requested your approval for ${personName}'s site access application.</p><p>You can review the full details on your dashboard using the link below.</p>${button(approvalsEngagementLink(opts.engagementId), "Review the application")}`,
+    subject: subject(`Management Approval Required - ${opts.personName}`),
+    html: `${HELLO}<p>Reception has submitted ${personName}'s site-access application for your review and approval.</p><p>Please review the application details on the Site Access dashboard and record your decision.</p>${button(approvalsEngagementLink(opts.engagementId), "Review Application")}`,
   };
 }
 
@@ -181,8 +179,8 @@ function dueForInductionTemplate(opts: {
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   return {
-    subject: subject(`${opts.personName} is due for induction`),
-    html: `<p>${personName}'s site access application has been approved by management, and they are now due for induction.</p><p>This is for your information. Once induction has been done, you can record it on the application.</p>${button(trainingEngagementLink(opts.engagementId), "Record induction status")}`,
+    subject: subject(`Induction Required - ${opts.personName}`),
+    html: `${HELLO}<p>${personName} is now due for the required induction.</p><p>Please arrange the induction as applicable and update the induction status on the application once it has been completed.</p>${button(trainingEngagementLink(opts.engagementId), "Record Induction Status")}`,
   };
 }
 
@@ -199,15 +197,17 @@ export function stakeholderApprovalReceivedTemplate(opts: {
 
   const personName = escapeHtml(opts.personName);
   return {
-    subject: subject(`${opts.personName} is due for medicals`),
-    html: `<p>${personName}'s site access application has been approved by management, and is due for medicals.</p><p>This is for your information. Once the medicals have been done, you can record the result on the application.</p>${button(hospitalEngagementLink(opts.engagementId), "Record medical status")}`,
+    subject: subject(`Medical Assessment Required - ${opts.personName}`),
+    html: `${HELLO}<p>Management has approved ${personName}'s site-access application, and the individual is now due for a medical assessment.</p><p>Please carry out the required assessment and update the medical status on the application once the assessment has been completed.</p>${button(hospitalEngagementLink(opts.engagementId), "Record Medical Status")}`,
   };
 }
 
-// Each audience goes to its own dashboard: the Department Head cannot open a
-// Reception record, and the notification sits on both dashboards.
+// Reception can open the application; the Department Head cannot open a
+// Reception record, so theirs goes to their dashboard, where the
+// notification sits.
 export function stakeholderApprovalRejectedTemplate(opts: {
   personName: string;
+  engagementId: string;
   rejectedBy: string;
   approverRole: string;
   reason: string;
@@ -217,14 +217,14 @@ export function stakeholderApprovalRejectedTemplate(opts: {
   const rejectedBy = escapeHtml(opts.rejectedBy);
   const approverRole = escapeHtml(roleLabel(opts.approverRole));
   const reason = escapeHtml(opts.reason);
-  const dashboard =
+  const link =
     opts.audience === "Receptionist"
-      ? `${baseUrl()}/dashboard/reception`
+      ? engagementLink(opts.engagementId)
       : `${baseUrl()}/dashboard/department`;
 
   return {
-    subject: subject(`${opts.personName}'s application was not approved`),
-    html: `<p>${rejectedBy}, ${approverRole}, did not approve ${personName}'s site access application.</p><p>Reason given: ${reason}</p>${button(dashboard, "Go to your dashboard")}`,
+    subject: subject(`Application Not Approved - ${opts.personName}`),
+    html: `${HELLO}<p>The site-access application for ${personName} has been declined by ${rejectedBy}, ${approverRole}.</p><p>Reason provided: ${reason}</p><p>Please review the application and the decision details on the Site Access dashboard.</p>${button(link, "View Application")}`,
   };
 }
 
@@ -235,8 +235,8 @@ export function delegatedApprovalRequestedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   const receptionistName = escapeHtml(opts.receptionistName);
   return {
-    subject: subject("delegated approval request"),
-    html: `<p>${receptionistName} is requesting a delegated approval for ${personName}'s site access application.</p>${button(`${baseUrl()}/dashboard/system-admin/delegations`, "Review request")}`,
+    subject: subject(`Delegated Approval Request - ${opts.personName}`),
+    html: `${HELLO}<p>${receptionistName} is requesting a delegated approval for ${personName}'s site access application.</p>${button(`${baseUrl()}/dashboard/system-admin/delegations`, "Review request")}`,
   };
 }
 
@@ -247,7 +247,7 @@ export function delegatedApprovalGrantedTemplate(opts: {
   const recipientName = escapeHtml(opts.recipientName);
   return {
     subject: subject("you can now approve this application"),
-    html: `<p>Hi ${recipientName},</p><p>You've been granted a one-off delegated approval privilege for an engagement.</p>${button(engagementLink(opts.engagementId), "Complete the approval")}`,
+    html: `<p>Hi ${recipientName},</p><p>Your request for delegated approval has been granted. You are now authorised to approve the specified engagement on a one-time basis through the GMC Site Access System.</p><p>Please use the link below to complete the approval process.</p>${button(engagementLink(opts.engagementId), "Complete Approval")}`,
   };
 }
 
@@ -265,8 +265,8 @@ export function inductionCompletedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
 
   return {
-    subject: subject(`${opts.personName} is ready for an access card`),
-    html: `<p>${personName} has completed induction and is ready for biometrics.</p>${button(securityEngagementLink(opts.engagementId), "Review records")}`,
+    subject: subject(`Induction Completed - ${opts.personName}`),
+    html: `${HELLO}<p>${personName} has successfully completed the required induction and is ready for biometric registration and access-card issuance, as applicable.</p><p>Please review the individual's records and complete the necessary actions.</p>${button(securityEngagementLink(opts.engagementId), "Review Records")}`,
   };
 }
 
@@ -276,26 +276,20 @@ export function hospitalUnfitTemplate(opts: {
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   return {
-    subject: subject(`${opts.personName} did not pass the medical check`),
-    html: `<p>${personName} has been assessed as unfit following their medicals and is pending re-evaluation.</p>${button(engagementLink(opts.engagementId), "View records")}`,
+    subject: subject(`Medical Assessment Update - ${opts.personName}`),
+    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Unfit. The application is currently pending re-evaluation.</p><p>Please review the application for the latest status and any further action required.</p>${button(engagementLink(opts.engagementId), "View Application Records")}`,
   };
 }
 
-// Reception's half of a conditional clearance: the conditions are theirs to
-// manage, so the doctor's comments travel with the notice.
 export function hospitalFitWithConditionsTemplate(opts: {
   personName: string;
   engagementId: string;
-  doctorComments: string;
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
-  const doctorComments = escapeHtml(opts.doctorComments);
 
   return {
-    subject: subject(
-      `${opts.personName} passed the medical check with conditions`,
-    ),
-    html: `<p>${personName} has been assessed as fit with conditions following their medicals and is now due for induction.</p><p>Doctor's comments: ${doctorComments}</p>${button(engagementLink(opts.engagementId), "View hospital record")}`,
+    subject: subject(`Medical Assessment Update - ${opts.personName}`),
+    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Fit with Conditions. The individual is now due for induction.</p><p>Please review the application and take any necessary follow-up action.</p>${button(engagementLink(opts.engagementId), "View Hospital Record")}`,
   };
 }
 
@@ -310,8 +304,8 @@ export function accessActivatedTemplate(opts: {
   const expiry = escapeHtml(opts.accessCardExpiry);
 
   return {
-    subject: subject(`${opts.personName} now has site access`),
-    html: `<p>${personName} now has site access.</p><p>Access card number: ${card}<br>Valid until: ${expiry}</p>${button(engagementLink(opts.engagementId), "View records")}`,
+    subject: subject(`Access Activated - ${opts.personName}`),
+    html: `${HELLO}<p>This is to confirm that site access has been successfully activated for ${personName}.</p><p>The access details are as follows:</p><p>Access Card Number: ${card}<br>Valid Until: ${expiry}</p><p>Please refer to the application for the complete access record.</p>${button(engagementLink(opts.engagementId), "View Application Records")}`,
   };
 }
 
@@ -323,8 +317,9 @@ export function terminationRequestedTemplate(opts: {
   const personName = escapeHtml(opts.personName);
   const reason = escapeHtml(opts.reason);
   return {
-    subject: subject("Access Revocation"),
-    html: `<p>Reception has asked for ${personName}'s site access to be revoked.</p><p>Reason given: ${reason}</p>${button(`${baseUrl()}/dashboard/security?view=revocations`, "Go to dashboard")}`,
+    // Exactly as agreed: this subject has no "GMC Site Access:" prefix.
+    subject: `Revocation Request - ${opts.personName}`,
+    html: `${HELLO}<p>Reception has submitted a request to revoke ${personName}'s site access.</p><p>Reason for revocation: ${reason}</p><p>Please review the request and proceed with the revocation through the GMC Site Access Management System.</p>${button(`${baseUrl()}/dashboard/security?view=revocations`, "Review Revocation Request")}`,
   };
 }
 
@@ -335,7 +330,7 @@ export function accessRevokedTemplate(opts: {
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   return {
-    subject: subject(`site access revoked for ${opts.personName}`),
-    html: `<p>Security has revoked ${personName}'s site access.</p>${button(engagementLink(opts.engagementId), "Open the application")}`,
+    subject: subject(`Access Revoked - ${opts.personName}`),
+    html: `${HELLO}<p>This is to confirm that ${personName}'s site access has been successfully revoked by Security.</p><p>Please refer to the application for the updated access status and related records.</p>${button(engagementLink(opts.engagementId), "Open Application")}`,
   };
 }

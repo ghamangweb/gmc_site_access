@@ -38,7 +38,7 @@ export async function issueInvitationAction(
       return { success: false, error: "Select a registration type" };
     }
 
-    const { token, department } = await issueInvitation(
+    const { token } = await issueInvitation(
       session.staffUserId,
       email,
       registrationType,
@@ -46,7 +46,7 @@ export async function issueInvitationAction(
 
     const emailSent = await sendEmail({
       to: email,
-      ...departmentInvitationTemplate({ token, department }),
+      ...departmentInvitationTemplate({ token }),
     });
 
     revalidatePath("/dashboard/department");
