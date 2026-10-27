@@ -1142,18 +1142,31 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 - [x] `recordHospitalClearance` rejects Fit with Conditions with empty doctor's comments; the
       Hospital form marks the field required (`*`) and disables Submit until comments are entered
-- [x] Reception's Fit with Conditions email now carries the doctor's comments and uses the agreed
-      copy (`docs/email-templates.md` #11). Reverses the issue #27 decision for this email only
+- [x] ~~Reception's Fit with Conditions email carries the doctor's comments~~ — removed in the
+      final email copy; comments are still required on the form
 - [x] `tsc --noEmit`, `biome check` clean
 - [ ] Manual check: Hospital selects Fit with Conditions → Submit stays disabled until comments
       entered; Reception email shows the comments
-- [x] All emails rewritten to the agreed plain-language copy in `docs/email-templates.md`:
+- [x] All emails rewritten to the agreed plain-language copy:
       privacy link on the invitation, company name in Reception's registration email,
       receptionist's name in the delegated-approval request, one "due for induction" email to
       Training School (from management approval or Hospital), "due for medicals" to Hospital
 - [x] `ROLE_LABELS` / `SYSTEM_ROLE_LABELS` (`lib/domain/types.ts`) so emails never show code
       values like `HospitalStaff`
 - [ ] Manual check: trigger a few emails and read them in the inbox
+
+---
+
+## Final email copy (2026-10-27)
+
+- [x] All 18 emails rewritten to the final agreed copy: "Hello,"
+      greetings, subjects as "<Topic> - {name}", fuller instructions per email
+- [x] Invitation no longer names the department; rejection email's Reception button opens the
+      application again
+- [x] Fit with Conditions email has no doctor's comments; revocation-request subject has no
+      "GMC Site Access:" prefix — both exactly as agreed
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual check: read a few real emails in the inbox
 
 ---
 

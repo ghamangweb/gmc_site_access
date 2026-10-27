@@ -341,6 +341,7 @@ export async function rejectStakeholderApprovalAction(
           to: user.email,
           ...stakeholderApprovalRejectedTemplate({
             personName: detail.person.fullName,
+            engagementId,
             rejectedBy: rejection.approverName,
             approverRole: rejection.approverRole,
             reason: trimmedReason,
@@ -465,7 +466,6 @@ export async function submitHospitalClearanceAction(
             : hospitalFitWithConditionsTemplate({
                 personName: detail.person.fullName,
                 engagementId,
-                doctorComments: input.doctorComments.trim(),
               })),
         });
 
