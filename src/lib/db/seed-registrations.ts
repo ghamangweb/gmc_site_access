@@ -578,7 +578,13 @@ const SUBMISSIONS: SeedSubmission[] = [
   }),
 ];
 
+// Optional count, e.g. `npm run db:seed:registrations -- 10`, seeds only the
+// first 10 submissions. No count seeds them all.
+const SEED_LIMIT = Number(process.argv[2]) || SUBMISSIONS.length;
+
 async function seedRegistrations() {
+  const selected = SUBMISSIONS.slice(0, SEED_LIMIT);
+
   const [issuer] = await db
     .select()
     .from(staffUsers)
@@ -603,13 +609,13 @@ async function seedRegistrations() {
       .map((invitation) => invitation.email),
   );
 
-  const pending = SUBMISSIONS.filter(
+  const pending = selected.filter(
     (submission) => !seededEmails.has(submission.email),
   );
 
   if (pending.length === 0) {
     console.log(
-      `All ${SUBMISSIONS.length} seeded submission(s) already present — leaving them as they are.`,
+      `All ${selected.length} seeded submission(s) already present — leaving them as they are.`,
     );
 
     // Documents are seeded separately and per-invitation, so an existing set

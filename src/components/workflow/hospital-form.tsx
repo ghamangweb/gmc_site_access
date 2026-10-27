@@ -52,7 +52,9 @@ export function HospitalForm({
   const [isPending, startTransition] = useTransition();
 
   const disabled = readOnly || isPending;
-  const canSubmit = !disabled && status !== "";
+  const commentsRequired = status === "FitWithConditions";
+  const canSubmit =
+    !disabled && status !== "" && (!commentsRequired || comments.trim() !== "");
 
   function handleSubmit() {
     if (status === "") return;
@@ -132,7 +134,7 @@ export function HospitalForm({
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label>Doctor Comments (optional)</Label>
+          <Label>Doctor Comments {commentsRequired ? "*" : "(optional)"}</Label>
           <Textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}

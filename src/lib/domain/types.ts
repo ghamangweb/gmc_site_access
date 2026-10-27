@@ -248,6 +248,28 @@ export const REQUESTABLE_ROLES = [
 
 export type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
+// What a role is called in an email — the stored value is camel case and
+// means nothing to the reader. Single source, like WORKFLOW_STATE_LABELS.
+export const ROLE_LABELS: Record<RequestableRole, string> = {
+  Guest: "Guest",
+  Receptionist: "Receptionist",
+  CSO: "Chief Sustainability Officer (CSO)",
+  HCM: "Human Capital Manager (HCM)",
+  GMM: "General Mine Manager (GMM)",
+  EM: "Engineering Manager (EM)",
+  HospitalStaff: "Hospital",
+  TrainingStaff: "Training School",
+  SecurityStaff: "Security",
+  DepartmentHead: "Department Head",
+};
+
+export const SYSTEM_ROLE_LABELS: Record<SystemRole, string> = {
+  User: "User",
+  Guest: "Guest",
+  Admin: "Administrator",
+  SystemAdmin: "System Administrator",
+};
+
 // Runtime tuple like DOC_TYPES: the reception form and Reception's
 // completion form both render it, and `VisaType` derives from it so a new
 // visa type is added in exactly one place.

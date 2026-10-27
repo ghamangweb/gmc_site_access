@@ -88,7 +88,13 @@ export async function submitRegistrationRequestAction(
       );
     }
 
-    // Both audiences get the same event with a link to their own screen.
+    // Foreign submissions carry `receptionData`, Local ones `registrationData`.
+    const companyName =
+      "receptionData" in formData
+        ? formData.receptionData.companyName
+        : formData.registrationData.companyName;
+
+    // Both audiences get the same event, each worded for its own job.
     // Sent in parallel: a visitor is waiting on this response, and one slow
     // mailbox shouldn't hold up the rest.
     const results = await Promise.all([
@@ -96,7 +102,6 @@ export async function submitRegistrationRequestAction(
         sendEmail({
           to: head.email,
           ...registrationSubmittedTemplate({
-            department: request.department,
             visitorName,
             audience: "DepartmentHead",
           }),
@@ -106,8 +111,8 @@ export async function submitRegistrationRequestAction(
         sendEmail({
           to: receptionist.email,
           ...registrationSubmittedTemplate({
-            department: request.department,
             visitorName,
+            companyName,
             audience: "Receptionist",
           }),
         }),
