@@ -23,12 +23,12 @@ export default async function SignInPage({
   return (
     <>
       <div className="flex flex-col items-center gap-6 text-center">
-        <h1 className="uppercase text-2xl font-bold leading-10 tracking-tight text-foreground">
+        <p className="text-sm font-medium uppercase text-muted-foreground">
           Ghana Manganese Company Limited
-        </h1>
-        <p className="max-w-sm text-xl leading-8 text-muted-foreground">
-          Site Access Workflow Management System
         </p>
+        <h1 className="max-w-sm text-2xl font-bold leading-8 tracking-tight text-foreground">
+          Site Access Workflow Management System
+        </h1>
       </div>
       <form
         action={async () => {

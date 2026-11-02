@@ -1,5 +1,12 @@
 # UI Registry
 
+## Sign-in text hierarchy (2026-11-02)
+
+`src/app/(auth)/sign-in/page.tsx`: company name above the system title in a
+`p` with `text-sm font-medium uppercase text-muted-foreground`. The system name
+is the primary `h1`, using `max-w-sm text-2xl font-bold leading-8 tracking-tight
+text-foreground`. Keep the centered `gap-6` stack.
+
 Living document. Updated after every component is built or shadcn/ui component is installed.
 Read this before building any new component — match existing patterns exactly before inventing new ones.
 

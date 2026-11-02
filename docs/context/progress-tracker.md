@@ -1,5 +1,10 @@
 # Progress Tracker
 
+## Sign-in text hierarchy (2026-11-02)
+
+- [x] Applied approved hierarchy: smaller, muted company name above the bold system-name `h1`.
+- [ ] Manual in-browser check of the sign-in text hierarchy.
+
 Update this file after each slice is complete. Mark components done as they are built — not
 in bulk at the end of a slice.
 Any AI agent reading this should immediately know what is done, what is in progress, and what is next.
