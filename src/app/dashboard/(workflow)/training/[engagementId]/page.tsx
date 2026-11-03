@@ -4,8 +4,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { HospitalHandoff } from "@/components/workflow/hospital-handoff";
 import { TrainingForm } from "@/components/workflow/training-form";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import {
   checkHospitalClearanceAge,
+  getActiveWorkflowCycle,
   getEngagementDetail,
   getLatestHospitalClearance,
   getLatestInductionRecord,
@@ -31,10 +33,18 @@ export default async function TrainingDetailPage({
 
   const { engagement, person } = detail;
 
-  const [clearance, hospitalClearance, latestInduction] = await Promise.all([
+  const [
+    clearance,
+    hospitalClearance,
+    latestInduction,
+    documents,
+    activeCycle,
+  ] = await Promise.all([
     checkHospitalClearanceAge(engagementId),
     getLatestHospitalClearance(engagementId),
     getLatestInductionRecord(engagementId),
+    getDocumentsForEngagement(engagementId),
+    getActiveWorkflowCycle(engagementId),
   ]);
 
   const isTrainingStaff =
@@ -62,6 +72,9 @@ export default async function TrainingDetailPage({
           engagementId={engagementId}
           clearance={clearance}
           latestInduction={latestInduction}
+          uploadedDocuments={documents.filter(
+            (document) => document.workflowCycleId === activeCycle?.id,
+          )}
           readOnly={readOnly}
         />
       </div>

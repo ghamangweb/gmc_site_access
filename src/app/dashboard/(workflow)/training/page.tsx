@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { TrainingExportButton } from "@/components/layout/training-export-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -75,6 +76,9 @@ export default async function TrainingQueuePage({
       <PageHeader
         title="Training School"
         subtitle="Induction queue for work-path and mine-site visitors."
+        actions={
+          session.systemRole !== "Guest" ? <TrainingExportButton /> : undefined
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">

@@ -5,18 +5,22 @@ import {
   count,
   desc,
   eq,
+  exists,
   inArray,
   isNotNull,
   isNull,
   lt,
   notInArray,
+  or,
   type SQL,
 } from "drizzle-orm";
 import type { SessionUser } from "@/lib/auth/session";
 import { searchQueryTokens } from "@/lib/crypto";
+import { csvRow } from "@/lib/csv";
 import { db } from "@/lib/db/client";
 import {
   accessProvisionings,
+  documents,
   engagements,
   hospitalClearances,
   inductionRecords,
@@ -37,6 +41,10 @@ import {
   type PageRequest,
   pageOffset,
 } from "@/lib/domain/pagination";
+import {
+  TRAINING_REPORT_HEADERS,
+  trainingReportRows,
+} from "@/lib/domain/training-report";
 import {
   type AccessPurpose,
   type AccessState,
@@ -1744,6 +1752,131 @@ export async function listRecentInductions(
   ]);
 
   return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+export async function exportTrainingCsv(): Promise<string> {
+  const batchSize = 500;
+
+  return db.transaction(
+    async (tx) => {
+      const chunks = ["\uFEFF", csvRow(TRAINING_REPORT_HEADERS)];
+
+      for (let offset = 0; ; offset += batchSize) {
+        const cycles = await tx
+          .select({
+            id: workflowCycles.id,
+            engagementId: engagements.id,
+            cycleNumber: workflowCycles.cycleNumber,
+            name: persons.fullName,
+            passport: persons.passportNo,
+            purpose: engagements.accessPurpose,
+            workflowState: engagements.workflowState,
+          })
+          .from(workflowCycles)
+          .innerJoin(
+            engagements,
+            eq(workflowCycles.engagementId, engagements.id),
+          )
+          .innerJoin(persons, eq(engagements.personId, persons.id))
+          .where(
+            or(
+              and(
+                isNull(workflowCycles.archivedAt),
+                eq(engagements.workflowState, "AtTraining"),
+                inArray(engagements.accessPurpose, ["Work", "VisitMine"]),
+              ),
+              exists(
+                tx
+                  .select({ id: inductionRecords.id })
+                  .from(inductionRecords)
+                  .where(
+                    eq(inductionRecords.workflowCycleId, workflowCycles.id),
+                  ),
+              ),
+            ),
+          )
+          .orderBy(
+            engagements.createdAt,
+            engagements.id,
+            workflowCycles.cycleNumber,
+            workflowCycles.id,
+          )
+          .limit(batchSize)
+          .offset(offset);
+
+        if (cycles.length === 0) break;
+
+        const cycleIds = cycles.map((cycle) => cycle.id);
+        const inductions = await tx
+          .select({
+            workflowCycleId: inductionRecords.workflowCycleId,
+            generalSiteInduction: inductionRecords.generalSiteInduction,
+            otherInductions: inductionRecords.otherInductions,
+            completedAt: inductionRecords.completedAt,
+          })
+          .from(inductionRecords)
+          .where(inArray(inductionRecords.workflowCycleId, cycleIds))
+          .orderBy(
+            desc(inductionRecords.completedAt),
+            desc(inductionRecords.id),
+          );
+
+        const audits = await tx
+          .select({
+            workflowCycleId: workflowTransitions.workflowCycleId,
+            engagementId: workflowTransitions.engagementId,
+            completedBy: staffUsers.displayName,
+            performedAt: workflowTransitions.performedAt,
+            fromState: workflowTransitions.fromState,
+            toState: workflowTransitions.toState,
+            comments: workflowTransitions.comments,
+          })
+          .from(workflowTransitions)
+          .leftJoin(
+            staffUsers,
+            eq(workflowTransitions.performedBy, staffUsers.id),
+          )
+          .where(
+            and(
+              inArray(workflowTransitions.workflowCycleId, cycleIds),
+              eq(workflowTransitions.fromState, "AtTraining"),
+              eq(workflowTransitions.toState, "AtSecurity"),
+            ),
+          )
+          .orderBy(
+            desc(workflowTransitions.performedAt),
+            desc(workflowTransitions.id),
+          );
+
+        const clearanceForms = await tx
+          .select({
+            workflowCycleId: documents.workflowCycleId,
+            engagementId: documents.engagementId,
+          })
+          .from(documents)
+          .where(
+            and(
+              inArray(documents.workflowCycleId, cycleIds),
+              eq(documents.docType, "training_clearance_form"),
+            ),
+          );
+
+        for (const row of trainingReportRows(
+          cycles,
+          inductions,
+          audits,
+          clearanceForms,
+        )) {
+          chunks.push(csvRow(row));
+        }
+
+        if (cycles.length < batchSize) break;
+      }
+
+      return chunks.join("");
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 export async function recordInductionCompletion(
