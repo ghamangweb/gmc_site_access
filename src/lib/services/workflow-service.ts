@@ -133,6 +133,7 @@ function getNextStateForPath(accessPurpose: AccessPurpose): {
 } {
   switch (accessPurpose) {
     case "Work":
+    case "WorkMine":
       return { nextState: "AtHospital", nextRole: "HospitalStaff" };
     case "VisitMine":
       return { nextState: "AtTraining", nextRole: "TrainingStaff" };
@@ -1485,7 +1486,7 @@ export async function recordHospitalClearance(
   }
   if (
     preCheck.workflowState !== "AtHospital" ||
-    preCheck.accessPurpose !== "Work"
+    (preCheck.accessPurpose !== "Work" && preCheck.accessPurpose !== "WorkMine")
   ) {
     throw new Error("Engagement is not awaiting Hospital clearance");
   }
@@ -1532,7 +1533,8 @@ export async function recordHospitalClearance(
     }
     if (
       engagement.workflowState !== "AtHospital" ||
-      engagement.accessPurpose !== "Work"
+      (engagement.accessPurpose !== "Work" &&
+        engagement.accessPurpose !== "WorkMine")
     ) {
       throw new Error("Engagement is not awaiting Hospital clearance");
     }
@@ -1635,7 +1637,11 @@ export async function checkHospitalClearanceAge(
 ): Promise<ClearanceAge> {
   const engagement = await getEngagementById(engagementId);
 
-  if (!engagement || engagement.accessPurpose !== "Work") {
+  if (
+    !engagement ||
+    (engagement.accessPurpose !== "Work" &&
+      engagement.accessPurpose !== "WorkMine")
+  ) {
     return { applicable: false };
   }
 

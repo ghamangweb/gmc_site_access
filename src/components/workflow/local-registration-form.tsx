@@ -89,7 +89,7 @@ const localFormSchema = z.object({
   emergencyContactName: z.string().min(1, "Required"),
   emergencyContactPhone: phoneFieldSchema,
   employmentStatus: z.string().min(1, "Required"),
-  accessPurpose: z.enum(["Work", "Visit", "VisitMine"]),
+  accessPurpose: z.enum(["Work", "WorkMine", "Visit", "VisitMine"]),
   arrivalDate: z.string().min(1, "Required"),
   departureDate: z.string().min(1, "Required"),
   companyName: z.string().min(1, "Required"),
@@ -325,9 +325,10 @@ export function LocalRegistrationForm({
               control={form.control}
               name="accessPurpose"
               label="Access Purpose"
-              options={["Work", "Visit", "VisitMine"]}
+              options={["Work", "WorkMine", "Visit", "VisitMine"]}
               optionLabels={{
                 Work: "Coming to work",
+                WorkMine: "Require mine site access to work",
                 Visit: "Coming to visit (no mine site access)",
                 VisitMine: "Coming to visit + mine site access",
               }}

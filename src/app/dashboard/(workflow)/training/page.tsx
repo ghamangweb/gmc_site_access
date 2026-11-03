@@ -45,9 +45,13 @@ export default async function TrainingQueuePage({
   // Both paths that reach induction: work-path visitors arriving from
   // Hospital, and visit+mine visitors who come straight from Reception.
   const [awaitingCount, awaiting, recorded] = await Promise.all([
-    countEngagementsForLayer("AtTraining", ["Work", "VisitMine"]),
+    countEngagementsForLayer("AtTraining", ["Work", "WorkMine", "VisitMine"]),
     activeView === "awaiting"
-      ? listEngagementsForLayer("AtTraining", ["Work", "VisitMine"], request)
+      ? listEngagementsForLayer(
+          "AtTraining",
+          ["Work", "WorkMine", "VisitMine"],
+          request,
+        )
       : undefined,
     activeView === "recorded" ? listRecentInductions(request) : undefined,
   ]);

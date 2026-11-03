@@ -41,10 +41,11 @@ export type ActionResult =
       missingDocTypes?: DocType[];
     };
 
-export type AccessPurpose = "Work" | "Visit" | "VisitMine";
+export type AccessPurpose = "Work" | "WorkMine" | "Visit" | "VisitMine";
 
 export const ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string> = {
   Work: "Require mine site access",
+  WorkMine: "Require mine site access to work",
   Visit: "Familiarization Visit (no mine site access)",
   VisitMine: "Require Mine Tour",
 };

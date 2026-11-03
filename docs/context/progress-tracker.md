@@ -1185,6 +1185,16 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Nature of Visit — "Require mine site access to work" (2026-11-03)
+
+- [x] New `AccessPurpose` value `WorkMine`, labelled "Require mine site access to work";
+      routes exactly like `Work` (Hospital → Training → Security) and passes the Hospital
+      clearance / clearance-age checks; added to both registration forms, the prefill schema,
+      the Hospital/Training/Security queues and the zh dictionary
+- [x] `access_purpose` is a text column — no migration
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
