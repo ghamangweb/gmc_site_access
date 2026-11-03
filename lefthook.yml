@@ -1,3 +1,6 @@
+# Multi-line job logic lives in .lefthook/scripts/ rather than inline here.
+# On Windows, lefthook passes inline `run` scripts to sh without escaping
+# double quotes, which breaks any script containing them.
 pre-commit:
   parallel: true
   jobs:
@@ -8,64 +11,30 @@ pre-commit:
 
     - name: check-yaml
       glob: "*.{yml,yaml}"
-      run: |
-        for f in {staged_files}; do
-          python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f" || exit 1
-        done
+      run: sh .lefthook/scripts/check-yaml.sh {staged_files}
 
     - name: check-json
       glob: "*.{json,jsonc}"
-      run: |
-        for f in {staged_files}; do
-          bun -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$f" || exit 1
-        done
+      run: sh .lefthook/scripts/check-json.sh {staged_files}
 
     - name: end-of-file-fixer
       glob: "*"
-      run: |
-        for f in {staged_files}; do
-          grep -Iq . "$f" 2>/dev/null || continue
-          [ -s "$f" ] || continue
-          [ "$(tail -c1 "$f")" = "" ] || printf '\n' >> "$f"
-        done
+      run: sh .lefthook/scripts/end-of-file-fixer.sh {staged_files}
       stage_fixed: true
 
     - name: trailing-whitespace
       glob: "*"
-      run: |
-        for f in {staged_files}; do
-          grep -Iq . "$f" 2>/dev/null || continue
-          sed -i 's/[ \t]*$//' "$f"
-        done
+      run: sh .lefthook/scripts/trailing-whitespace.sh {staged_files}
       stage_fixed: true
 
     - name: check-added-large-files
-      run: |
-        for f in {staged_files}; do
-          size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
-          if [ "$size" -gt 11264000 ]; then
-            echo "$f is larger than 11000KB"
-            exit 1
-          fi
-        done
+      run: sh .lefthook/scripts/check-added-large-files.sh {staged_files}
 
     - name: check-merge-conflict
-      run: |
-        for f in {staged_files}; do
-          grep -Iq . "$f" 2>/dev/null || continue
-          if grep -nE '^(<{7}|={7}|>{7})( |$)' "$f"; then
-            echo "Merge conflict markers found in $f"
-            exit 1
-          fi
-        done
+      run: sh .lefthook/scripts/check-merge-conflict.sh {staged_files}
 
     - name: no-commit-to-branch
-      run: |
-        branch=$(git rev-parse --abbrev-ref HEAD)
-        if ! echo "$branch" | grep -Eq '^(fix|feature|bugfix|chore|hotfix)/[a-zA-Z0-9-]+$'; then
-          echo "Direct commits to '$branch' are not allowed. Use fix/, feature/, bugfix/, chore/, or hotfix/ branches."
-          exit 1
-        fi
+      run: sh .lefthook/scripts/no-commit-to-branch.sh
 
     - name: build
       run: bun run build
