@@ -1210,6 +1210,24 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Department Head approval of submissions (2026-11-03)
+
+- [x] Submissions are inserted `PendingDepartmentApproval`; only the department's Head(s) are
+      notified (email "Registration Approval Required" → `/dashboard/department`, + dashboard)
+- [x] `/dashboard/department` "Submitted Registrations" table (`SubmissionRow`) with Approve
+      (confirm) and Reject (reason required, final) for pending rows
+- [x] Approve → `Approved`, Reception gets the existing "New Visitor Registration" email +
+      dashboard notification, row appears in Reception's queue
+- [x] Reception's list, counts, `getRegistrationRequest` and `linkRequestToEngagement` only
+      act on `Approved` (/`Converted`) rows; `/reception/new?requestId=` for a non-visible row
+      redirects to the queue
+- [x] Migration `0027_department_approval` — `approved_by`/`approved_at` nullable, adds
+      `rejected_by`/`rejected_at`/`rejection_reason`; existing rows stay `Approved`
+- [ ] `db:seed:registrations` still inserts rows as `Approved` (no pending seed data)
+- [ ] Follow-up: HOD view of the full submission before deciding
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

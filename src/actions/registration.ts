@@ -15,8 +15,10 @@ import {
   revokeInvitation,
 } from "@/lib/services/invitation-service";
 import {
+  approveRegistrationRequest,
   createRegistrationRequest,
   type LocalRegistrationFormInput,
+  rejectRegistrationRequest,
 } from "@/lib/services/registration-service";
 import type { ReceptionFormInput } from "@/lib/services/workflow-service";
 
@@ -71,34 +73,25 @@ export async function submitRegistrationRequestAction(
   formData: ReceptionFormInput | LocalRegistrationFormInput,
 ): Promise<ActionResult> {
   try {
-    const { request, departmentHeads, receptionists, visitorName } =
+    const { request, departmentHeads, visitorName } =
       await createRegistrationRequest(token, formData);
 
     // A visitor must never be shown GMC's internal staffing problems, so this
     // is logged rather than returned as a warning — but it still must not pass
-    // silently: a submission nobody was told about goes nowhere.
-    if (departmentHeads.length === 0 || receptionists.length === 0) {
+    // silently: with no Department Head to approve it, a submission goes
+    // nowhere.
+    if (departmentHeads.length === 0) {
       console.error(
-        "[actions/registration] submission notified incomplete audience:",
-        {
-          department: request.department,
-          departmentHeads: departmentHeads.length,
-          receptionists: receptionists.length,
-        },
+        "[actions/registration] submission has no Department Head to approve it:",
+        { department: request.department },
       );
     }
 
-    // Foreign submissions carry `receptionData`, Local ones `registrationData`.
-    const companyName =
-      "receptionData" in formData
-        ? formData.receptionData.companyName
-        : formData.registrationData.companyName;
-
-    // Both audiences get the same event, each worded for its own job.
-    // Sent in parallel: a visitor is waiting on this response, and one slow
-    // mailbox shouldn't hold up the rest.
-    const results = await Promise.all([
-      ...departmentHeads.map((head) =>
+    // Only the Department Head for now: Reception is mailed when the Head
+    // approves. Sent in parallel: a visitor is waiting on this response, and
+    // one slow mailbox shouldn't hold up the rest.
+    const results = await Promise.all(
+      departmentHeads.map((head) =>
         sendEmail({
           to: head.email,
           ...registrationSubmittedTemplate({
@@ -107,17 +100,7 @@ export async function submitRegistrationRequestAction(
           }),
         }),
       ),
-      ...receptionists.map((receptionist) =>
-        sendEmail({
-          to: receptionist.email,
-          ...registrationSubmittedTemplate({
-            visitorName,
-            companyName,
-            audience: "Receptionist",
-          }),
-        }),
-      ),
-    ]);
+    );
 
     const allEmailsSent = results.every(Boolean);
 
@@ -167,6 +150,92 @@ export async function revokeInvitationAction(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to revoke invitation",
+    };
+  }
+}
+
+export async function approveRegistrationRequestAction(
+  requestId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("DepartmentHead");
+
+    const { request, receptionists, visitorName } =
+      await approveRegistrationRequest(requestId, session.staffUserId);
+
+    if (receptionists.length === 0) {
+      console.error(
+        "[actions/registration] approved submission has no Receptionist to notify:",
+        { requestId: request.id },
+      );
+    }
+
+    // SAFETY: `form_data` is jsonb written only by `createRegistrationRequest`;
+    // both payload shapes carry `companyName` under their own key.
+    const submitted = request.formData as {
+      receptionData?: { companyName?: string };
+      registrationData?: { companyName?: string };
+    };
+    const companyName =
+      submitted.receptionData?.companyName ??
+      submitted.registrationData?.companyName;
+
+    const results = await Promise.all(
+      receptionists.map((receptionist) =>
+        sendEmail({
+          to: receptionist.email,
+          ...registrationSubmittedTemplate({
+            visitorName,
+            companyName,
+            audience: "Receptionist",
+          }),
+        }),
+      ),
+    );
+
+    revalidatePath("/dashboard/department");
+    revalidatePath("/dashboard/reception");
+    return results.every(Boolean)
+      ? { success: true }
+      : {
+          success: true,
+          warning:
+            "Approved, but Reception may not have been notified by email",
+        };
+  } catch (error) {
+    console.error("[actions/registration]", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to approve",
+    };
+  }
+}
+
+export async function rejectRegistrationRequestAction(
+  requestId: string,
+  reason: string,
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("DepartmentHead");
+
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      return { success: false, error: "Reason is required" };
+    }
+
+    await rejectRegistrationRequest(
+      requestId,
+      session.staffUserId,
+      trimmedReason,
+    );
+
+    revalidatePath("/dashboard/department");
+    return { success: true };
+  } catch (error) {
+    console.error("[actions/registration]", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to reject",
     };
   }
 }

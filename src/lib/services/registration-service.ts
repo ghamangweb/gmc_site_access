@@ -1,4 +1,12 @@
-import { and, arrayOverlaps, count, desc, eq, isNull } from "drizzle-orm";
+import {
+  and,
+  arrayOverlaps,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+} from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import {
@@ -35,6 +43,21 @@ export type RegistrationRequest = typeof registrationRequests.$inferSelect;
 type SubmittedFormData = ReceptionFormInput | LocalRegistrationFormInput;
 
 type StaffUser = typeof staffUsers.$inferSelect;
+
+// The Department Head decides first; only then does a submission reach
+// Reception, which turns it into an Engagement (Converted).
+export type RegistrationRequestStatus =
+  | "PendingDepartmentApproval"
+  | "Approved"
+  | "Rejected"
+  | "Converted";
+
+// What Reception can see: approved submissions, and the ones it has already
+// converted (listed with a link to their Engagement).
+const RECEPTION_VISIBLE_STATUSES: RegistrationRequestStatus[] = [
+  "Approved",
+  "Converted",
+];
 
 export type LocalRegistrationFormInput = {
   person: {
@@ -84,7 +107,6 @@ export async function createRegistrationRequest(
 ): Promise<{
   request: RegistrationRequest;
   departmentHeads: StaffUser[];
-  receptionists: StaffUser[];
   visitorName: string;
 }> {
   const invitation = await validateInvitationToken(token);
@@ -154,44 +176,17 @@ export async function createRegistrationRequest(
         department: consumed.department,
         registrationType: consumed.registrationType,
         formData: submittedData,
-        status: "Approved",
-        approvedBy: consumed.issuedBy,
-        approvedAt: new Date(),
+        status: "PendingDepartmentApproval",
       })
       .returning();
 
     return { request, department: consumed.department };
   });
 
-  const [allHeads, receptionists] = await Promise.all([
-    db
-      .select()
-      .from(staffUsers)
-      .where(
-        and(
-          arrayOverlaps(staffUsers.workflowRoles, ["DepartmentHead"]),
-          isNull(staffUsers.deactivatedAt),
-        ),
-      ),
-    db
-      .select()
-      .from(staffUsers)
-      .where(
-        and(
-          arrayOverlaps(staffUsers.workflowRoles, ["Receptionist"]),
-          isNull(staffUsers.deactivatedAt),
-        ),
-      ),
-  ]);
+  const matchingHeads = await listDepartmentHeads(department);
 
-  // Only the head of the department the invitation was issued for.
-  const matchingHeads = allHeads.filter(
-    (head) => head.department === department,
-  );
-
-  // Reception is notified too: the submission lands in their queue and they
-  // are the ones who turn it into an Engagement. Notifying only the
-  // Department Head meant nobody told the person who acts on it next.
+  // Only the Department Head hears about it now: Reception is told once the
+  // Head approves (`approveRegistrationRequest`), and not before.
   const visitorName = summariseRequest(request).fullName;
 
   if (matchingHeads.length > 0) {
@@ -199,10 +194,90 @@ export async function createRegistrationRequest(
       matchingHeads.map((head) => ({
         recipientStaffUserId: head.id,
         registrationRequestId: request.id,
-        message: `${visitorName} submitted a registration for ${department}.`,
+        message: `${visitorName} submitted a registration for ${department} and is awaiting your approval.`,
       })),
     );
   }
+
+  return {
+    request,
+    departmentHeads: matchingHeads,
+    visitorName,
+  };
+}
+
+// Active heads of one department — the people who approve its submissions.
+async function listDepartmentHeads(department: string): Promise<StaffUser[]> {
+  const heads = await db
+    .select()
+    .from(staffUsers)
+    .where(
+      and(
+        arrayOverlaps(staffUsers.workflowRoles, ["DepartmentHead"]),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    );
+
+  return heads.filter((head) => head.department === department);
+}
+
+async function getDepartmentOf(staffUserId: string): Promise<string> {
+  const [user] = await db
+    .select({ department: staffUsers.department })
+    .from(staffUsers)
+    .where(eq(staffUsers.id, staffUserId));
+
+  if (!user?.department) {
+    throw new Error("You are not assigned to a department");
+  }
+
+  return user.department;
+}
+
+// Scoped to the approver's own department and to rows still pending, so a
+// Head of another department can't decide it and a double click can't
+// decide it twice.
+export async function approveRegistrationRequest(
+  requestId: string,
+  approverStaffUserId: string,
+): Promise<{
+  request: RegistrationRequest;
+  receptionists: StaffUser[];
+  visitorName: string;
+}> {
+  const department = await getDepartmentOf(approverStaffUserId);
+
+  const [request] = await db
+    .update(registrationRequests)
+    .set({
+      status: "Approved",
+      approvedBy: approverStaffUserId,
+      approvedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(registrationRequests.id, requestId),
+        eq(registrationRequests.department, department),
+        eq(registrationRequests.status, "PendingDepartmentApproval"),
+      ),
+    )
+    .returning();
+
+  if (!request) {
+    throw new Error("This submission is no longer awaiting your approval");
+  }
+
+  const receptionists = await db
+    .select()
+    .from(staffUsers)
+    .where(
+      and(
+        arrayOverlaps(staffUsers.workflowRoles, ["Receptionist"]),
+        isNull(staffUsers.deactivatedAt),
+      ),
+    );
+
+  const visitorName = summariseRequest(request).fullName;
 
   if (receptionists.length > 0) {
     await db.insert(notifications).values(
@@ -214,12 +289,39 @@ export async function createRegistrationRequest(
     );
   }
 
-  return {
-    request,
-    departmentHeads: matchingHeads,
-    receptionists,
-    visitorName,
-  };
+  return { request, receptionists, visitorName };
+}
+
+// Final: the row never reaches Reception. A fresh invitation is the way back.
+export async function rejectRegistrationRequest(
+  requestId: string,
+  rejecterStaffUserId: string,
+  reason: string,
+): Promise<RegistrationRequest> {
+  const department = await getDepartmentOf(rejecterStaffUserId);
+
+  const [request] = await db
+    .update(registrationRequests)
+    .set({
+      status: "Rejected",
+      rejectedBy: rejecterStaffUserId,
+      rejectedAt: new Date(),
+      rejectionReason: reason,
+    })
+    .where(
+      and(
+        eq(registrationRequests.id, requestId),
+        eq(registrationRequests.department, department),
+        eq(registrationRequests.status, "PendingDepartmentApproval"),
+      ),
+    )
+    .returning();
+
+  if (!request) {
+    throw new Error("This submission is no longer awaiting your approval");
+  }
+
+  return request;
 }
 
 export type RegistrationRequestSummary = {
@@ -231,6 +333,8 @@ export type RegistrationRequestSummary = {
   accessPurpose: AccessPurpose;
   submittedAt: Date;
   engagementId: string | null;
+  status: RegistrationRequestStatus;
+  rejectionReason: string | null;
 };
 
 // The visitor's own submission, as Reception sees it in its queue. `formData`
@@ -257,6 +361,10 @@ function summariseRequest(
     accessPurpose,
     submittedAt: request.createdAt,
     engagementId: request.engagementId,
+    // SAFETY: `status` is a text column written only by this service, always
+    // a RegistrationRequestStatus member.
+    status: request.status as RegistrationRequestStatus,
+    rejectionReason: request.rejectionReason,
   };
 }
 
@@ -275,9 +383,12 @@ export async function listRegistrationRequests(
     .select()
     .from(registrationRequests)
     .where(
-      request.registrationType
-        ? eq(registrationRequests.registrationType, request.registrationType)
-        : undefined,
+      and(
+        inArray(registrationRequests.status, RECEPTION_VISIBLE_STATUSES),
+        request.registrationType
+          ? eq(registrationRequests.registrationType, request.registrationType)
+          : undefined,
+      ),
     )
     .orderBy(desc(registrationRequests.createdAt));
 
@@ -313,6 +424,7 @@ export async function countRegistrationRequestsByType(): Promise<{
       value: count(),
     })
     .from(registrationRequests)
+    .where(inArray(registrationRequests.status, RECEPTION_VISIBLE_STATUSES))
     .groupBy(registrationRequests.registrationType);
 
   const byType = { all: 0, Local: 0, Foreign: 0 };
@@ -335,20 +447,48 @@ export async function countOutstandingRegistrationRequests(): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(registrationRequests)
-    .where(isNull(registrationRequests.engagementId));
+    .where(eq(registrationRequests.status, "Approved"));
 
   return row?.value ?? 0;
 }
 
+// Reception's lookup, so a submission still awaiting (or refused by) its
+// Department Head can't be opened or converted by guessing its id.
 export async function getRegistrationRequest(
   requestId: string,
 ): Promise<RegistrationRequest | undefined> {
   const [request] = await db
     .select()
     .from(registrationRequests)
-    .where(eq(registrationRequests.id, requestId));
+    .where(
+      and(
+        eq(registrationRequests.id, requestId),
+        inArray(registrationRequests.status, RECEPTION_VISIBLE_STATUSES),
+      ),
+    );
 
   return request;
+}
+
+// The Department Head's own queue: every submission for their department,
+// newest first, pending ones on top so the decisions waiting are seen first.
+export async function listRegistrationRequestsForDepartment(
+  staffUserId: string,
+): Promise<RegistrationRequestSummary[]> {
+  const department = await getDepartmentOf(staffUserId);
+
+  const rows = await db
+    .select()
+    .from(registrationRequests)
+    .where(eq(registrationRequests.department, department))
+    .orderBy(desc(registrationRequests.createdAt));
+
+  const summaries = rows.map(summariseRequest);
+
+  return [
+    ...summaries.filter((s) => s.status === "PendingDepartmentApproval"),
+    ...summaries.filter((s) => s.status !== "PendingDepartmentApproval"),
+  ];
 }
 
 // Called once Reception has created the Engagement. Scoped to rows that are
@@ -364,6 +504,7 @@ export async function linkRequestToEngagement(
     .where(
       and(
         eq(registrationRequests.id, requestId),
+        eq(registrationRequests.status, "Approved"),
         isNull(registrationRequests.engagementId),
       ),
     )

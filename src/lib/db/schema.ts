@@ -288,11 +288,15 @@ export const registrationRequests = pgTable("registration_requests", {
   // still outstanding — this is what keeps a submission from being converted
   // twice, and what the Reception queue reads to show Converted vs a button.
   engagementId: uuid().references(() => engagements.id),
-  status: text().notNull().default("Approved"),
-  approvedBy: uuid()
-    .notNull()
-    .references(() => staffUsers.id),
-  approvedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  // PendingDepartmentApproval → Approved | Rejected, then Converted once
+  // Reception creates the Engagement. Only Approved rows reach Reception; a
+  // rejection is final (the Department Head sends a fresh invitation).
+  status: text().notNull().default("PendingDepartmentApproval"),
+  approvedBy: uuid().references(() => staffUsers.id),
+  approvedAt: timestamp({ withTimezone: true }),
+  rejectedBy: uuid().references(() => staffUsers.id),
+  rejectedAt: timestamp({ withTimezone: true }),
+  rejectionReason: encryptedText(),
   createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 

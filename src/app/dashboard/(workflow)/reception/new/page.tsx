@@ -28,6 +28,12 @@ export default async function NewReceptionPage({
     ? await getRegistrationRequest(requestId)
     : undefined;
 
+  // Not one Reception can see — still awaiting its Department Head, rejected,
+  // or not there at all. Back to the queue rather than a blank registration.
+  if (requestId && !request) {
+    redirect("/dashboard/reception");
+  }
+
   // An already-converted submission must not open a second time — send the
   // Receptionist to the Engagement it produced instead.
   if (request?.engagementId) {

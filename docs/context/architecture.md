@@ -91,7 +91,7 @@ Azure Functions and Drizzle migrations sit at project root (outside `src/`).
     │   │   └── api.ts                    → UTApi wrapper: signed view URLs + delete (server only)
     │   ├── services/
     │   │   ├── invitation-service.ts     → issue/revoke/consume invitation tokens, list by issuer
-    │   │   ├── registration-service.ts   → consumes an invitation token + creates its Registration Request; notifies the matching Department Head(s) — no separate approval step
+    │   │   ├── registration-service.ts   → consumes an invitation token + creates its Registration Request (`PendingDepartmentApproval`); notifies the matching Department Head(s), who approve or reject it before Reception sees it
     │   │   ├── workflow-service.ts       → transitions, guards, path routing
     │   │   ├── person-registry-service.ts → passport lookup
     │   │   ├── document-service.ts
@@ -133,9 +133,9 @@ Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` �
 - `dashboard/system-admin/layout.tsx` — `requireSystemAdmin` guard only, passes children through
 - Pages render `PageHeader` (title / subtitle / actions) + content
 - `dashboard/(workflow)/` — route group holding the six workflow-layer queues (`department`, `reception`, `hospital`, `training`, `security`, `it`), kept apart from `system-admin/` to mirror the System Roles vs. Workflow Roles split (`docs/context/project-overview.md`). Route groups add no URL segment, so `/dashboard/department`, `/dashboard/reception`, etc. are unchanged; no group-level layout is needed since `dashboard/layout.tsx` already covers every child route
-- `dashboard/department/` (built 2026-10-09) is an invitation console, not a Registration
-  Request queue — per `project-overview.md`, the invitation itself is the approval, so there
-  is no "review and approve incoming requests" queue to build here at all. The page is an
+- `dashboard/department/` (built 2026-10-09) is the invitation console plus, since 2026-11-03,
+  the department's "Submitted Registrations" table (`SubmissionRow`), where the Department Head
+  approves or rejects each submission before it reaches Reception. The page is an
   email-input form (`InviteForm`, with a Local/Foreign registration-type picker) plus a table
   of the signed-in Department Head's own sent `invitations`, each revocable. `/register` sits
   **outside** `/dashboard/*` and outside `(auth)/*` — it is not wrapped by the dashboard shell,
@@ -155,7 +155,7 @@ Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` �
 | `src/app/register/` | Public, unauthenticated page only — no session/auth code, no direct DB access. |
 | `src/app/api/register/documents/` | The project's only unauthenticated write surface. Kept as its own file (rather than branching auth inside `api/documents/`) so the whole no-auth path is auditable in one place. Authorization is the invitation token: valid + unrevoked + unconsumed, and every operation is scoped to that invitation's own documents. Submitting consumes the token, which closes the window. |
 | `src/actions/` | Server Actions for form mutations only. No file uploads. |
-| `src/actions/registration.ts` | `submitRegistrationRequestAction` runs with no auth guard (public); `issueInvitationAction`/`revokeInvitationAction` require `requireWriteAccess("DepartmentHead")`. No `approveRegistrationRequest` action exists — the invitation is the approval. |
+| `src/actions/registration.ts` | `submitRegistrationRequestAction` runs with no auth guard (public); `issueInvitationAction`/`revokeInvitationAction`/`approveRegistrationRequestAction`/`rejectRegistrationRequestAction` require `requireWriteAccess("DepartmentHead")`. |
 | `src/lib/domain/` | Shared types and role/state string unions. No React, no Azure SDK, no Drizzle. |
 | `src/lib/services/` | Business logic — workflow transitions, flagging, notifications, registration routing. |
 | `src/lib/azure/` | Thin Azure SDK clients only (Blob, Queue, Graph). |
@@ -201,14 +201,18 @@ notifications table (routed to matching Department Head(s) by department)
 src/lib/email/send.ts → Graph API (registrationSubmittedTemplate)
 ```
 
-**There is no separate Department-approval step after submission** — per
-`project-overview.md`, the invitation itself is the approval. `createRegistrationRequest`
-inserts the row with `status: "Approved"`, `approved_by`/`approved_at` set directly from the
-invitation, in the same insert. No `approveRegistrationRequest` action or `requireDepartmentHead`
-guard exists or is planned — don't add one. The idempotency guarantee this project's other
-approval-style transitions get from a pre-check + transactional re-check comes here instead
-from `consumeInvitation`'s atomic `UPDATE ... WHERE revoked_at IS NULL AND consumed_at IS NULL`:
-a reused or concurrently-raced token simply can't produce a second row, by construction.
+**The Department Head approves every submission before Reception sees it** *(changed
+2026-11-03 — previously the invitation itself was the approval)*. `createRegistrationRequest`
+inserts the row as `PendingDepartmentApproval` and notifies (email + dashboard) only the active
+Head(s) of that department. `approveRegistrationRequestAction` / `rejectRegistrationRequestAction`
+(`requireWriteAccess("DepartmentHead")`) call `approveRegistrationRequest` /
+`rejectRegistrationRequest`, each a single `UPDATE ... WHERE status = 'PendingDepartmentApproval'
+AND department = <approver's department>` — so only that department's Heads can decide, and a
+second click finds nothing. Approval sets `approved_by`/`approved_at` and notifies Reception
+(email + dashboard); rejection stores `rejected_by`/`rejected_at`/`rejection_reason` and is
+final. Reception's list, counts and `getRegistrationRequest` only read `Approved`/`Converted`
+rows. Token reuse is still blocked by `consumeInvitation`'s atomic
+`UPDATE ... WHERE revoked_at IS NULL AND consumed_at IS NULL`.
 
 ### Dashboard reads (Server Components)
 
@@ -349,10 +353,13 @@ which kind of ID it holds.
 | department | text | Copied from the invitation at submission time — routes the notification to matching `staff_users.department` where `DepartmentHead` in `workflow_roles` |
 | registration_type | text | `Local` \| `Foreign` — copied from the invitation at submission time |
 | form_data | jsonb | Shaped like `ReceptionFormInput` (Foreign) or `LocalRegistrationFormInput` (Local) — see `registration-service.ts`. No document columns: visitor uploads live in `documents` keyed by `invitation_id`, reachable from here via `invitation_id` |
-| status | text | Always inserted as `Approved` — there is no observable `PendingDepartmentApproval` row; the invitation itself was the approval, so `approved_by`/`approved_at` are set in the same insert |
-| approved_by | uuid | FK → staff_users — the invitation's `issued_by` |
+| status | text | `PendingDepartmentApproval` on insert → `Approved` \| `Rejected` (Department Head) → `Converted` (Reception). Rows from before 2026-11-03 were inserted `Approved` |
+| approved_by | uuid | Nullable FK → staff_users — the Department Head who approved (pre-2026-11-03 rows: the invitation's `issued_by`) |
 | engagement_id | uuid | Nullable FK → engagements — set when Reception converts the submission; null means still outstanding. This is what stops one submission becoming two Engagements |
-| approved_at | timestamptz | |
+| approved_at | timestamptz | Nullable |
+| rejected_by | uuid | Nullable FK → staff_users — the Department Head who rejected |
+| rejected_at | timestamptz | Nullable |
+| rejection_reason | text | Nullable, encrypted |
 | created_at | timestamptz | |
 
 Created via `src/lib/services/registration-service.ts`'s `createRegistrationRequest`, inside
@@ -623,7 +630,7 @@ Defined as typed string unions in `src/lib/domain/types.ts`.
 
 **access_state:** `Pending`, `Active`, `Expired`, `TerminationRequested`, `Terminated`
 
-`registration_requests.status` (`PendingDepartmentApproval` \| `Approved`) is a separate, simpler state machine — it is not part of `workflow_state`/`access_state` since a Registration Request is not yet an Engagement.
+`registration_requests.status` (`PendingDepartmentApproval` → `Approved` \| `Rejected`, then `Converted`) is a separate, simpler state machine — it is not part of `workflow_state`/`access_state` since a Registration Request is not yet an Engagement.
 
 Path-specific transitions — see `docs/context/project-overview.md` Core User Flow.
 
@@ -673,11 +680,10 @@ Rules the AI agent must never violate:
   through Delegated Approval (Slice 2's one-off, audited, revocable grant) — never by
   permanently assigning someone a second workflow role
 - `/register` is never wrapped by `src/proxy.ts` and never reads session/JWT state
-- `registration_requests` has exactly one write path, ever — `createRegistrationRequest`
-  (`registration-service.ts`), reached only through `submitRegistrationRequestAction`. There is
-  no `approveRegistrationRequest` action, no `requireDepartmentHead` guard, and none should be
-  added — per `project-overview.md` the invitation is the approval, so there is nothing left to
-  separately approve or reject after submission.
+- `registration_requests` is written only by `registration-service.ts`: `createRegistrationRequest`
+  (via `submitRegistrationRequestAction`), `approveRegistrationRequest` /
+  `rejectRegistrationRequest` (Department Head, pending rows of their own department only) and
+  `linkRequestToEngagement` (Reception, `Approved` rows only).
 - Idempotency for that one write path comes from `invitations.consumed_at` + `revoked_at`, checked
   and set atomically inside the same transaction that inserts the `registration_requests` row
   (`consumeInvitation`'s `UPDATE ... WHERE revoked_at IS NULL AND consumed_at IS NULL`) — a reused
