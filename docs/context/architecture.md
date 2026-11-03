@@ -529,7 +529,8 @@ ID type have nowhere else to live — same reasoning as `induction_records` in S
 | engagement_id | uuid | Nullable FK — null for auth notifications and registration-request notifications |
 | registration_request_id | uuid | Nullable FK → registration_requests — required (non-null) for both the registration-submitted notification (to the matching Department Head) and the registration-approved notification (Reception handoff); null for every other notification type |
 | message | text | |
-| read_at | timestamptz | Null until read |
+| read_at | timestamptz | Null until read. An unread row is also how a pending access request is tracked (`auth-service.ts`). The bell hides a read row a week after `read_at` |
+| cleared_at | timestamptz | Nullable (2026-11-03, migration `0027`). Set by Clear / Clear all. Hides the row from the bell and the unread dot without touching `read_at` |
 | created_at | timestamptz | |
 
 ### `termination_requests`

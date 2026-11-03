@@ -1,16 +1,19 @@
 "use client";
 
-import { Bell, ChevronsUpDown, LogOut } from "lucide-react";
+import { Bell, ChevronsUpDown, LogOut, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
 import {
+  clearAllNotificationsAction,
+  clearNotificationAction,
   markAllNotificationsReadAction,
   markNotificationReadAction,
 } from "@/actions/notifications";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export type NotificationItem = {
   id: string;
@@ -26,6 +30,9 @@ export type NotificationItem = {
   readAt: Date | null;
   createdAt: Date;
 };
+
+// Beyond this many, the list scrolls instead of growing down the page.
+const MAX_VISIBLE_NOTIFICATIONS = 4;
 
 function initials(name: string) {
   return name
@@ -96,6 +103,76 @@ export function DashboardTopbar({
     });
   }
 
+  function handleClear(id: string) {
+    startTransition(async () => {
+      try {
+        const result = await clearNotificationAction(id);
+
+        if (!result.success) {
+          toast.error("Couldn't clear notification", {
+            description: result.error,
+          });
+        }
+      } catch {
+        toast.error("Couldn't clear notification");
+      }
+    });
+  }
+
+  function handleClearAll() {
+    startTransition(async () => {
+      try {
+        const result = await clearAllNotificationsAction();
+
+        if (!result.success) {
+          toast.error("Couldn't clear notifications", {
+            description: result.error,
+          });
+        }
+      } catch {
+        toast.error("Couldn't clear notifications");
+      }
+    });
+  }
+
+  const notificationList = notifications.map((notification) => (
+    <div key={notification.id} className="flex items-start gap-1">
+      <DropdownMenuItem
+        onSelect={() => !notification.readAt && handleMarkRead(notification.id)}
+        className="flex min-w-0 flex-1 flex-col items-start gap-1 whitespace-normal"
+      >
+        <div className="flex w-full items-start gap-2">
+          {!notification.readAt && (
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+          )}
+          <p
+            className={
+              notification.readAt
+                ? "text-sm text-muted-foreground"
+                : "text-sm text-foreground"
+            }
+          >
+            {notification.message}
+          </p>
+        </div>
+        <span className="pl-3.5 text-xs text-muted-foreground">
+          {timeAgo(notification.createdAt)}
+        </span>
+      </DropdownMenuItem>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => handleClear(notification.id)}
+        disabled={isPending}
+        className="mt-1 h-7 w-7 shrink-0 text-muted-foreground"
+      >
+        <X className="h-4 w-4" />
+        <span className="sr-only">Clear notification</span>
+      </Button>
+    </div>
+  ));
+
   return (
     <header className="sticky top-0 z-10 w-full bg-background">
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-6">
@@ -122,50 +199,43 @@ export function DashboardTopbar({
                 <span className="text-sm font-medium text-foreground">
                   Notifications
                 </span>
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAllRead}
-                    disabled={isPending}
-                    className="cursor-pointer text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    Mark all as read
-                  </button>
-                )}
+                <span className="flex items-center gap-3">
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      disabled={isPending}
+                      className="cursor-pointer text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      disabled={isPending}
+                      className="cursor-pointer text-xs font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {notifications.length === 0 ? (
                 <p className="px-2 py-6 text-center text-sm text-muted-foreground">
                   No notifications yet
                 </p>
+              ) : notifications.length > MAX_VISIBLE_NOTIFICATIONS ? (
+                // Radix sizes the viewport to 100% of the root, which a
+                // max-height alone doesn't define, so the cap goes on the
+                // viewport itself.
+                <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-72">
+                  {notificationList}
+                </ScrollArea>
               ) : (
-                notifications.map((notification) => (
-                  <DropdownMenuItem
-                    key={notification.id}
-                    onSelect={() =>
-                      !notification.readAt && handleMarkRead(notification.id)
-                    }
-                    className="flex flex-col items-start gap-1 whitespace-normal"
-                  >
-                    <div className="flex w-full items-start gap-2">
-                      {!notification.readAt && (
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
-                      )}
-                      <p
-                        className={
-                          notification.readAt
-                            ? "text-sm text-muted-foreground"
-                            : "text-sm text-foreground"
-                        }
-                      >
-                        {notification.message}
-                      </p>
-                    </div>
-                    <span className="pl-3.5 text-xs text-muted-foreground">
-                      {timeAgo(notification.createdAt)}
-                    </span>
-                  </DropdownMenuItem>
-                ))
+                notificationList
               )}
             </DropdownMenuContent>
           </DropdownMenu>

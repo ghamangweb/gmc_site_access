@@ -1,5 +1,16 @@
 # UI Registry
 
+## Notifications bell: clear + scroll (2026-11-03)
+
+`dashboard-topbar.tsx`: each notification is a `flex items-start gap-1` row holding the
+`DropdownMenuItem` (`min-w-0 flex-1`) and a sibling ghost `Button` (`size="icon"`,
+`mt-1 h-7 w-7 text-muted-foreground`, Lucide `X`, sr-only "Clear notification"). The X is a
+sibling, not a child, so clicking it never triggers the item's mark-as-read select. Header
+gains "Clear all" beside "Mark all as read" (same text-button style, shown when the list is
+non-empty). Above `MAX_VISIBLE_NOTIFICATIONS` (4) the list renders inside `ScrollArea` with
+`[&>[data-slot=scroll-area-viewport]]:max-h-72`: Radix sizes the viewport to 100% of the root,
+so a `max-h` on the root alone never scrolls.
+
 ## Sign-in text hierarchy (2026-11-02)
 
 `src/app/(auth)/sign-in/page.tsx`: company name above the system title in a

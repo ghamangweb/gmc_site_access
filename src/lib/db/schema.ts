@@ -308,5 +308,8 @@ export const notifications = pgTable("notifications", {
   registrationRequestId: uuid().references(() => registrationRequests.id),
   message: encryptedText().notNull(),
   readAt: timestamp({ withTimezone: true }),
+  // Separate from `readAt`: an unread row is also how a pending access
+  // request is tracked, so clearing must never touch `readAt` or delete it.
+  clearedAt: timestamp({ withTimezone: true }),
   createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
