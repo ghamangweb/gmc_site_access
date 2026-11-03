@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { submitTrainingCompletionAction } from "@/actions/engagements";
@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DocumentSelector } from "@/components/workflow/document-selector";
+import type { DocType } from "@/lib/domain/types";
+import type { Document } from "@/lib/services/document-service";
 import type { ClearanceAge } from "@/lib/services/workflow-service";
 
 type LatestInduction = {
@@ -22,6 +25,7 @@ export function TrainingForm({
   engagementId,
   clearance,
   latestInduction,
+  uploadedDocuments,
   readOnly,
 }: {
   engagementId: string;
@@ -29,6 +33,7 @@ export function TrainingForm({
    * went through Hospital and report `applicable: false`. */
   clearance: ClearanceAge;
   latestInduction?: LatestInduction;
+  uploadedDocuments: Document[];
   readOnly: boolean;
 }) {
   const router = useRouter();
@@ -36,13 +41,20 @@ export function TrainingForm({
   const [otherInductions, setOtherInductions] = useState(false);
   const [comments, setComments] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [documentBusy, setDocumentBusy] = useState(false);
+
+  const handleDocumentBusyChange = useCallback(
+    (_docType: DocType, busy: boolean): void => setDocumentBusy(busy),
+    [],
+  );
 
   const expired = clearance.applicable && clearance.expired;
   const disabled = readOnly || isPending || expired;
 
-  const canSubmit = !disabled;
+  const canSubmit = !disabled && !documentBusy;
 
   function handleSubmit() {
+    if (!canSubmit) return;
     startTransition(async () => {
       const result = await submitTrainingCompletionAction(engagementId, {
         generalSiteInduction,
@@ -146,6 +158,18 @@ export function TrainingForm({
             disabled={disabled}
           />
         </div>
+
+        <DocumentSelector
+          engagementId={engagementId}
+          mode="required"
+          docTypes={["training_clearance_form"]}
+          requiredDocTypes={[]}
+          labels={{ training_clearance_form: "Upload clearance form" }}
+          hideLabels
+          uploadedDocuments={uploadedDocuments}
+          onDocumentBusyChange={handleDocumentBusyChange}
+          disabled={disabled}
+        />
 
         {!readOnly && (
           <div className="flex flex-col gap-2">

@@ -26,7 +26,7 @@ export default async function SignInPage({
         <p className="text-sm font-medium uppercase text-muted-foreground">
           Ghana Manganese Company Limited
         </p>
-        <h1 className="max-w-sm text-2xl font-bold leading-8 tracking-tight text-foreground">
+        <h1 className="max-w-md text-2xl font-bold leading-8 tracking-tight text-foreground">
           Site Access Workflow Management System
         </h1>
       </div>

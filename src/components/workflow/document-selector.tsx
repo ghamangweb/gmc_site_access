@@ -40,6 +40,9 @@ type DocumentSelectorProps = {
   mode?: "select" | "required";
   docTypes?: DocType[];
   requiredDocTypes?: DocType[];
+  labels?: Partial<Record<DocType, string>>;
+  hideLabels?: boolean;
+  onDocumentBusyChange?: (docType: DocType, busy: boolean) => void;
   value?: DocType[];
   onChange?: (value: DocType[]) => void;
   uploadedDocuments: Document[];
@@ -54,6 +57,9 @@ export function DocumentSelector({
   mode = "select",
   docTypes = RECEPTION_DOCUMENT_TYPES,
   requiredDocTypes,
+  labels,
+  hideLabels = false,
+  onDocumentBusyChange,
   value = [],
   onChange,
   uploadedDocuments,
@@ -95,8 +101,10 @@ export function DocumentSelector({
             className="flex items-center justify-between gap-3"
           >
             {mode === "required" ? (
-              <span className="text-sm text-foreground">
-                {t(DOCUMENT_LABELS[docType])}
+              <span
+                className={hideLabels ? "sr-only" : "text-sm text-foreground"}
+              >
+                {t(labels?.[docType] ?? DOCUMENT_LABELS[docType])}
                 {requiredDocTypes && !requiredDocTypes.includes(docType) && (
                   <span className="ml-2 text-xs text-muted-foreground">
                     {t("(optional)")}
@@ -128,6 +136,7 @@ export function DocumentSelector({
                   engagementId={engagementId}
                   invitationToken={invitationToken}
                   docType={docType}
+                  onBusyChange={onDocumentBusyChange}
                   uploaded={uploaded}
                   optional={
                     !!requiredDocTypes && !requiredDocTypes.includes(docType)
@@ -247,6 +256,7 @@ function UploadSlot({
   uploaded,
   optional,
   disabled,
+  onBusyChange,
 }: {
   engagementId?: string;
   invitationToken?: string;
@@ -254,6 +264,7 @@ function UploadSlot({
   uploaded: Document | undefined;
   optional?: boolean;
   disabled?: boolean;
+  onBusyChange?: (docType: DocType, busy: boolean) => void;
 }) {
   const { t } = useRegistrationLanguage();
   const router = useRouter();
@@ -284,6 +295,10 @@ function UploadSlot({
       },
     },
   );
+
+  useEffect(() => {
+    onBusyChange?.(docType, isUploading || isDeleting);
+  }, [docType, isUploading, isDeleting, onBusyChange]);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

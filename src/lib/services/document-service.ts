@@ -31,6 +31,7 @@ const DOC_TYPE_OWNERS: Record<DocType, WorkflowRole> = {
   insurance_proof: "Receptionist",
   induction_declaration_form: "TrainingStaff",
   induction_registration_form: "TrainingStaff",
+  training_clearance_form: "TrainingStaff",
   biometric_image: "SecurityStaff",
   passport_photo: "SecurityStaff",
 };
