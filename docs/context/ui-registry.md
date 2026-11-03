@@ -11,6 +11,55 @@ non-empty). Above `MAX_VISIBLE_NOTIFICATIONS` (4) the list renders inside `Scrol
 `[&>[data-slot=scroll-area-viewport]]:max-h-72`: Radix sizes the viewport to 100% of the root,
 so a `max-h` on the root alone never scrolls.
 
+## TrainingExportButton (2026-11-03)
+
+File: `src/components/layout/training-export-button.tsx`, in Training PageHeader actions.
+Uses the existing outline Button: `border-input bg-background rounded-md text-sm
+font-medium`, accent hover and ring focus, Download icon, no shadow. The loading label
+is "Exporting..." and repeat clicks are disabled by Button's loading state. Errors use
+the existing Sonner toast. "Export Training Report" downloads all training records,
+independent of the selected tab or search, with status and sign-off audit columns.
+
+## Training clearance upload (2026-11-03)
+
+`training-form.tsx` reuses `DocumentSelector` after Comments. The clearance-form label
+is screen-reader-only; the upload button keeps its optional indicator. Uses the existing outline small upload
+button, token-based text, and view/remove controls. Read-only and expired forms disable
+document changes. No required-file validation; submission waits only for an active
+upload/removal. `DocumentSelector` supports optional field labels and per-document busy
+notifications; existing consumers keep their default labels and behavior.
+
+## Dark palette (2026-11-03)
+
+`src/app/globals.css` defines dark colors through `.dark` overrides of the existing
+HSL tokens: blue-gray surfaces, soft white text, brighter blue accents, and dark
+status backgrounds with light labels. Components continue using semantic token
+classes. Light colors remain in `:root`; radius and overlay inherit unchanged.
+Tailwind `dark:` utilities follow the `.dark` class through
+`@custom-variant dark (&:where(.dark, .dark *));`.
+The root `<html>` uses `suppressHydrationWarning` for theme attribute changes;
+this is limited to the HTML element, not its descendants.
+`src/components/ui/sonner.tsx` follows next-themes resolved light/dark mode with a
+system fallback before resolution. Toast surfaces and status icons retain their
+existing semantic color tokens and adapt through the same palette.
+
+### ThemeSelector (2026-11-03)
+
+File: `src/components/layout/theme-selector.tsx`, rendered beside Notifications in the topbar.
+
+| Property | Class |
+| --- | --- |
+| Trigger radius | `rounded-md` |
+| Trigger text | `text-muted-foreground` |
+| Hover | `hover:bg-accent hover:text-accent-foreground` |
+| Keyboard focus | `focus-visible:ring-1 focus-visible:ring-ring` |
+| Shadow | None |
+
+An icon-only button toggles light/dark using next-themes resolved theme. A moon offers
+dark mode and a sun offers light mode; the accessible label and title describe the action.
+Disabled until mounting to avoid hydration mismatches. No dropdown or System option;
+the provider can still follow the OS initially, until a click saves an explicit choice.
+
 ## Sign-in text hierarchy (2026-11-02)
 
 `src/app/(auth)/sign-in/page.tsx`: company name above the system title in a

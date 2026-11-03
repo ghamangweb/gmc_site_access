@@ -12,6 +12,7 @@ import {
   markAllNotificationsReadAction,
   markNotificationReadAction,
 } from "@/actions/notifications";
+import { ThemeSelector } from "@/components/layout/theme-selector";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,6 +187,7 @@ export function DashboardTopbar({
           />
         </Link>
         <div className="flex items-center gap-2">
+          <ThemeSelector />
           <DropdownMenu>
             <DropdownMenuTrigger className="relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
               <Bell className="h-5 w-5" />

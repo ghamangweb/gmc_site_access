@@ -16,6 +16,49 @@
 - [ ] Manual check: clear one, clear all, 5+ notifications scroll, a read item older than a week
       is gone, an admin's cleared access request still shows on Users
 
+## Training CSV export (2026-11-03)
+
+- [x] Training header Export Training Report downloads all awaiting/recorded training
+      cycles, independent of tab, search, and pagination. Guests do not see the button.
+- [x] `/api/reports/training` checks TrainingStaff write access including PIN and active
+      account checks and returns a dated no-store CSV attachment.
+- [x] One row per engagement/cycle; 500-cycle batches with stable ordering in
+      a read-only repeatable-read transaction. CSV output is buffered before download.
+- [x] Name/ID, visit purpose, training status, current workflow stage,
+      induction flags/date, completing staff, sign-off audit timestamp/stages/note, and
+      clearance form presence. Engagement ID and cycle number removed from CSV export.
+      Audit and document details match both engagement and cycle; missing audits stay blank.
+      Historical completed cycles remain included.
+- [x] UTF-8 BOM, escaped cells, formula protection, UTC timestamps, no medical comments.
+- [ ] Browser check: identical report from either tab/search, audit attribution, Excel, Guest access.
+- [ ] Other dashboards await approval after Training review.
+
+## Optional training clearance form (2026-11-03)
+
+- [x] Induction sign-off offers "Upload clearance form (optional)" using the existing
+      document uploader; accepts the existing PDF/image types and 16 MB limit.
+- [x] `training_clearance_form` belongs to TrainingStaff and is excluded from visitor
+      requirements. The training page shows documents from the active workflow cycle.
+- [x] Completion remains available without a file; waits while an upload/removal runs.
+- [x] Removed the visible clearance-form label as requested; kept the upload control
+      and optional indicator. The field label remains screen-reader-only.
+- [x] TypeScript and Biome checks passed. Anti-slop reports existing spacing/type-assertion
+      issues in shared document files; unrelated cleanup was not included.
+- [ ] Browser check: upload, preview, remove, reload, and complete with/without a file.
+
+## Theme support (2026-11-03)
+
+- [x] Step 1: added the approved `.dark` palette for core and workflow-status tokens.
+- [x] Step 2: Tailwind `dark:` utilities now follow the `.dark` class through a custom variant.
+- [x] Step 3: root `<html>` uses `suppressHydrationWarning` for next-themes attribute changes.
+- [ ] Browser verification of dark surfaces and text contrast.
+- [x] Step 4 revised: dashboard topbar icon button toggles Light/Dark; moon offers dark,
+      sun offers light. Uses resolved theme and is disabled until mounting.
+- [ ] Browser verification: click and keyboard toggle, saved choice after refresh.
+- [x] Step 5: toast theme follows next-themes resolved light/dark mode, with a system
+      fallback before resolution; custom token-based toast styling is preserved.
+- [ ] Browser verification: trigger a toast in Light and Dark modes.
+
 ## Sign-in text hierarchy (2026-11-02)
 
 - [x] Applied approved hierarchy: smaller, muted company name above the bold system-name `h1`.

@@ -123,6 +123,7 @@ export const DOC_TYPES = [
   "insurance_proof",
   "induction_declaration_form",
   "induction_registration_form",
+  "training_clearance_form",
   "biometric_image",
   "passport_photo",
 ] as const;
@@ -135,6 +136,7 @@ export type DocType = (typeof DOC_TYPES)[number];
 const LAYER_OWNED_DOC_TYPES = [
   "induction_declaration_form",
   "induction_registration_form",
+  "training_clearance_form",
   "biometric_image",
   "passport_photo",
 ] as const satisfies readonly DocType[];
@@ -167,6 +169,7 @@ export const DOCUMENT_LABELS: Record<DocType, string> = {
   insurance_proof: "Proof of medical/travel insurance",
   induction_declaration_form: "Induction declaration form",
   induction_registration_form: "Induction registration form",
+  training_clearance_form: "Clearance form",
   biometric_image: "Biometric capture",
   passport_photo: "Passport photograph",
 };
