@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth/session";
-import { STAKEHOLDER_ROLES } from "@/lib/domain/types";
+import { canViewReception, STAKEHOLDER_ROLES } from "@/lib/domain/types";
 
 // Route to each role's workflow dashboard. Every workflow role now has one,
 // so the placeholder below is only reached by a provisioned user with no
@@ -37,6 +37,12 @@ export default async function DashboardPage() {
 
   if (session.workflowRoles.includes("DepartmentHead")) {
     redirect("/dashboard/department");
+  }
+
+  // HSE and a plain Guest share the Receptionist's queue, read-only. Last, so a
+  // Guest who also holds a workflow role still lands on that role's queue.
+  if (canViewReception(session)) {
+    redirect("/dashboard/reception");
   }
 
   return (

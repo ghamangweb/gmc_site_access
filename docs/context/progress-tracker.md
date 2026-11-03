@@ -1195,6 +1195,21 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## HSE role — read-only Reception (2026-11-03)
+
+- [x] New `HSE` workflow role: requestable on the Access-required page, provisionable in
+      System Admin → Users, labelled "HSE" in emails
+- [x] `canViewReception` (`src/lib/domain/types.ts`) — Receptionist, HSE, or a plain Guest (no
+      workflow role). Used by the proxy, `/dashboard`, the Reception queue and the
+      `/dashboard/reception/[engagementId]` detail page
+- [x] HSE and plain Guest land on `/dashboard/reception` and open records at the same
+      `/dashboard/reception/[engagementId]` URL; read-only — every write control is still gated
+      on the Receptionist role (`canManage`, `formReadOnly`, `canRequestApproval`,
+      `requireWriteAccess("Receptionist")`)
+- [x] `workflow_roles` is `text[]` — no migration
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
