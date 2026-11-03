@@ -1,5 +1,21 @@
 # Progress Tracker
 
+## Dashboard notifications: one-week read retention, clear, scroll (2026-11-03)
+
+- [x] Read notifications drop off the bell a week after they were read (`getRecentNotifications`
+      filter only; rows are kept). Fetch cap raised 10 → 50
+- [x] Clear: an X on each notification plus "Clear all" in the header. Stored in new nullable
+      `notifications.cleared_at`, never by deleting or setting `read_at`, because an unread row is
+      also a pending access request on the System Admin users page. Cleared rows are excluded from
+      the list and the unread dot
+- [x] More than 4 notifications: list wraps in `ScrollArea`, viewport capped at `max-h-72`
+      (about four two-line notifications)
+- [x] Migration `0028_notification_cleared_at.sql` (one `ADD COLUMN`). **Written, NOT applied**
+- [x] `tsc --noEmit`, `biome check` clean; no new anti-slop findings
+- [ ] **Apply `bun run db:migrate` (dev), then production.** Until then the bell query fails and the bell shows empty (the layout catches it)
+- [ ] Manual check: clear one, clear all, 5+ notifications scroll, a read item older than a week
+      is gone, an admin's cleared access request still shows on Users
+
 ## Training CSV export (2026-11-03)
 
 - [x] Training header Export Training Report downloads all awaiting/recorded training
