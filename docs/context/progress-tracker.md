@@ -1175,6 +1175,16 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Workflow dummy data seed (2026-10-29)
+
+- [x] `bun run db:seed:workflow` (`src/lib/db/seed-workflow.ts`) takes the `db:seed:registrations`
+      submissions through the real services so every layer has waiting and recorded work:
+      Reception submissions + one converted record, awaiting stakeholder approval, Hospital
+      (awaiting + Unfit), Training (awaiting), Security (awaiting + activated), completed Visits
+- [x] Notifications only, no emails; local dev only
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

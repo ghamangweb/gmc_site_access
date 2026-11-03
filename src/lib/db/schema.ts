@@ -83,7 +83,7 @@ export const engagements = pgTable(
     delegatedApproverId: uuid().references(() => staffUsers.id),
     delegationGrantedBy: uuid().references(() => staffUsers.id),
     delegationGrantedAt: timestamp({ withTimezone: true }),
-    delegationReason: text(),
+    delegationReason: encryptedText(),
   },
   (table) => [
     // Only one non-terminal (active) engagement per person at a time —
@@ -154,12 +154,12 @@ export const stakeholderApprovals = pgTable("stakeholder_approvals", {
     .notNull()
     .references(() => staffUsers.id),
   approverName: text().notNull(),
-  signature: text().notNull(),
+  signature: encryptedText().notNull(),
   approvedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   isDelegated: boolean().notNull().default(false),
   delegatedBy: uuid().references(() => staffUsers.id),
   delegatedAt: timestamp({ withTimezone: true }),
-  delegationReason: text(),
+  delegationReason: encryptedText(),
 });
 
 // One row per rejection, kept as history: a record can be rejected, fixed by
@@ -205,7 +205,7 @@ export const accessProvisionings = pgTable("access_provisionings", {
     .references(() => workflowCycles.id),
   idType: text().notNull(),
   biometricCaptured: boolean().notNull().default(false),
-  accessCardNumber: text().notNull(),
+  accessCardNumber: encryptedText().notNull(),
   // Business rule: never later than the departure date. The "or earliest visa
   // /permit expiry" half of that rule cannot be enforced yet — those dates are
   // not stored anywhere until Slice 8 adds them.
