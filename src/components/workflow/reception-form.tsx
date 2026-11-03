@@ -116,7 +116,7 @@ const receptionFormSchema = z
     emergencyContactName: z.string().min(1, "Required"),
     emergencyContactPhone: phoneFieldSchema,
     employmentStatus: z.string().min(1, "Required"),
-    accessPurpose: z.enum(["Work", "Visit", "VisitMine"]),
+    accessPurpose: z.enum(["Work", "WorkMine", "Visit", "VisitMine"]),
     arrivalDate: z.string().min(1, "Required"),
     departureDate: z.string().min(1, "Required"),
     companyName: z.string().min(1, "Required"),
@@ -606,7 +606,7 @@ export function ReceptionForm({
               control={form.control}
               name="accessPurpose"
               label="Nature of Visit"
-              options={["Work", "Visit", "VisitMine"]}
+              options={["Work", "WorkMine", "Visit", "VisitMine"]}
               optionLabels={ACCESS_PURPOSE_LABELS}
               disabled={disabled}
             />

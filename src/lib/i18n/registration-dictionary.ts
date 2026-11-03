@@ -98,6 +98,7 @@ const ZH_ENTRIES = {
   Contractor: "承包商",
   "Visitor(Expatriate)": "访客（外籍人士）",
   "Require mine site access": "需要矿区准入",
+  "Require mine site access to work": "需要矿区准入以开展工作",
   "Familiarization Visit (no mine site access)": "参观考察（不进入矿区）",
   "Require Mine Tour": "需要矿区参观",
   "Coming to work": "前来工作",

@@ -1175,6 +1175,59 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Workflow dummy data seed (2026-10-29)
+
+- [x] `bun run db:seed:workflow` (`src/lib/db/seed-workflow.ts`) takes the `db:seed:registrations`
+      submissions through the real services so every layer has waiting and recorded work:
+      Reception submissions + one converted record, awaiting stakeholder approval, Hospital
+      (awaiting + Unfit), Training (awaiting), Security (awaiting + activated), completed Visits
+- [x] Notifications only, no emails; local dev only
+
+---
+
+## Nature of Visit — "Require mine site access to work" (2026-11-03)
+
+- [x] New `AccessPurpose` value `WorkMine`, labelled "Require mine site access to work";
+      routes exactly like `Work` (Hospital → Training → Security) and passes the Hospital
+      clearance / clearance-age checks; added to both registration forms, the prefill schema,
+      the Hospital/Training/Security queues and the zh dictionary
+- [x] `access_purpose` is a text column — no migration
+
+---
+
+## HSE role — read-only Reception (2026-11-03)
+
+- [x] New `HSE` workflow role: requestable on the Access-required page, provisionable in
+      System Admin → Users, labelled "HSE" in emails
+- [x] `canViewReception` (`src/lib/domain/types.ts`) — Receptionist, HSE, or a plain Guest (no
+      workflow role). Used by the proxy, `/dashboard`, the Reception queue and the
+      `/dashboard/reception/[engagementId]` detail page
+- [x] HSE and plain Guest land on `/dashboard/reception` and open records at the same
+      `/dashboard/reception/[engagementId]` URL; read-only — every write control is still gated
+      on the Receptionist role (`canManage`, `formReadOnly`, `canRequestApproval`,
+      `requireWriteAccess("Receptionist")`)
+- [x] `workflow_roles` is `text[]` — no migration
+
+---
+
+## Department Head approval of submissions (2026-11-03)
+
+- [x] Submissions are inserted `PendingDepartmentApproval`; only the department's Head(s) are
+      notified (email "Registration Approval Required" → `/dashboard/department`, + dashboard)
+- [x] `/dashboard/department` "Submitted Registrations" table (`SubmissionRow`) with Approve
+      (confirm) and Reject (reason required, final) for pending rows
+- [x] Approve → `Approved`, Reception gets the existing "New Visitor Registration" email +
+      dashboard notification, row appears in Reception's queue
+- [x] Reception's list, counts, `getRegistrationRequest` and `linkRequestToEngagement` only
+      act on `Approved` (/`Converted`) rows; `/reception/new?requestId=` for a non-visible row
+      redirects to the queue
+- [x] Migration `0027_department_approval` — `approved_by`/`approved_at` nullable, adds
+      `rejected_by`/`rejected_at`/`rejection_reason`; existing rows stay `Approved`
+- [ ] `db:seed:registrations` still inserts rows as `Approved` (no pending seed data)
+- [ ] Follow-up: HOD view of the full submission before deciding
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

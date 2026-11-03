@@ -23,6 +23,7 @@ import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
+  canViewReception,
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
@@ -79,7 +80,7 @@ export default async function ReceptionQueuePage({
   // Stakeholders used to land here too. They have their own queue now, and
   // nothing on this page is their work — /dashboard sends them to
   // /dashboard/approvals.
-  if (!session.workflowRoles.includes("Receptionist")) {
+  if (!canViewReception(session)) {
     redirect("/dashboard");
   }
 

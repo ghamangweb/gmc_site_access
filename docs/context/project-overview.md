@@ -247,7 +247,7 @@ Visit-specific documents, approvals, and workflow information do not belong dire
 
 An Engagement represents a specific visit or work request.
 
-It is created by Reception once the invited submission has arrived. The invitation itself is the approval, so there is no separate Department approval step after submission.
+It is created by Reception once the invited submission has been approved by the Department Head. A submission the Department Head rejects never reaches Reception.
 
 The Engagement contains the information and activities associated with that particular visit, including:
 
@@ -276,7 +276,7 @@ Guests have read-only access within their assigned workflow areas and cannot mod
 
 ### Department Head
 
-Department Heads issue and revoke invitation links for their GMC Liaison Department. They email links to visitors, may resend them, and may revoke an outstanding link at any time. They have no explicit rejection action and no write access to visitor records beyond the invitation console.
+Department Heads issue and revoke invitation links for their GMC Liaison Department. They email links to visitors, may resend them, and may revoke an outstanding link at any time. They approve or reject each submission made through their department's invitations before it reaches Reception; a rejection needs a reason and is final. They have no other write access to visitor records.
 
 ### System Administrator
 
@@ -318,8 +318,7 @@ The following rules define the expected behaviour of the system:
 - The registration form is viewable without authentication, but submission requires a valid, unrevoked invitation link.
 - Visitors do not create accounts or log into the system.
 - Staff must authenticate before accessing staff functions.
-- Department Heads issue invitation links for their GMC Liaison Department. The invitation is the approval; there is no separate approval step after submission.
-- There is no explicit rejection action at the Department stage; declining is withholding the invitation.
+- Department Heads issue invitation links for their GMC Liaison Department, then approve or reject each submission before it reaches Reception. Rejection is final; a new invitation is the way back.
 - A submission remains tied to its invitation, and an invitation link stays valid until the Department Head revokes it.
 - Registration Requests do not create Persons or Engagements.
 - Engagements are created only at Reception.
@@ -339,7 +338,7 @@ The following rules define the expected behaviour of the system:
 ## Features In Scope
 
 - Registration form, viewable by anyone but submittable only by visitors holding a valid invitation link from the Department Head.
-- Department Head invitation console: generate, email, resend, and revoke invitation links.
+- Department Head invitation console: generate, email, resend, and revoke invitation links; approve or reject submitted registrations.
 - Staff authentication using Microsoft Entra ID and PIN.
 - Role-based staff access.
 - Reception processing and Engagement creation.

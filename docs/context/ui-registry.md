@@ -2009,3 +2009,28 @@ PDFs via `pdfjs-dist`), so there is no `<img>`, no browser PDF toolbar and no fi
 tab — it removes the easy routes (save button, right-click save, Ctrl+S, a copyable URL), nothing
 more. The route refuses browser navigations via `Sec-Fetch-Dest`. Not yet applied to
 `DocumentSelector`'s upload-slot eye icon, which still opens a signed URL in a new tab.
+
+### SubmissionRow (2026-11-03)
+
+File: src/app/dashboard/(workflow)/department/submission-row.tsx
+Last updated: 2026-11-03
+
+| Property | Class |
+|---|---|
+| Background | inherits `TableRow` inside the page's `overflow-x-auto bg-card` wrapper (same as `InvitationRow`) |
+| Border | none of its own — table rows |
+| Border radius | n/a |
+| Text — primary | table default |
+| Text — secondary | rejection reason `text-xs text-muted-foreground` under the badge |
+| Spacing | actions `flex justify-end gap-2`; status cell `flex flex-col gap-1` |
+| Hover state | table default |
+| Shadow | none — this system never uses `shadow-*` |
+| Status / accent usage | Awaiting Approval `bg-status-warning-bg text-status-warning-fg`; Approved (incl. Converted) `bg-status-success-bg text-status-success-fg`; Rejected `bg-status-danger-bg text-status-danger-fg` |
+
+**Pattern notes:**
+The Department Head's "Submitted Registrations" table on `/dashboard/department`, above the
+invitations. Approve and Reject (`size="sm"`, Reject `variant="outline"`) render only for
+`PendingDepartmentApproval` rows and only when `canManage` (non-Guest). Approve opens a confirm
+dialog ("Confirm Approval"); Reject opens the stakeholder-panel-style dialog — `Reason *`
+`Textarea`, `variant="destructive"` "Confirm Rejection", disabled until a reason is typed.
+Pending rows are sorted to the top by `listRegistrationRequestsForDepartment`.
