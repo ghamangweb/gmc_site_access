@@ -1,5 +1,5 @@
 {
-  "id": "8e0d47b5-ff6f-405b-bc1e-18c9d07568ba",
+  "id": "459369a7-c09d-4363-acf9-1232fc41d8a1",
   "prevId": "958a68b9-926e-41f7-8b18-ccf088042c9a",
   "version": "7",
   "dialect": "postgresql",
@@ -622,12 +622,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "cleared_at": {
-          "name": "cleared_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -820,20 +814,37 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'Approved'"
+          "default": "'PendingDepartmentApproval'"
         },
         "approved_by": {
           "name": "approved_by",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "approved_at": {
           "name": "approved_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": false
+        },
+        "rejected_by": {
+          "name": "rejected_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejected_at": {
+          "name": "rejected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejection_reason": {
+          "name": "rejection_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -868,6 +879,15 @@
           "tableFrom": "registration_requests",
           "tableTo": "staff_users",
           "columnsFrom": ["approved_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "registration_requests_rejected_by_staff_users_id_fk": {
+          "name": "registration_requests_rejected_by_staff_users_id_fk",
+          "tableFrom": "registration_requests",
+          "tableTo": "staff_users",
+          "columnsFrom": ["rejected_by"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"

@@ -6,7 +6,8 @@ export type WorkflowRole =
   | "HospitalStaff"
   | "TrainingStaff"
   | "SecurityStaff"
-  | "DepartmentHead";
+  | "DepartmentHead"
+  | "HSE";
 
 export const GMC_LIAISON_DEPARTMENTS = [
   "Mining",
@@ -41,10 +42,11 @@ export type ActionResult =
       missingDocTypes?: DocType[];
     };
 
-export type AccessPurpose = "Work" | "Visit" | "VisitMine";
+export type AccessPurpose = "Work" | "WorkMine" | "Visit" | "VisitMine";
 
 export const ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string> = {
   Work: "Require mine site access",
+  WorkMine: "Require mine site access to work",
   Visit: "Familiarization Visit (no mine site access)",
   VisitMine: "Require Mine Tour",
 };
@@ -238,6 +240,7 @@ export type ApproverRole = StakeholderRole | "Delegated";
 // form and `requestAccessAction`, which rejects anything not listed here.
 export const REQUESTABLE_ROLES = [
   "Guest",
+  "HSE",
   "Receptionist",
   ...STAKEHOLDER_ROLES,
   "HospitalStaff",
@@ -248,10 +251,25 @@ export const REQUESTABLE_ROLES = [
 
 export type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
+// Who can open Reception. Only a Receptionist can act there; HSE and a plain
+// Guest (no workflow role of their own) see the same queue and records
+// read-only. Shared by the proxy, /dashboard and the Reception pages.
+export function canViewReception(user: {
+  systemRole: SystemRole;
+  workflowRoles: WorkflowRole[];
+}): boolean {
+  return (
+    user.workflowRoles.includes("Receptionist") ||
+    user.workflowRoles.includes("HSE") ||
+    (user.systemRole === "Guest" && user.workflowRoles.length === 0)
+  );
+}
+
 // What a role is called in an email — the stored value is camel case and
 // means nothing to the reader. Single source, like WORKFLOW_STATE_LABELS.
 export const ROLE_LABELS: Record<RequestableRole, string> = {
   Guest: "Guest",
+  HSE: "HSE",
   Receptionist: "Receptionist",
   CSO: "Chief Sustainability Officer (CSO)",
   HCM: "Human Capital Manager (HCM)",

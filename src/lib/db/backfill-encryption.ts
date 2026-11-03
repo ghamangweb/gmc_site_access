@@ -34,7 +34,7 @@ const ENCRYPTED_COLUMNS: { table: string; columns: string[] }[] = [
       "emergency_contact_phone",
     ],
   },
-  { table: "engagements", columns: ["reception_data"] },
+  { table: "engagements", columns: ["reception_data", "delegation_reason"] },
   { table: "registration_requests", columns: ["form_data"] },
   {
     table: "hospital_clearances",
@@ -42,6 +42,12 @@ const ENCRYPTED_COLUMNS: { table: string; columns: string[] }[] = [
   },
   { table: "induction_records", columns: ["trainer_comments"] },
   { table: "termination_requests", columns: ["reason"] },
+  { table: "stakeholder_rejections", columns: ["reason"] },
+  {
+    table: "stakeholder_approvals",
+    columns: ["signature", "delegation_reason"],
+  },
+  { table: "access_provisionings", columns: ["access_card_number"] },
   { table: "invitations", columns: ["email"] },
   { table: "notifications", columns: ["message"] },
   { table: "workflow_transitions", columns: ["comments"] },

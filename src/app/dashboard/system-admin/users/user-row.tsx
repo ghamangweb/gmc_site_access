@@ -56,6 +56,7 @@ const WORKFLOW_ROLES: WorkflowRole[] = [
   "TrainingStaff",
   "SecurityStaff",
   "DepartmentHead",
+  "HSE",
 ];
 const NO_WORKFLOW_ROLE = "none";
 

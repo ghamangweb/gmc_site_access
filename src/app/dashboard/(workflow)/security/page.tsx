@@ -88,10 +88,14 @@ export default async function SecurityQueuePage({
   // Visit-only records never reach Security — they finish at Reception.
   const [awaitingCount, revocationCount, awaiting, granted, revocations] =
     await Promise.all([
-      countEngagementsForLayer("AtSecurity", ["Work", "VisitMine"]),
+      countEngagementsForLayer("AtSecurity", ["Work", "WorkMine", "VisitMine"]),
       countPendingRevocations(),
       activeView === "awaiting"
-        ? listEngagementsForLayer("AtSecurity", ["Work", "VisitMine"], request)
+        ? listEngagementsForLayer(
+            "AtSecurity",
+            ["Work", "WorkMine", "VisitMine"],
+            request,
+          )
         : undefined,
       // The end of the line: Security has issued a card, so the visitor is
       // through every stage — one row per card issued.

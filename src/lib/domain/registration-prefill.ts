@@ -73,7 +73,7 @@ const detailsSchema = z
 const submittedPayloadSchema = z.object({
   person: personSchema,
   accessPurpose: z
-    .enum(["Work", "Visit", "VisitMine"])
+    .enum(["Work", "WorkMine", "Visit", "VisitMine"])
     .optional()
     .catch(undefined),
   arrivalDate: optionalText,

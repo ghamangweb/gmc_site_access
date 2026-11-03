@@ -62,9 +62,9 @@ export default async function HospitalQueuePage({
   // The awaiting pill must show outstanding work on either tab, so the count
   // is its own query.
   const [awaitingCount, awaiting, recorded] = await Promise.all([
-    countEngagementsForLayer("AtHospital", ["Work"]),
+    countEngagementsForLayer("AtHospital", ["Work", "WorkMine"]),
     activeView === "awaiting"
-      ? listEngagementsForLayer("AtHospital", ["Work"], request)
+      ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
       : undefined,
     activeView === "recorded"
       ? listRecentHospitalClearances(request)

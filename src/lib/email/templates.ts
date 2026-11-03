@@ -112,8 +112,8 @@ export function departmentInvitationTemplate(opts: {
 export function registrationSubmittedTemplate(opts: {
   visitorName?: string;
   companyName?: string;
-  // Department Heads are only told; Reception acts on it from their
-  // dashboard, so only theirs carries a link.
+  // The Department Head is mailed on submission, to approve or reject it;
+  // Reception only once the Head has approved it.
   audience: "DepartmentHead" | "Receptionist";
 }): MessageTemplate {
   const visitorName = opts.visitorName ?? "A visitor";
@@ -121,8 +121,8 @@ export function registrationSubmittedTemplate(opts: {
 
   if (opts.audience === "DepartmentHead") {
     return {
-      subject: subject(`Registration Submitted for ${visitorName}`),
-      html: `${HELLO}<p>${visitor} has successfully submitted their registration form for site access at Ghana Manganese Company (GMC).</p><p>This notification is for your information.</p>`,
+      subject: subject(`Registration Approval Required - ${visitorName}`),
+      html: `${HELLO}<p>${visitor} has submitted their registration form for site access at Ghana Manganese Company (GMC).</p><p>Please review the submission on the Site Access dashboard and approve or reject it before it proceeds to Reception.</p>${button(`${baseUrl()}/dashboard/department`, "Review Registration")}`,
     };
   }
 
