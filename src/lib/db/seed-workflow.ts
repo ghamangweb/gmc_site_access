@@ -95,7 +95,8 @@ const CLEARANCE_COMMENTS: Record<HospitalClearanceStatus, string> = {
   Fit: "",
   FitWithConditions:
     "Fit for site work. Must wear prescription safety glasses.",
-  Unfit: "",
+  Unfit:
+    "Not fit for site work. Uncontrolled hypertension; review in 3 months.",
 };
 
 // The first active staff user holding a workflow role, so Hospital and

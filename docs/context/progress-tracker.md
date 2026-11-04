@@ -7,6 +7,14 @@
 - [x] Apply the same light/dark logo switch to the shared authentication shell and visitor registration page.
 - [ ] Manual check: confirm sign-in, PIN, and registration logos follow the selected theme.
 
+## Hospital: comments required for Unfit (2026-11-04)
+
+- [x] Doctor Comments is required (`*`, submit disabled until filled) for Unfit as well as
+      Fit with Conditions, in `HospitalForm` and enforced in `recordHospitalClearance`
+- [x] `seed-workflow.ts` Unfit sample now has a comment so the seed still passes
+- [x] `tsc --noEmit`, `biome lint` clean
+- [ ] Manual check: select Unfit → Submit stays disabled until a comment is entered
+
 ## Dashboard notifications: one-week read retention, clear, scroll (2026-11-03)
 
 - [x] Read notifications drop off the bell a week after they were read (`getRecentNotifications`

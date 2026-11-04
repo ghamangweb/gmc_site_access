@@ -233,7 +233,7 @@ export function getRegistrationDocTypes(
 // Sustainability Officer, Human Capital Manager, General Mine Manager,
 // Engineering Manager. EM replaced DMD (2026-10-26); approvals signed before
 // then still read "DMD" in `stakeholder_approvals.approver_role`.
-export const STAKEHOLDER_ROLES = ["CSO", "HCM", "GMM", "EM"] as const;
+export const STAKEHOLDER_ROLES = ["CSO", "HCM", "GMM", "EM", "MM"] as const;
 
 export type StakeholderRole = (typeof STAKEHOLDER_ROLES)[number];
 
@@ -278,6 +278,7 @@ export const ROLE_LABELS: Record<RequestableRole, string> = {
   HCM: "Human Capital Manager (HCM)",
   GMM: "General Mine Manager (GMM)",
   EM: "Engineering Manager (EM)",
+  MM: "Mining Manager(MM)",
   HospitalStaff: "Hospital",
   TrainingStaff: "Training School",
   SecurityStaff: "Security",

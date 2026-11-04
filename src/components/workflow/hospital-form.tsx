@@ -52,7 +52,7 @@ export function HospitalForm({
   const [isPending, startTransition] = useTransition();
 
   const disabled = readOnly || isPending;
-  const commentsRequired = status === "FitWithConditions";
+  const commentsRequired = status === "FitWithConditions" || status === "Unfit";
   const canSubmit =
     !disabled && status !== "" && (!commentsRequired || comments.trim() !== "");
 
