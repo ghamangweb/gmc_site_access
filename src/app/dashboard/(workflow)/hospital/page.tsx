@@ -147,7 +147,6 @@ export default async function HospitalQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Departure</TableHead>
                   {/* w-px shrinks the column to the button, so the header
@@ -163,7 +162,6 @@ export default async function HospitalQueuePage({
                         {person.fullName}
                       </Link>
                     </TableCell>
-                    <TableCell>{person.passportNo}</TableCell>
                     <TableCell>{engagement.arrivalDate}</TableCell>
                     <TableCell>{engagement.departureDate}</TableCell>
                     <TableCell>
@@ -201,7 +199,6 @@ export default async function HospitalQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Recorded</TableHead>
                   <TableHead>Cleared By</TableHead>
                   <TableHead>Next Review Date</TableHead>
@@ -220,7 +217,6 @@ export default async function HospitalQueuePage({
                           {person.fullName}
                         </Link>
                       </TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatQueueDate(clearance.clearanceDate)}
                       </TableCell>
@@ -277,7 +273,6 @@ export default async function HospitalQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Outcome</TableHead>
                   <TableHead>Recorded</TableHead>
                   <TableHead>Cleared By</TableHead>
@@ -316,7 +311,6 @@ export default async function HospitalQueuePage({
                         className="hover:bg-muted/50"
                       >
                         <TableCell>{person.fullName}</TableCell>
-                        <TableCell>{person.passportNo}</TableCell>
                         <TableCell>
                           <Badge className={CLEARANCE_BADGE[status]}>
                             {HOSPITAL_CLEARANCE_LABELS[status]}

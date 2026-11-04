@@ -1509,6 +1509,26 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Site Access Records — HSE and Guest dashboard (2026-11-04)
+
+*Supersedes the read-only Reception access above: Reception is Receptionist-only again.*
+
+- [x] `canViewRecords` (`src/lib/domain/types.ts`) replaces `canViewReception` — HSE, or a plain
+      Guest (no workflow role). Used by the proxy (`overview` layer), `/dashboard` and the page
+- [x] `/dashboard/overview` "Site Access Records": one read-only table of every engagement —
+      Name, Nature of Visit, Stage, Medical (outcome only / Exempted), Induction (Completed /
+      Exempted), Access (effective state). Search + pagination; no record pages, no actions
+- [x] `listRecordsOverview` (`workflow-service.ts`) — one page of engagements plus each row's
+      latest clearance, induction, exemptions and provisioning in the active cycle
+- [x] HSE notified (dashboard + email `hseRecordUpdateTemplate` → `/dashboard/overview`) when
+      Hospital records a clearance (any outcome), Training completes an induction, Security
+      activates access. Emails carry no health or card details. Guests are not notified
+- [x] Passport / Ghana Card columns removed from every dashboard table (Reception, Department,
+      Approvals, Hospital, Training, Security); search still matches on the number. Record
+      detail page headers and CSV exports unchanged
+
+---
+
 ## Security access card expiry (2026-11-04)
 
 - [x] Access Setup shows the departure date as the card expiry, removes the date picker,

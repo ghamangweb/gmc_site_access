@@ -25,6 +25,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   training: "Training School",
   security: "Security",
   department: "Department",
+  overview: "Site Access Records",
 };
 
 const UUID_PATTERN =

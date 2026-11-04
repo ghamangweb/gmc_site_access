@@ -327,7 +327,7 @@ Microsoft Graph API
 | email | text | Written from the Entra `email` claim on first sign-in, then refreshed on every sign-in when the claim differs |
 | display_name | text | Entra `name` claim (falls back to `email`), refreshed on every sign-in when it differs — this is the name shown as GMC Liaison Person on a registration form |
 | system_role | text | User \| Guest \| Admin \| SystemAdmin |
-| workflow_roles | text[] | Receptionist, Hospital, DepartmentHead, HSE, etc. |
+| workflow_roles | text[] | Receptionist, Hospital, DepartmentHead, HSE (read-only `/dashboard/overview`, notified as Hospital / Training / Security finish), etc. |
 | department | text | Nullable — GMC Liaison Department this user heads; only set when `workflow_roles` includes `DepartmentHead`. Constrained to the canonical `GmcLiaisonDepartment` list (`src/lib/domain/types.ts`'s `GMC_LIAISON_DEPARTMENTS`) shared with `registration_requests.department` — not arbitrary text |
 | pin_hash | text | Never plaintext; cleared on deactivation |
 | deactivated_at | timestamptz | Nullable — soft delete. Twelve tables reference this row (audit trail), so a hard DELETE would either violate a foreign key or destroy attribution. A deactivated user cannot sign in and is excluded from every recipient/approver lookup |

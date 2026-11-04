@@ -23,7 +23,6 @@ import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
-  canViewReception,
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
@@ -80,7 +79,7 @@ export default async function ReceptionQueuePage({
   // Stakeholders used to land here too. They have their own queue now, and
   // nothing on this page is their work — /dashboard sends them to
   // /dashboard/approvals.
-  if (!canViewReception(session)) {
+  if (!session.workflowRoles.includes("Receptionist")) {
     redirect("/dashboard");
   }
 
@@ -226,7 +225,6 @@ export default async function ReceptionQueuePage({
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Name</TableHead>
-                    <TableHead>Passport / Ghana Card</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Nature of Visit</TableHead>
@@ -278,7 +276,6 @@ export default async function ReceptionQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Status</TableHead>
                   {canManage && (
@@ -298,7 +295,6 @@ export default async function ReceptionQueuePage({
                       key={engagement.id}
                       engagementId={engagement.id}
                       personName={person.fullName}
-                      passportNo={person.passportNo}
                       accessPurpose={engagement.accessPurpose}
                       workflowState={workflowState}
                       accessState={engagement.accessState}
@@ -336,7 +332,6 @@ export default async function ReceptionQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Rejected By</TableHead>
                   <TableHead>Reason</TableHead>
@@ -352,7 +347,6 @@ export default async function ReceptionQueuePage({
                         {person.fullName}
                       </Link>
                     </TableCell>
-                    <TableCell>{person.passportNo}</TableCell>
                     <TableCell>
                       {/* SAFETY: access_purpose is written only from the
                           AccessPurpose union by `createEngagement`. */}

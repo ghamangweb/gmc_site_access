@@ -18,7 +18,6 @@ export function RegistrationRequestRow({
   return (
     <TableRow className="hover:bg-muted/50">
       <TableCell>{request.fullName}</TableCell>
-      <TableCell>{request.identityNo}</TableCell>
       <TableCell>{request.registrationType}</TableCell>
       <TableCell>{request.department}</TableCell>
       <TableCell>{ACCESS_PURPOSE_LABELS[request.accessPurpose]}</TableCell>

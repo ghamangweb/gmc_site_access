@@ -46,7 +46,6 @@ export const WORKFLOW_STATE_BADGE: Record<WorkflowState, string> = {
 type ReceptionRowProps = {
   engagementId: string;
   personName: string;
-  passportNo: string;
   accessPurpose: string;
   workflowState: WorkflowState;
   accessState: string;
@@ -58,7 +57,6 @@ type ReceptionRowProps = {
 export function ReceptionRow({
   engagementId,
   personName,
-  passportNo,
   accessPurpose,
   workflowState,
   accessState,
@@ -103,7 +101,6 @@ export function ReceptionRow({
             {personName}
           </Link>
         </TableCell>
-        <TableCell>{passportNo}</TableCell>
         <TableCell>
           {ACCESS_PURPOSE_LABELS[accessPurpose as AccessPurpose]}
         </TableCell>
