@@ -271,15 +271,14 @@ export const REQUESTABLE_ROLES = [
 
 export type RequestableRole = (typeof REQUESTABLE_ROLES)[number];
 
-// Who can open Reception. Only a Receptionist can act there; HSE and a plain
-// Guest (no workflow role of their own) see the same queue and records
-// read-only. Shared by the proxy, /dashboard and the Reception pages.
-export function canViewReception(user: {
+// Who sees the Site Access Records overview: HSE, and a plain Guest (no
+// workflow role of their own). One shared, read-only table — no record pages
+// and no actions. Shared by the proxy, /dashboard and the page itself.
+export function canViewRecords(user: {
   systemRole: SystemRole;
   workflowRoles: WorkflowRole[];
 }): boolean {
   return (
-    user.workflowRoles.includes("Receptionist") ||
     user.workflowRoles.includes("HSE") ||
     (user.systemRole === "Guest" && user.workflowRoles.length === 0)
   );

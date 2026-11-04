@@ -12,7 +12,6 @@ import { requirePinConfirmed } from "@/lib/auth/guards";
 import {
   type AccessPurpose,
   type ApproverRole,
-  canViewReception,
   type ReceptionData,
   STAKEHOLDER_ROLES,
 } from "@/lib/domain/types";
@@ -68,7 +67,7 @@ export async function EngagementDetail({
   // to — a delegate holds no workflow role at all, so the grant is the check.
   const canOpen =
     queueHref === "/dashboard/reception"
-      ? canViewReception(session)
+      ? session.workflowRoles.includes("Receptionist")
       : STAKEHOLDER_ROLES.some((role) =>
           session.workflowRoles.includes(role),
         ) || engagement.delegatedApproverId === session.staffUserId;

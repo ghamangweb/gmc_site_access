@@ -64,6 +64,7 @@ import {
   STAKEHOLDER_ROLES,
   WORKFLOW_EXEMPTION_STAGE_LABELS,
   type WorkflowExemptionInput,
+  type WorkflowExemptionStage,
   type WorkflowRole,
   type WorkflowState,
 } from "@/lib/domain/types";
@@ -312,6 +313,54 @@ export async function listAllEngagementsWithPerson(): Promise<EngagementRow[]> {
     .from(engagements)
     .innerJoin(persons, eq(engagements.personId, persons.id))
     .orderBy(engagements.createdAt);
+}
+
+// The Site Access Records overview (HSE and plain Guests): every engagement
+// with where it is and what each layer decided — outcomes only, never the
+// doctor's or trainer's comments. The per-row lookups are bounded by the
+// page size and reuse the same "latest in the active cycle" getters the
+// layer screens use, so the table can't disagree with them.
+export type RecordOverviewRow = EngagementRow & {
+  clearanceStatus: HospitalClearanceStatus | undefined;
+  inductionCompleted: boolean;
+  exemptedStages: WorkflowExemptionStage[];
+  accessCardExpiry: string | undefined;
+};
+
+export async function listRecordsOverview(
+  request: PageRequest = {},
+): Promise<Page<RecordOverviewRow>> {
+  const engagementsPage = await listEngagementsWithPerson(request);
+
+  const rows = await Promise.all(
+    engagementsPage.rows.map(async (row) => {
+      const [clearance, induction, exemptions, provisioning] =
+        await Promise.all([
+          getLatestHospitalClearance(row.engagement.id),
+          getLatestInductionRecord(row.engagement.id),
+          getActiveWorkflowExemptions(row.engagement.id),
+          getAccessProvisioning(row.engagement.id),
+        ]);
+
+      return {
+        ...row,
+        // SAFETY: clearance_status is written only from the
+        // HospitalClearanceStatus union by `recordHospitalClearance`.
+        clearanceStatus: clearance?.clearanceStatus as
+          | HospitalClearanceStatus
+          | undefined,
+        inductionCompleted: induction !== undefined,
+        // SAFETY: stage is written only from WORKFLOW_EXEMPTION_STAGES by
+        // `applyStakeholderExemption`.
+        exemptedStages: exemptions.map(
+          (exemption) => exemption.stage as WorkflowExemptionStage,
+        ),
+        accessCardExpiry: provisioning?.accessCardExpiry,
+      };
+    }),
+  );
+
+  return { ...engagementsPage, rows };
 }
 
 export async function listEngagementsForLayer(
@@ -1742,6 +1791,7 @@ export async function recordHospitalClearance(
   nextRecipients: StaffUser[];
   nextRole: "TrainingStaff" | "SecurityStaff" | null;
   receptionRecipients: StaffUser[];
+  hseRecipients: StaffUser[];
   outcome: "Cleared" | "Unfit";
 }> {
   const preCheck = await getEngagementById(engagementId, client);
@@ -1778,6 +1828,11 @@ export async function recordHospitalClearance(
     input.clearanceStatus === "Fit"
       ? []
       : await getStaffByWorkflowRoles(["Receptionist"], client);
+
+  // HSE hears about every clearance, whatever the outcome — an Unfit most of
+  // all. Outcome and comments stay on Hospital's screens; HSE sees the
+  // outcome on the Site Access Records overview.
+  const hseRecipients = await getStaffByWorkflowRoles(["HSE"], client);
 
   return client.transaction(async (tx) => {
     // Row lock — the pre-check above is just a friendly fast path; this is
@@ -1881,6 +1936,11 @@ export async function recordHospitalClearance(
         engagementId,
         message: receptionMessage,
       })),
+      ...hseRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: "Hospital recorded the medical clearance for this record.",
+      })),
     ];
 
     if (dashboardNotices.length > 0) {
@@ -1892,6 +1952,7 @@ export async function recordHospitalClearance(
       nextRecipients,
       nextRole,
       receptionRecipients,
+      hseRecipients,
       outcome,
     };
   });
@@ -2372,7 +2433,11 @@ export async function recordInductionCompletion(
   },
   performedBy: string,
   client: DbClient = db,
-): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
+): Promise<{
+  engagement: Engagement;
+  recipients: StaffUser[];
+  hseRecipients: StaffUser[];
+}> {
   const preCheck = await getEngagementById(engagementId, client);
 
   if (!preCheck) {
@@ -2395,6 +2460,7 @@ export async function recordInductionCompletion(
   }
 
   const recipients = await getStaffByWorkflowRoles(["SecurityStaff"], client);
+  const hseRecipients = await getStaffByWorkflowRoles(["HSE"], client);
 
   const updated = await client.transaction(async (tx) => {
     // Same row lock as Hospital's: the pre-check is a fast path, this is the
@@ -2465,21 +2531,28 @@ export async function recordInductionCompletion(
       comments: "Induction completed",
     });
 
-    if (recipients.length > 0) {
-      await tx.insert(notifications).values(
-        recipients.map((recipient) => ({
-          recipientStaffUserId: recipient.id,
-          engagementId,
-          message:
-            "Induction completed and the record was forwarded to Security.",
-        })),
-      );
+    const notices = [
+      ...recipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message:
+          "Induction completed and the record was forwarded to Security.",
+      })),
+      ...hseRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: "Training School completed the induction for this record.",
+      })),
+    ];
+
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
     }
 
     return updatedEngagement;
   });
 
-  return { engagement: updated, recipients };
+  return { engagement: updated, recipients, hseRecipients };
 }
 
 export type AccessProvisioning = typeof accessProvisionings.$inferSelect;
@@ -2611,7 +2684,11 @@ export async function activateAccess(
     comments: string;
   },
   performedBy: string,
-): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
+): Promise<{
+  engagement: Engagement;
+  recipients: StaffUser[];
+  hseRecipients: StaffUser[];
+}> {
   const comments =
     typeof input.comments === "string" ? input.comments.trim() : "";
 
@@ -2656,8 +2733,10 @@ export async function activateAccess(
     );
   }
 
-  // Security did this themselves, so only Reception needs telling.
+  // Security did this themselves, so only Reception needs telling — and HSE,
+  // which follows every record through to activation.
   const recipients = await getStaffByWorkflowRoles(["Receptionist"]);
+  const hseRecipients = await getStaffByWorkflowRoles(["HSE"]);
 
   const updated = await db.transaction(async (tx) => {
     const [engagement] = await tx
@@ -2709,18 +2788,25 @@ export async function activateAccess(
       comments: `Access activated, card ${input.accessCardNumber}\n${comments}`,
     });
 
-    if (recipients.length > 0) {
-      await tx.insert(notifications).values(
-        recipients.map((recipient) => ({
-          recipientStaffUserId: recipient.id,
-          engagementId,
-          message: "Site access has been activated.",
-        })),
-      );
+    const notices = [
+      ...recipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: "Site access has been activated.",
+      })),
+      ...hseRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: "Security activated site access for this record.",
+      })),
+    ];
+
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
     }
 
     return updatedEngagement;
   });
 
-  return { engagement: updated, recipients };
+  return { engagement: updated, recipients, hseRecipients };
 }

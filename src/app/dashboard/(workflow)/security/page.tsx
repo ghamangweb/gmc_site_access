@@ -166,7 +166,6 @@ export default async function SecurityQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Departure</TableHead>
@@ -189,7 +188,6 @@ export default async function SecurityQueuePage({
                           {person.fullName}
                         </Link>
                       </TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{engagement.arrivalDate}</TableCell>
                       <TableCell>{engagement.departureDate}</TableCell>
@@ -229,7 +227,6 @@ export default async function SecurityQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Card No.</TableHead>
                   <TableHead>Access From</TableHead>
@@ -260,7 +257,6 @@ export default async function SecurityQueuePage({
                       className="hover:bg-muted/50"
                     >
                       <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{provisioning.accessCardNumber}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -320,7 +316,6 @@ export default async function SecurityQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Card No.</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Requested By</TableHead>
@@ -342,7 +337,6 @@ export default async function SecurityQueuePage({
                       className="hover:bg-muted/50"
                     >
                       <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell>{accessCardNumber ?? "-"}</TableCell>
                       <TableCell className="max-w-xs whitespace-normal">
                         {terminationRequest.reason}

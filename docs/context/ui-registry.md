@@ -2180,3 +2180,26 @@ invitations. Approve and Reject (`size="sm"`, Reject `variant="outline"`) render
 dialog ("Confirm Approval"); Reject opens the stakeholder-panel-style dialog — `Reason *`
 `Textarea`, `variant="destructive"` "Confirm Rejection", disabled until a reason is typed.
 Pending rows are sorted to the top by `listRegistrationRequestsForDepartment`.
+
+### Site Access Records overview (2026-11-04)
+
+File: src/app/dashboard/(workflow)/overview/page.tsx
+Last updated: 2026-11-04
+
+| Property | Class |
+|---|---|
+| Background | table wrapper `overflow-hidden rounded-xl border border-border bg-card` (same as the layer queues) |
+| Border | `border-border` on the wrapper |
+| Border radius | `rounded-xl` |
+| Text — primary | table default |
+| Text — secondary | "Not recorded" `text-muted-foreground text-xs`; not-applicable "—" `text-muted-foreground` |
+| Spacing | search row `mb-4 flex flex-wrap items-center justify-end gap-4` |
+| Hover state | table default — rows are not links |
+| Shadow | none — this system never uses `shadow-*` |
+| Status / accent usage | Stage: info while in a layer, success Completed, danger Cancelled, neutral Draft. Medical: Fit success, Fit with Conditions warning, Unfit danger. Induction Completed success. Exempted (either stage) warning. Access: Active success, Revocation Requested warning, Expired / Revoked danger, Pending neutral |
+
+**Pattern notes:**
+Read-only by design: no row links, no actions column, no record pages. Medical and Induction show
+outcomes only — never doctor's or trainer's comments. "—" means the nature of visit never goes
+through that layer; "Not recorded" means it does but hasn't yet. No passport / Ghana Card column —
+no dashboard table shows one (2026-11-04).

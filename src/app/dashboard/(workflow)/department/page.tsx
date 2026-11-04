@@ -61,7 +61,6 @@ export default async function DepartmentQueuePage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport / Ghana Card</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Submitted</TableHead>

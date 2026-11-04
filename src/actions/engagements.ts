@@ -17,6 +17,7 @@ import {
   hospitalClearedTemplate,
   hospitalFitWithConditionsTemplate,
   hospitalUnfitTemplate,
+  hseRecordUpdateTemplate,
   inductionCompletedTemplate,
   stakeholderApprovalReceivedTemplate,
   stakeholderApprovalRejectedTemplate,
@@ -548,6 +549,32 @@ export async function requestDelegatedApprovalAction(
   }
 }
 
+// The warning a layer sees after recording its work: which audiences had
+// nobody provisioned to tell, and which audiences' emails failed — named, so
+// "nobody was notified" is never said when HSE (or anyone else) was. Reporting
+// plain success here is how a record goes quiet in a queue nobody is watching.
+function notificationResult(
+  done: string,
+  unprovisioned: string[],
+  failedEmails: string[],
+): ActionResult {
+  const problems: string[] = [];
+
+  if (unprovisioned.length > 0) {
+    problems.push(
+      `no ${unprovisioned.join(" or ")} user is provisioned, so they were not notified`,
+    );
+  }
+
+  if (failedEmails.length > 0) {
+    problems.push(`${failedEmails.join(" and ")} may not have been emailed`);
+  }
+
+  return problems.length > 0
+    ? { success: true, warning: `${done}, but ${problems.join(", and ")}.` }
+    : { success: true };
+}
+
 export async function submitHospitalClearanceAction(
   engagementId: string,
   input: {
@@ -558,12 +585,19 @@ export async function submitHospitalClearanceAction(
   try {
     const session = await requireWriteAccess("HospitalStaff");
 
-    const { nextRecipients, nextRole, receptionRecipients, outcome } =
-      await recordHospitalClearance(engagementId, input, session.staffUserId);
+    const {
+      nextRecipients,
+      nextRole,
+      receptionRecipients,
+      hseRecipients,
+      outcome,
+    } = await recordHospitalClearance(engagementId, input, session.staffUserId);
 
     const detail = await getEngagementDetail(engagementId);
 
-    let allSent = true;
+    const nextLabel =
+      nextRole === "SecurityStaff" ? "Security" : "Training School";
+    const failedEmails = new Set<string>();
 
     if (detail) {
       for (const recipient of nextRecipients) {
@@ -575,7 +609,7 @@ export async function submitHospitalClearanceAction(
             nextRole: nextRole ?? "TrainingStaff",
           }),
         });
-        if (!sent) allSent = false;
+        if (!sent) failedEmails.add(nextLabel);
       }
 
       // Reception hears about a conditional clearance as well as an Unfit
@@ -595,7 +629,19 @@ export async function submitHospitalClearanceAction(
               })),
         });
 
-        if (!sent) allSent = false;
+        if (!sent) failedEmails.add("Reception");
+      }
+
+      for (const recipient of hseRecipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...hseRecordUpdateTemplate({
+            personName: detail.person.fullName,
+            event: "MedicalClearance",
+          }),
+        });
+
+        if (!sent) failedEmails.add("HSE");
       }
     }
 
@@ -606,35 +652,21 @@ export async function submitHospitalClearanceAction(
     revalidatePath("/dashboard/security");
     revalidatePath("/dashboard/reception");
 
-    // Whoever should have been told but could not be. Reporting plain success
-    // here is how a record goes quiet in a queue nobody is watching.
-    const unreachable: string[] = [];
+    // Whoever should have been told but could not be. HSE is not required:
+    // it follows records, and the record moves on without it.
+    const unprovisioned: string[] = [];
 
     if (outcome === "Cleared" && nextRecipients.length === 0) {
-      unreachable.push(
-        nextRole === "SecurityStaff"
-          ? "no Security user is provisioned"
-          : "no Training School user is provisioned",
-      );
+      unprovisioned.push(nextLabel);
     }
 
     if (input.clearanceStatus !== "Fit" && receptionRecipients.length === 0) {
-      unreachable.push("no Receptionist is provisioned");
+      unprovisioned.push("Reception");
     }
 
-    if (unreachable.length > 0) {
-      return {
-        success: true,
-        warning: `Clearance recorded, but ${unreachable.join(" and ")}, so nobody was notified.`,
-      };
-    }
-    return allSent
-      ? { success: true }
-      : {
-          success: true,
-          warning:
-            "Clearance recorded, but some notification emails may not have sent",
-        };
+    return notificationResult("Clearance recorded", unprovisioned, [
+      ...failedEmails,
+    ]);
   } catch (error) {
     console.error("[actions/engagements]", error);
     return {
@@ -656,7 +688,7 @@ export async function submitTrainingCompletionAction(
   try {
     const session = await requireWriteAccess("TrainingStaff");
 
-    const { recipients } = await recordInductionCompletion(
+    const { recipients, hseRecipients } = await recordInductionCompletion(
       engagementId,
       input,
       session.staffUserId,
@@ -664,7 +696,7 @@ export async function submitTrainingCompletionAction(
 
     const detail = await getEngagementDetail(engagementId);
 
-    let allSent = true;
+    const failedEmails = new Set<string>();
 
     if (detail) {
       for (const recipient of recipients) {
@@ -677,7 +709,21 @@ export async function submitTrainingCompletionAction(
         });
 
         if (!sent) {
-          allSent = false;
+          failedEmails.add("Security");
+        }
+      }
+
+      for (const recipient of hseRecipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...hseRecordUpdateTemplate({
+            personName: detail.person.fullName,
+            event: "InductionCompleted",
+          }),
+        });
+
+        if (!sent) {
+          failedEmails.add("HSE");
         }
       }
     }
@@ -685,20 +731,11 @@ export async function submitTrainingCompletionAction(
     revalidatePath("/dashboard/training");
     revalidatePath(`/dashboard/training/${engagementId}`);
 
-    if (recipients.length === 0) {
-      return {
-        success: true,
-        warning:
-          "Induction recorded, but no Security user is provisioned, so nobody was notified.",
-      };
-    }
-
-    return allSent
-      ? { success: true }
-      : {
-          success: true,
-          warning: "Induction recorded, but Security may not have been emailed",
-        };
+    return notificationResult(
+      "Induction recorded",
+      recipients.length === 0 ? ["Security"] : [],
+      [...failedEmails],
+    );
   } catch (error) {
     console.error("[actions/engagements]", error);
 
@@ -840,14 +877,14 @@ export async function activateAccessAction(
   try {
     const session = await requireWriteAccess("SecurityStaff");
 
-    const { recipients } = await activateAccess(
+    const { recipients, hseRecipients } = await activateAccess(
       engagementId,
       input,
       session.staffUserId,
     );
     const detail = await getEngagementDetail(engagementId);
 
-    let allSent = true;
+    const failedEmails = new Set<string>();
 
     if (detail) {
       for (const recipient of recipients) {
@@ -861,7 +898,19 @@ export async function activateAccessAction(
           }),
         });
 
-        if (!sent) allSent = false;
+        if (!sent) failedEmails.add("Reception");
+      }
+
+      for (const recipient of hseRecipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...hseRecordUpdateTemplate({
+            personName: detail.person.fullName,
+            event: "AccessActivated",
+          }),
+        });
+
+        if (!sent) failedEmails.add("HSE");
       }
     }
 
@@ -869,20 +918,11 @@ export async function activateAccessAction(
     revalidatePath(`/dashboard/security/${engagementId}`);
     revalidatePath("/dashboard/reception");
 
-    if (recipients.length === 0) {
-      return {
-        success: true,
-        warning:
-          "Access activated, but no Receptionist is provisioned, so nobody was notified.",
-      };
-    }
-
-    return allSent
-      ? { success: true }
-      : {
-          success: true,
-          warning: "Access activated, but some emails may not have sent",
-        };
+    return notificationResult(
+      "Access activated",
+      recipients.length === 0 ? ["Reception"] : [],
+      [...failedEmails],
+    );
   } catch (error) {
     console.error("[actions/engagements]", error);
 

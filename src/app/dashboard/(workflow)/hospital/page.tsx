@@ -118,7 +118,6 @@ export default async function HospitalQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Departure</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -132,7 +131,6 @@ export default async function HospitalQueuePage({
                         {person.fullName}
                       </Link>
                     </TableCell>
-                    <TableCell>{person.passportNo}</TableCell>
                     <TableCell>{engagement.arrivalDate}</TableCell>
                     <TableCell>{engagement.departureDate}</TableCell>
                     <TableCell className="text-right">
@@ -170,7 +168,6 @@ export default async function HospitalQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Outcome</TableHead>
                   <TableHead>Recorded</TableHead>
                   <TableHead>Stage</TableHead>
@@ -189,7 +186,6 @@ export default async function HospitalQueuePage({
                   return (
                     <TableRow key={clearance.id} className="hover:bg-muted/50">
                       <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell>
                         <Badge className={CLEARANCE_BADGE[status]}>
                           {HOSPITAL_CLEARANCE_LABELS[status]}

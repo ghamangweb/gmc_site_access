@@ -143,7 +143,6 @@ export default async function ApprovalsQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Requested</TableHead>
@@ -163,7 +162,6 @@ export default async function ApprovalsQueuePage({
                   return (
                     <TableRow key={engagement.id} className="hover:bg-muted/50">
                       <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{engagement.arrivalDate}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -207,7 +205,6 @@ export default async function ApprovalsQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Approved By</TableHead>
                   <TableHead>Approved On</TableHead>
                   <TableHead>Stage</TableHead>
@@ -218,7 +215,6 @@ export default async function ApprovalsQueuePage({
                 {approved.rows.map(({ approval, engagement, person }) => (
                   <TableRow key={approval.id} className="hover:bg-muted/50">
                     <TableCell>{person.fullName}</TableCell>
-                    <TableCell>{person.passportNo}</TableCell>
                     <TableCell>
                       {approval.approverName}
                       <span className="ml-2 text-muted-foreground text-xs">

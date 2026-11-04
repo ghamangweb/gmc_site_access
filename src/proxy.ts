@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth/entra";
 import { withNext } from "@/lib/auth/next-path";
-import { canViewReception, type WorkflowRole } from "@/lib/domain/types";
+import { canViewRecords, type WorkflowRole } from "@/lib/domain/types";
 
 const LAYER_ROLES: Record<string, WorkflowRole[]> = {
-  // No entry for `reception` either: HSE and a plain Guest view it read-only,
-  // so it is checked by `canViewReception` below.
+  reception: ["Receptionist"],
+  // No entry for `overview`: a plain Guest holds no workflow role at all, so
+  // it is checked by `canViewRecords` below.
   // No entry for `approvals`: a delegated approver holds no workflow role at
   // all, so the page itself does the checking (stakeholder role, or the grant
   // on that engagement).
@@ -49,7 +50,7 @@ export default auth((req) => {
   }
 
   const layer = pathname.split("/")[2];
-  if (layer === "reception" && !canViewReception(session.user)) {
+  if (layer === "overview" && !canViewRecords(session.user)) {
     return NextResponse.redirect(
       new URL(withNext("/no-access", requested), req.url),
     );

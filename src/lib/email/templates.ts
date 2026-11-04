@@ -345,6 +345,41 @@ export function accessActivatedTemplate(opts: {
   };
 }
 
+// HSE follows every record without acting on any, so its emails say what
+// happened and link to the Site Access Records overview — HSE has no record
+// pages to open. No health or card details: those stay on the layers' screens.
+export function hseRecordUpdateTemplate(opts: {
+  personName: string;
+  event: "MedicalClearance" | "InductionCompleted" | "AccessActivated";
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const dashboard = button(
+    `${baseUrl()}/dashboard/overview`,
+    "Go To Dashboard",
+  );
+  const viewStatus =
+    "<p>Please access the Site Access dashboard to view the record's current status.</p>";
+
+  if (opts.event === "MedicalClearance") {
+    return {
+      subject: subject(`Medical Clearance Recorded - ${opts.personName}`),
+      html: `${HELLO}<p>Hospital has recorded the medical clearance for ${personName}.</p>${viewStatus}${dashboard}`,
+    };
+  }
+
+  if (opts.event === "InductionCompleted") {
+    return {
+      subject: subject(`Induction Completed - ${opts.personName}`),
+      html: `${HELLO}<p>Training School has recorded ${personName}'s induction as completed, and the record has moved to Security for access activation.</p>${viewStatus}${dashboard}`,
+    };
+  }
+
+  return {
+    subject: subject(`Site Access Activated - ${opts.personName}`),
+    html: `${HELLO}<p>Security has activated site access for ${personName}.</p>${viewStatus}${dashboard}`,
+  };
+}
+
 // To Security, who carry the revocation out.
 export function terminationRequestedTemplate(opts: {
   personName: string;

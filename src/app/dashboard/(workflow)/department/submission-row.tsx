@@ -109,7 +109,6 @@ export function SubmissionRow({
     <>
       <TableRow>
         <TableCell>{request.fullName}</TableCell>
-        <TableCell>{request.identityNo}</TableCell>
         <TableCell>{request.registrationType}</TableCell>
         <TableCell>{ACCESS_PURPOSE_LABELS[request.accessPurpose]}</TableCell>
         <TableCell>{formatQueueDate(request.submittedAt)}</TableCell>

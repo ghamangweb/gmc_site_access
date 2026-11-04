@@ -107,7 +107,6 @@ export default async function TrainingQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Departure</TableHead>
@@ -130,7 +129,6 @@ export default async function TrainingQueuePage({
                           {person.fullName}
                         </Link>
                       </TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{engagement.arrivalDate}</TableCell>
                       <TableCell>{engagement.departureDate}</TableCell>
@@ -170,7 +168,6 @@ export default async function TrainingQueuePage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
-                  <TableHead>Passport No.</TableHead>
                   <TableHead>Inductions</TableHead>
                   <TableHead>Completed</TableHead>
                 </TableRow>
@@ -179,7 +176,6 @@ export default async function TrainingQueuePage({
                 {recorded.rows.map(({ induction, person }) => (
                   <TableRow key={induction.id} className="hover:bg-muted/50">
                     <TableCell>{person.fullName}</TableCell>
-                    <TableCell>{person.passportNo}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {[
                         induction.generalSiteInduction ? "General site" : null,
