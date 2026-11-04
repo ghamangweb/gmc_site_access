@@ -1,11 +1,16 @@
 "use client";
 
+import { addDays, format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { submitHospitalClearanceAction } from "@/actions/engagements";
+import {
+  submitHospitalClearanceAction,
+  submitHospitalReviewAction,
+} from "@/actions/engagements";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -29,6 +34,15 @@ const STATUS_CONSEQUENCES: Record<HospitalClearanceStatus, string> = {
   Unfit: "Stays at the Hospital stage, and Reception is notified.",
 };
 
+// A review leaves the record's stage alone, so none of the above applies.
+const REVIEW_CONSEQUENCES: Record<HospitalClearanceStatus, string> = {
+  Fit: "Recorded as a review. The record's stage is not changed.",
+  FitWithConditions:
+    "Recorded as a review with a new review date. The record's stage is not changed.",
+  Unfit:
+    "Recorded as a review. The record's stage is not changed, and Reception is notified.",
+};
+
 type LatestClearance = {
   clearanceStatus: HospitalClearanceStatus;
   doctorComments: string;
@@ -39,31 +53,54 @@ type HospitalFormProps = {
   engagementId: string;
   latestClearance?: LatestClearance;
   readOnly: boolean;
+  /** Set when reviewing a Fit with Conditions clearance from the recorded
+   * tab: submits a review of that clearance instead of a new clearance. */
+  reviewOfClearanceId?: string;
 };
 
 export function HospitalForm({
   engagementId,
   latestClearance,
   readOnly,
+  reviewOfClearanceId,
 }: HospitalFormProps) {
   const router = useRouter();
   const [status, setStatus] = useState<HospitalClearanceStatus | "">("");
   const [comments, setComments] = useState("");
+  const [nextReviewDate, setNextReviewDate] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  const isReview = reviewOfClearanceId !== undefined;
   const disabled = readOnly || isPending;
   const commentsRequired = status === "FitWithConditions" || status === "Unfit";
+  const reviewDateRequired = status === "FitWithConditions";
   const canSubmit =
-    !disabled && status !== "" && (!commentsRequired || comments.trim() !== "");
+    !disabled &&
+    status !== "" &&
+    (!commentsRequired || comments.trim() !== "") &&
+    (!reviewDateRequired || nextReviewDate !== "");
+  // The server checks the same rule; this just keeps today and earlier out of
+  // the picker.
+
+  const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
 
   function handleSubmit() {
     if (status === "") return;
 
+    const input = {
+      clearanceStatus: status,
+      doctorComments: comments,
+      nextReviewDate: reviewDateRequired ? nextReviewDate : undefined,
+    };
+
     startTransition(async () => {
-      const result = await submitHospitalClearanceAction(engagementId, {
-        clearanceStatus: status,
-        doctorComments: comments,
-      });
+      const result = isReview
+        ? await submitHospitalReviewAction(
+            engagementId,
+            reviewOfClearanceId,
+            input,
+          )
+        : await submitHospitalClearanceAction(engagementId, input);
       if (!result.success) {
         toast.error(result.error);
 
@@ -72,11 +109,12 @@ export function HospitalForm({
 
       setStatus("");
       setComments("");
+      setNextReviewDate("");
 
       if (result.warning) {
         toast.warning(result.warning);
       } else {
-        toast.success("Clearance recorded");
+        toast.success(isReview ? "Review recorded" : "Clearance recorded");
       }
 
       // Hospital records a decision and moves on, so the queue — not the
@@ -88,7 +126,7 @@ export function HospitalForm({
   return (
     <div className="bg-card border border-border rounded-xl p-6">
       <h2 className="text-lg font-semibold text-foreground mb-4">
-        Hospital Clearance
+        {isReview ? "Record Review" : "Hospital Clearance"}
       </h2>
 
       {latestClearance && (
@@ -128,10 +166,22 @@ export function HospitalForm({
           </Select>
           {status !== "" && (
             <p className="text-xs text-muted-foreground">
-              {STATUS_CONSEQUENCES[status]}
+              {(isReview ? REVIEW_CONSEQUENCES : STATUS_CONSEQUENCES)[status]}
             </p>
           )}
         </div>
+
+        {reviewDateRequired && (
+          <div className="flex flex-col gap-2">
+            <Label>Next Review Date *</Label>
+            <DatePicker
+              value={nextReviewDate}
+              onChange={setNextReviewDate}
+              disabled={disabled}
+              minDate={tomorrow}
+            />
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <Label>Doctor Comments {commentsRequired ? "*" : "(optional)"}</Label>
@@ -150,7 +200,7 @@ export function HospitalForm({
               disabled={!canSubmit}
               onClick={handleSubmit}
             >
-              Submit Clearance
+              {isReview ? "Submit Review" : "Submit Clearance"}
             </Button>
           </div>
         )}

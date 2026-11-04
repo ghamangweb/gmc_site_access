@@ -8,7 +8,7 @@
 | Database         | PostgreSQL (Neon, serverless)            | Persons, engagements, workflow, audit, staff users   |
 | ORM              | Drizzle                                  | PostgreSQL access                                    |
 | File storage     | UploadThing                              | Document uploads (direct browser → storage)          |
-| Background jobs  | Azure Functions                          | Visa expiry, hospital timeout, email worker          |
+| Background jobs  | Inngest (`/api/inngest`); Azure Functions planned | Hospital review reminders (Inngest, built); visa expiry, hospital timeout, email worker (Azure Functions, Slices 8–10, not built) |
 | Email            | Storage Queue + Microsoft Graph API      | Async outbound notifications                         |
 | Authentication   | Entra ID + 4-digit PIN + role gates      | Staff access                                         |
 | Styling          | Tailwind CSS + shadcn/ui                 | UI components and styling                            |
@@ -165,6 +165,8 @@ Every route under `/dashboard/*` is wrapped by `src/app/dashboard/layout.tsx` �
 | `src/components/` | UI only. No direct DB or workflow logic. |
 | `src/proxy.ts` | Single Next.js proxy pipeline (Next 16 renamed `middleware` → `proxy`; `nodejs` runtime only) — reads JWT token only, no DB calls. Explicitly excludes `/register`. |
 | `functions/` | Azure Functions — timer and queue-triggered background jobs. |
+| `src/lib/inngest/` | Inngest client (`client.ts`) and one file per job function. A job only orchestrates, like a Server Action: rules and DB writes stay in services; emails go through `src/lib/email/`. Step results are stored by Inngest, so steps return ids or counts — never names or health data. |
+| `src/app/api/inngest/` | Inngest's serve endpoint (`serve()` from `inngest/next`). No session: Inngest signs each request with `INNGEST_SIGNING_KEY`; the proxy only matches `/dashboard`. No business logic. |
 
 ---
 
@@ -265,7 +267,22 @@ src/lib/azure/blob.ts
 PostgreSQL (documents table)
 ```
 
-### Background jobs (Azure Functions)
+### Background jobs (Inngest) — built 2026-11-04
+
+```
+Inngest cron (TZ=Africa/Accra 0 7 * * *) → POST /api/inngest
+        ↓
+src/lib/inngest/hospital-review-reminders.ts
+        ↓  step "find-due-reviews"      → listDueHospitalReviewReminders()   (ids only)
+        ↓  step "send-review-reminder"  → claimHospitalReviewReminder()      (claim + bell notices, one tx)
+        ↓                                 → src/lib/email/send.ts            (Hospital staff)
+PostgreSQL (hospital_clearances.review_reminder_*_sent_at)
+```
+
+Env: `INNGEST_DEV=1` locally via the `dev` script (run `bun run inngest:dev` beside `next dev`);
+`INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` in production.
+
+### Background jobs (Azure Functions) — planned, not built
 
 Timers and queue workers — no HTTP request from the browser.
 
@@ -673,7 +690,8 @@ Path-specific transitions — see `docs/context/project-overview.md` Core User F
 
 Rules the AI agent must never violate:
 
-- Server Actions for form mutations — API routes for file uploads only
+- Server Actions for form mutations — API routes for file uploads only, plus the one exception
+  `/api/inngest` (Inngest's serve endpoint for background jobs, added 2026-11-04)
 - Server Actions never call Azure SDK directly — go through services
 - API route handlers contain no business logic — delegate to services
 - Route handlers and Server Actions never write to DB directly — use repositories via services

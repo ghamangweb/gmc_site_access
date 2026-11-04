@@ -76,14 +76,19 @@ registration). Each retains its existing logo dimensions and responsive sizing.
 
 ## Notifications bell: clear + scroll (2026-11-03)
 
-`dashboard-topbar.tsx`: each notification is a `flex items-start gap-1` row holding the
-`DropdownMenuItem` (`min-w-0 flex-1`) and a sibling ghost `Button` (`size="icon"`,
-`mt-1 h-7 w-7 text-muted-foreground`, Lucide `X`, sr-only "Clear notification"). The X is a
-sibling, not a child, so clicking it never triggers the item's mark-as-read select. Header
+`dashboard-topbar.tsx`: each notification is a `relative rounded-sm` row holding a full-width
+`DropdownMenuItem` (`w-full pr-9 focus:bg-transparent`) and a sibling ghost `Button`
+(`size="icon"`, `absolute top-1 right-1 h-7 w-7 text-muted-foreground`, Lucide `X`, sr-only
+"Clear notification"). The X is a sibling, not a child, so clicking it never triggers the item's
+mark-as-read select. The highlight is on the row (`hover:bg-accent
+has-[[data-slot=dropdown-menu-item]:focus]:bg-accent`, 2026-11-04) so it spans the X too —
+Radix drops the item's focus when the pointer moves onto the X. Header
 gains "Clear all" beside "Mark all as read" (same text-button style, shown when the list is
-non-empty). Above `MAX_VISIBLE_NOTIFICATIONS` (4) the list renders inside `ScrollArea` with
-`[&>[data-slot=scroll-area-viewport]]:max-h-72`: Radix sizes the viewport to 100% of the root,
-so a `max-h` on the root alone never scrolls.
+non-empty). The list scrolls with the menu itself — `DropdownMenuContent`'s own
+`overflow-y-auto`, capped at about 4 notifications with
+`max-h-[min(21rem,var(--radix-dropdown-menu-content-available-height))]` on the content. A nested
+`ScrollArea` (above 4 notifications) was removed 2026-11-04: it stacked a second scroll bar on
+the menu's. Don't reintroduce one.
 
 ## TrainingExportButton (2026-11-03)
 
@@ -1587,6 +1592,41 @@ form was dropped 2026-10-21 since Hospital no longer uploads one. It renders
 **only when a clearance exists** — a visit+mine visitor never went through Hospital, so there is
 no hand-off and no empty card. Reception keeps its own read-only view of the same document;
 that was never the problem.
+
+**Reused for Hospital's View (2026-11-04).** Optional `title` prop (default "From Hospital").
+Hospital's recorded-tab View opens `/dashboard/hospital/[id]?clearance=<id>`, which renders this
+card titled "Recorded Clearance" under the identity `PageHeader` and **no form** — View is
+read-only even for an Unfit record still at Hospital; re-examination goes through the awaiting tab.
+
+**Cleared By column (2026-11-04).** Hospital's recorded tab: Name · Passport No. · Outcome ·
+Recorded · **Cleared By** · Stage · Action. Plain `TableCell` with the recorder's display name,
+"-" when the row predates `recorded_by` and couldn't be backfilled (past Unfit decisions).
+
+**Next Review Date + row menu + Review (2026-11-04).** Recorded tab columns: Name · Passport No. ·
+Outcome · Recorded · Cleared By · **Next Review Date** · Stage · Action. Next Review Date is
+`text-muted-foreground`, `formatQueueDate(parseISO(...))`, "-" when NULL.
+
+| Property | Class |
+|---|---|
+| Row menu trigger | `Button variant="ghost" size="icon" className="size-8"` + `MoreVerticalIcon` + `sr-only` "Open menu" (as `InvitationRow`, but vertical, per request) |
+| Menu | `DropdownMenuContent align="end"`; items are `DropdownMenuItem asChild` + `Link` |
+| Inactive Review | `DropdownMenuItem disabled` (the item's own `data-[disabled]:opacity-50`) |
+
+`HospitalForm` takes optional `reviewOfClearanceId`: heading "Record Review", button "Submit Review",
+review-specific consequence text, and submits `submitHospitalReviewAction`. In both modes Fit with
+Conditions reveals a required "Next Review Date" `DatePicker` with `minDate` = tomorrow.
+`HospitalHandoff` adds a "Next Review Date" field (same label/value styles as comments) when set.
+`DatePicker` gained optional `minDate` (YYYY-MM-DD → `disabled={{ before }}`); existing callers unchanged.
+
+**Awaiting Review tab (2026-11-04).** Third `QueueViewTabs` entry between Awaiting Clearance and
+Recorded Clearances (`?view=review`), with a count pill (`countAwaitingHospitalReviews`) shown on
+every tab. Columns: Name (links to `?clearance=`) · Passport No. · Recorded · Cleared By · Next Review
+Date · Stage · Action. Action is `Button size="sm"` "Record Review" → `?review=`, left-aligned like
+the other columns (no `text-right`, per request — unlike the other tabs' Action column).
+Awaiting Clearance's Action column is `TableHead className="w-px"` with a left-aligned cell: the
+column shrinks to the "Record Clearance" button and stays at the right edge, and the header starts
+where the button starts (per request). Soonest review date first. Empty state: `CalendarClockIcon`,
+"No reviews awaiting".
 
 **Notification routing per outcome.** `recordHospitalClearance` returned one `recipients` list
 and the action mailed one template to all of it, so **Fit with Conditions told Training only** —

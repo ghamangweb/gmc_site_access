@@ -26,6 +26,7 @@ mock.module("@/lib/services/workflow-service", () => ({
       "getActiveEngagementForPassport",
       "getEngagementDetail",
       "recordHospitalClearance",
+      "recordHospitalReview",
       "recordInductionCompletion",
       "rejectStakeholderApproval",
       "requestDelegatedApproval",

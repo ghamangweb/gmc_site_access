@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requirePinConfirmed, requireWriteAccess } from "@/lib/auth/guards";
-import type { ActionResult, HospitalClearanceStatus } from "@/lib/domain/types";
+import type { ActionResult } from "@/lib/domain/types";
 import {
   canGrantWorkflowExemption,
   type WorkflowExemptionApprovalInput,
@@ -16,6 +16,7 @@ import {
   delegatedApprovalRequestedTemplate,
   hospitalClearedTemplate,
   hospitalFitWithConditionsTemplate,
+  hospitalReviewUnfitTemplate,
   hospitalUnfitTemplate,
   hseRecordUpdateTemplate,
   inductionCompletedTemplate,
@@ -40,8 +41,10 @@ import {
   createEngagement,
   getActiveEngagementForPassport,
   getEngagementDetail,
+  type HospitalClearanceInput,
   type ReceptionFormInput,
   recordHospitalClearance,
+  recordHospitalReview,
   recordInductionCompletion,
   rejectStakeholderApproval,
   requestDelegatedApproval,
@@ -577,10 +580,7 @@ function notificationResult(
 
 export async function submitHospitalClearanceAction(
   engagementId: string,
-  input: {
-    clearanceStatus: HospitalClearanceStatus;
-    doctorComments: string;
-  },
+  input: HospitalClearanceInput,
 ): Promise<ActionResult> {
   try {
     const session = await requireWriteAccess("HospitalStaff");
@@ -673,6 +673,73 @@ export async function submitHospitalClearanceAction(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to record clearance",
+    };
+  }
+}
+
+// A review of a Fit with Conditions clearance from Hospital's recorded tab.
+// The record's stage is untouched, so only Reception is told, and only when
+// the review comes back Unfit.
+export async function submitHospitalReviewAction(
+  engagementId: string,
+  reviewedClearanceId: string,
+  input: HospitalClearanceInput,
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("HospitalStaff");
+
+    const { receptionRecipients } = await recordHospitalReview(
+      engagementId,
+      reviewedClearanceId,
+      input,
+      session.staffUserId,
+    );
+
+    let allSent = true;
+
+    if (receptionRecipients.length > 0) {
+      const detail = await getEngagementDetail(engagementId);
+
+      if (detail) {
+        for (const recipient of receptionRecipients) {
+          const sent = await sendEmail({
+            to: recipient.email,
+            ...hospitalReviewUnfitTemplate({
+              personName: detail.person.fullName,
+              engagementId,
+            }),
+          });
+
+          if (!sent) allSent = false;
+        }
+      }
+    }
+
+    revalidatePath("/dashboard/hospital");
+    revalidatePath(`/dashboard/hospital/${engagementId}`);
+    revalidatePath("/dashboard/reception");
+
+    if (input.clearanceStatus === "Unfit" && receptionRecipients.length === 0) {
+      return {
+        success: true,
+        warning:
+          "Review recorded, but no Receptionist is provisioned, so nobody was notified.",
+      };
+    }
+
+    return allSent
+      ? { success: true }
+      : {
+          success: true,
+          warning:
+            "Review recorded, but some notification emails may not have sent",
+        };
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to record review",
     };
   }
 }
