@@ -17,7 +17,7 @@ import {
 import type { SessionUser } from "@/lib/auth/session";
 import { searchQueryTokens } from "@/lib/crypto";
 import { csvRow } from "@/lib/csv";
-import { db } from "@/lib/db/client";
+import { type DbClient, db } from "@/lib/db/client";
 import {
   accessProvisionings,
   documents,
@@ -33,6 +33,7 @@ import {
   stakeholderRejections,
   terminationRequests,
   workflowCycles,
+  workflowExemptions,
   workflowTransitions,
 } from "@/lib/db/schema";
 import {
@@ -41,6 +42,10 @@ import {
   type PageRequest,
   pageOffset,
 } from "@/lib/domain/pagination";
+import {
+  SECURITY_REPORT_HEADERS,
+  securityReportRows,
+} from "@/lib/domain/security-report";
 import {
   TRAINING_REPORT_HEADERS,
   trainingReportRows,
@@ -57,9 +62,20 @@ import {
   isoToday,
   type ReceptionData,
   STAKEHOLDER_ROLES,
+  WORKFLOW_EXEMPTION_STAGE_LABELS,
+  type WorkflowExemptionInput,
   type WorkflowRole,
   type WorkflowState,
 } from "@/lib/domain/types";
+import {
+  approvalDestination,
+  EXEMPTION_APPROVER_ROLES,
+  hospitalDestination,
+  validateWorkflowExemption,
+  type WorkflowExemptionApprovalInput,
+  type WorkflowExemptionMessage,
+  workflowExemptionNotification,
+} from "@/lib/domain/workflow-exemptions";
 import type { StaffUser } from "@/lib/services/auth-service";
 import {
   getDocumentsForEngagement,
@@ -78,6 +94,16 @@ export type StakeholderRejection = typeof stakeholderRejections.$inferSelect;
 export type WorkflowCycle = typeof workflowCycles.$inferSelect;
 export type HospitalClearance = typeof hospitalClearances.$inferSelect;
 
+export type WorkflowExemption = typeof workflowExemptions.$inferSelect;
+
+export type WorkflowExemptionDetails = WorkflowExemption & {
+  cycleNumber: number;
+  archivedAt: Date | null;
+  approverName: string;
+  approverRole: string;
+  approvedAt: Date;
+};
+
 export type ReceptionFormInput = {
   person: PersonInput;
   accessPurpose: AccessPurpose;
@@ -88,8 +114,9 @@ export type ReceptionFormInput = {
 
 export async function getStaffByWorkflowRoles(
   roles: WorkflowRole[],
+  client: DbClient = db,
 ): Promise<StaffUser[]> {
-  return db
+  return client
     .select()
     .from(staffUsers)
     .where(
@@ -136,25 +163,11 @@ async function notifyStaff(
   );
 }
 
-function getNextStateForPath(accessPurpose: AccessPurpose): {
-  nextState: WorkflowState;
-  nextRole: WorkflowRole | null;
-} {
-  switch (accessPurpose) {
-    case "Work":
-    case "WorkMine":
-      return { nextState: "AtHospital", nextRole: "HospitalStaff" };
-    case "VisitMine":
-      return { nextState: "AtTraining", nextRole: "TrainingStaff" };
-    case "Visit":
-      return { nextState: "Completed", nextRole: null };
-  }
-}
-
 export async function getEngagementById(
   engagementId: string,
+  client: DbClient = db,
 ): Promise<Engagement | undefined> {
-  const [engagement] = await db
+  const [engagement] = await client
     .select()
     .from(engagements)
     .where(eq(engagements.id, engagementId));
@@ -163,8 +176,9 @@ export async function getEngagementById(
 
 export async function getActiveWorkflowCycle(
   engagementId: string,
+  client: DbClient = db,
 ): Promise<WorkflowCycle | undefined> {
-  const [cycle] = await db
+  const [cycle] = await client
     .select()
     .from(workflowCycles)
     .where(
@@ -176,6 +190,61 @@ export async function getActiveWorkflowCycle(
     .orderBy(desc(workflowCycles.cycleNumber))
     .limit(1);
   return cycle;
+}
+
+export async function getActiveWorkflowExemptions(
+  engagementId: string,
+  client: DbClient = db,
+): Promise<WorkflowExemption[]> {
+  const cycle = await getActiveWorkflowCycle(engagementId, client);
+
+  if (!cycle) return [];
+
+  return client
+    .select()
+    .from(workflowExemptions)
+    .where(eq(workflowExemptions.workflowCycleId, cycle.id));
+}
+
+async function listWorkflowExemptionDetails(
+  where: SQL,
+  client: DbClient,
+): Promise<WorkflowExemptionDetails[]> {
+  return client
+    .select({
+      id: workflowExemptions.id,
+      engagementId: workflowExemptions.engagementId,
+      workflowCycleId: workflowExemptions.workflowCycleId,
+      stakeholderApprovalId: workflowExemptions.stakeholderApprovalId,
+      stage: workflowExemptions.stage,
+      reason: workflowExemptions.reason,
+      cycleNumber: workflowCycles.cycleNumber,
+      archivedAt: workflowCycles.archivedAt,
+      approverName: stakeholderApprovals.approverName,
+      approverRole: stakeholderApprovals.approverRole,
+      approvedAt: stakeholderApprovals.approvedAt,
+    })
+    .from(workflowExemptions)
+    .innerJoin(
+      workflowCycles,
+      eq(workflowExemptions.workflowCycleId, workflowCycles.id),
+    )
+    .innerJoin(
+      stakeholderApprovals,
+      eq(workflowExemptions.stakeholderApprovalId, stakeholderApprovals.id),
+    )
+    .where(where)
+    .orderBy(desc(workflowCycles.cycleNumber), workflowExemptions.stage);
+}
+
+export async function getWorkflowExemptionDetails(
+  engagementId: string,
+  client: DbClient = db,
+): Promise<WorkflowExemptionDetails[]> {
+  return listWorkflowExemptionDetails(
+    eq(workflowExemptions.engagementId, engagementId),
+    client,
+  );
 }
 
 export type EngagementRow = {
@@ -314,6 +383,7 @@ export async function getEngagementDetail(engagementId: string): Promise<
       engagement: Engagement;
       person: typeof persons.$inferSelect;
       approvals: StakeholderApproval[];
+      exemptions: WorkflowExemptionDetails[];
       /** The most recent rejection, if any. Whether it still stands is
        * `engagement.approvalRejectedAt`, which a fresh request clears. */
       latestRejection: StakeholderRejection | undefined;
@@ -330,7 +400,7 @@ export async function getEngagementDetail(engagementId: string): Promise<
     return undefined;
   }
 
-  const [approvals, [latestRejection]] = await Promise.all([
+  const [approvals, [latestRejection], exemptions] = await Promise.all([
     db
       .select()
       .from(stakeholderApprovals)
@@ -341,9 +411,10 @@ export async function getEngagementDetail(engagementId: string): Promise<
       .where(eq(stakeholderRejections.engagementId, engagementId))
       .orderBy(desc(stakeholderRejections.rejectedAt))
       .limit(1),
+    getWorkflowExemptionDetails(engagementId),
   ]);
 
-  return { ...row, approvals, latestRejection };
+  return { ...row, approvals, latestRejection, exemptions };
 }
 
 const TERMINAL_WORKFLOW_STATES: WorkflowState[] = ["Completed", "Cancelled"];
@@ -857,25 +928,82 @@ export async function countStakeholderApprovalsBy(
   return row?.value ?? 0;
 }
 
+export type StakeholderApprovalResult = {
+  engagement: Engagement;
+  recipients: StaffUser[];
+  nextRole: WorkflowRole | null;
+  exemptionMessage?: WorkflowExemptionMessage;
+};
+
 export async function applyStakeholderApproval(
+  engagementId: string,
+  session: SessionUser,
+  input: { signature: string },
+  performedBy: string,
+  client: DbClient = db,
+): Promise<StakeholderApprovalResult> {
+  // Normal approval accepts only a signature; exemptions use their own guarded entry point.
+  return applyApprovalDecision(
+    engagementId,
+    session,
+    { signature: input.signature },
+    performedBy,
+    client,
+  );
+}
+
+export async function applyStakeholderExemption(
+  engagementId: string,
+  session: SessionUser,
+  input: WorkflowExemptionApprovalInput,
+  performedBy: string,
+  client: DbClient = db,
+): Promise<StakeholderApprovalResult> {
+  if (!input.exemption) {
+    throw new Error("Select the stages and enter a reason for the exemption");
+  }
+
+  return applyApprovalDecision(
+    engagementId,
+    session,
+    input,
+    performedBy,
+    client,
+  );
+}
+
+async function applyApprovalDecision(
   engagementId: string,
   session: SessionUser,
   input: {
     signature: string;
+    exemption?: WorkflowExemptionInput;
   },
   performedBy: string,
-): Promise<{
-  engagement: Engagement;
-  recipients: StaffUser[];
-  nextRole: WorkflowRole | null;
-}> {
-  const engagement = await getEngagementById(engagementId);
+  client: DbClient,
+): Promise<StakeholderApprovalResult> {
+  if (
+    session.systemRole === "Guest" ||
+    !session.pinConfirmed ||
+    session.systemRole === "User"
+  ) {
+    throw new Error("Read-only or unconfirmed access: cannot approve");
+  }
+
+  if (performedBy !== session.staffUserId) {
+    throw new Error("Approval actor must match the signed-in stakeholder");
+  }
+
+  const engagement = await getEngagementById(engagementId, client);
+
   if (!engagement) {
     throw new Error("Engagement not found");
   }
+
   if (engagement.workflowState !== "AtReception") {
     throw new Error("Engagement is not awaiting Reception approval");
   }
+
   // Rejected stands until Reception asks again, which clears it.
   if (engagement.approvalRejectedAt) {
     throw new Error(
@@ -886,6 +1014,7 @@ export async function applyStakeholderApproval(
   const directRole = STAKEHOLDER_ROLES.find((role) =>
     session.workflowRoles.includes(role),
   );
+
   const isDelegatedApprover =
     !directRole &&
     engagement.delegatedApproverId !== null &&
@@ -895,40 +1024,126 @@ export async function applyStakeholderApproval(
     throw new Error("Not authorized to approve this engagement");
   }
 
-  const approverRole: ApproverRole = directRole ?? "Delegated";
   const approverName = session.displayName ?? "";
-  const { nextState, nextRole } = getNextStateForPath(
-    engagement.accessPurpose as AccessPurpose,
-  );
-  const recipients = nextRole ? await getStaffByWorkflowRoles([nextRole]) : [];
 
-  const updated = await db.transaction(async (tx) => {
+  return client.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (
+      !locked ||
+      locked.workflowState !== "AtReception" ||
+      locked.approvalRejectedAt
+    ) {
+      throw new Error("This request has already been decided");
+    }
+
+    if (!directRole && locked.delegatedApproverId !== session.staffUserId) {
+      throw new Error("Delegated approval is no longer authorized");
+    }
+
+    // SAFETY: accessPurpose is stored from the AccessPurpose domain union.
+    const purpose = locked.accessPurpose as AccessPurpose;
+
+    const exemption = input.exemption
+      ? validateWorkflowExemption(
+          input.exemption,
+          purpose,
+          session,
+          input.signature,
+        )
+      : undefined;
+
+    let approverRole: ApproverRole = directRole ?? "Delegated";
+
+    if (exemption) {
+      if (!locked.approvalRequestedAt) {
+        throw new Error(
+          "Reception must request stakeholder approval before an exemption can be granted",
+        );
+      }
+
+      const [actor] = await tx
+        .select()
+        .from(staffUsers)
+        .where(eq(staffUsers.id, session.staffUserId));
+
+      const currentRole = EXEMPTION_APPROVER_ROLES.find(
+        (role) =>
+          actor?.workflowRoles.includes(role) &&
+          session.workflowRoles.includes(role),
+      );
+
+      if (
+        !actor ||
+        actor.deactivatedAt ||
+        !currentRole ||
+        !["Admin", "SystemAdmin"].includes(actor.systemRole)
+      ) {
+        throw new Error(
+          "Stakeholder exemption authority is no longer available",
+        );
+      }
+
+      approverRole = currentRole;
+    }
+
+    const { nextState, nextRole } = approvalDestination(
+      purpose,
+      exemption?.stages,
+    );
+
+    const recipients = exemption
+      ? await getStaffByWorkflowRoles(["Receptionist"], tx)
+      : nextRole
+        ? await getStaffByWorkflowRoles([nextRole], tx)
+        : [];
+
+    const [exemptionVisitor] = exemption
+      ? await tx
+          .select({
+            personName: persons.fullName,
+            passportNo: persons.passportNo,
+          })
+          .from(persons)
+          .where(eq(persons.id, locked.personId))
+      : [];
+
+    if (exemption && !exemptionVisitor) {
+      throw new Error("Visitor details are required to record the exemption");
+    }
+
     const [existing] = await tx
       .select()
       .from(stakeholderApprovals)
       .where(eq(stakeholderApprovals.engagementId, engagementId));
+
     if (existing) {
       throw new Error("Engagement has already been approved");
     }
 
+    let approval: StakeholderApproval;
+
     try {
-      await tx.insert(stakeholderApprovals).values({
-        engagementId,
-        approverRole,
-        approverStaffUserId: session.staffUserId,
-        approverName,
-        signature: input.signature,
-        isDelegated: isDelegatedApprover,
-        delegatedBy: isDelegatedApprover
-          ? engagement.delegationGrantedBy
-          : null,
-        delegatedAt: isDelegatedApprover
-          ? engagement.delegationGrantedAt
-          : null,
-        delegationReason: isDelegatedApprover
-          ? engagement.delegationReason
-          : null,
-      });
+      [approval] = await tx
+        .insert(stakeholderApprovals)
+        .values({
+          engagementId,
+          approverRole,
+          approverStaffUserId: session.staffUserId,
+          approverName,
+          signature: input.signature,
+          isDelegated: isDelegatedApprover,
+          delegatedBy: isDelegatedApprover ? locked.delegationGrantedBy : null,
+          delegatedAt: isDelegatedApprover ? locked.delegationGrantedAt : null,
+          delegationReason: isDelegatedApprover
+            ? locked.delegationReason
+            : null,
+        })
+        .returning();
     } catch (error) {
       // 23505 = Postgres unique_violation — a concurrent approval won the
       // race between the check above and this insert; the unique
@@ -937,6 +1152,7 @@ export async function applyStakeholderApproval(
       if (isUniqueViolation(error)) {
         throw new Error("Engagement has already been approved");
       }
+
       throw error;
     }
 
@@ -951,8 +1167,21 @@ export async function applyStakeholderApproval(
       )
       .orderBy(desc(workflowCycles.cycleNumber))
       .limit(1);
+
     if (!cycle) {
       throw new Error("No active workflow cycle for this engagement");
+    }
+
+    if (exemption) {
+      await tx.insert(workflowExemptions).values(
+        exemption.stages.map((stage) => ({
+          engagementId,
+          workflowCycleId: cycle.id,
+          stakeholderApprovalId: approval.id,
+          stage,
+          reason: exemption.reason,
+        })),
+      );
     }
 
     const [updatedEngagement] = await tx
@@ -985,31 +1214,53 @@ export async function applyStakeholderApproval(
       fromState: "AtReception",
       toState: nextState,
       performedBy,
-      comments: `Approved by ${approverName} (${approverRole})`,
+      comments: exemption
+        ? `Approved by ${approverName} (${approverRole}). Exempted: ${exemption.stages.map((stage) => WORKFLOW_EXEMPTION_STAGE_LABELS[stage]).join(", ")}. Reason: ${exemption.reason}`
+        : `Approved by ${approverName} (${approverRole})`,
     });
 
-    if (recipients.length > 0 && nextRole) {
+    const exemptionMessage: WorkflowExemptionMessage | undefined =
+      exemption && exemptionVisitor
+        ? {
+            engagementId,
+            ...exemptionVisitor,
+            stages: exemption.stages,
+            reason: exemption.reason,
+            approverName: approval.approverName,
+            approverRole: approval.approverRole,
+            approvedAt: approval.approvedAt,
+            nextState,
+          }
+        : undefined;
+
+    if (recipients.length > 0 && (exemptionMessage || nextRole)) {
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: `Engagement approved at Reception and routed to ${nextRole}.`,
+          message: exemptionMessage
+            ? workflowExemptionNotification(exemptionMessage)
+            : `Engagement approved at Reception and routed to ${nextRole}.`,
         })),
       );
     }
 
-    return updatedEngagement;
+    return {
+      engagement: updatedEngagement,
+      recipients,
+      nextRole,
+      exemptionMessage,
+    };
   });
-
-  return { engagement: updated, recipients, nextRole };
 }
 
 // The Department Head who invited the visitor, when the record came from a
 // registration link. Records Reception keyed in directly have none.
 async function getInvitingDepartmentHead(
   engagementId: string,
+  client: DbClient = db,
 ): Promise<StaffUser | undefined> {
-  const [row] = await db
+  const [row] = await client
     .select({ staffUser: staffUsers })
     .from(registrationRequests)
     .innerJoin(
@@ -1036,12 +1287,13 @@ export async function rejectStakeholderApproval(
   engagementId: string,
   session: SessionUser,
   reason: string,
+  client: DbClient = db,
 ): Promise<{
   rejection: StakeholderRejection;
   receptionists: StaffUser[];
   departmentHead: StaffUser | undefined;
 }> {
-  const engagement = await getEngagementById(engagementId);
+  const engagement = await getEngagementById(engagementId, client);
   if (!engagement) {
     throw new Error("Engagement not found");
   }
@@ -1068,11 +1320,11 @@ export async function rejectStakeholderApproval(
   const approverName = session.displayName ?? "";
 
   const [receptionists, departmentHead] = await Promise.all([
-    getStaffByWorkflowRoles(["Receptionist"]),
-    getInvitingDepartmentHead(engagementId),
+    getStaffByWorkflowRoles(["Receptionist"], client),
+    getInvitingDepartmentHead(engagementId, client),
   ]);
 
-  const rejection = await db.transaction(async (tx) => {
+  const rejection = await client.transaction(async (tx) => {
     // Conditional for the same reason as the approval's update: whichever
     // decision commits first wins, and the other matches nothing.
     const [updated] = await tx
@@ -1463,13 +1715,14 @@ export async function listPendingRevocations(
 
 export async function getLatestHospitalClearance(
   engagementId: string,
+  client: DbClient = db,
 ): Promise<HospitalClearance | undefined> {
-  const cycle = await getActiveWorkflowCycle(engagementId);
+  const cycle = await getActiveWorkflowCycle(engagementId, client);
   if (!cycle) {
     return undefined;
   }
 
-  const [latest] = await db
+  const [latest] = await client
     .select()
     .from(hospitalClearances)
     .where(eq(hospitalClearances.workflowCycleId, cycle.id))
@@ -1483,22 +1736,27 @@ export async function recordHospitalClearance(
   engagementId: string,
   input: { clearanceStatus: HospitalClearanceStatus; doctorComments: string },
   performedBy: string,
+  client: DbClient = db,
 ): Promise<{
   engagement: Engagement;
-  trainingRecipients: StaffUser[];
+  nextRecipients: StaffUser[];
+  nextRole: "TrainingStaff" | "SecurityStaff" | null;
   receptionRecipients: StaffUser[];
   outcome: "Cleared" | "Unfit";
 }> {
-  const preCheck = await getEngagementById(engagementId);
+  const preCheck = await getEngagementById(engagementId, client);
+
   if (!preCheck) {
     throw new Error("Engagement not found");
   }
+
   if (
     preCheck.workflowState !== "AtHospital" ||
     (preCheck.accessPurpose !== "Work" && preCheck.accessPurpose !== "WorkMine")
   ) {
     throw new Error("Engagement is not awaiting Hospital clearance");
   }
+
   // The conditions are what Reception and Training School act on, so a
   // conditional clearance without them tells nobody anything. Likewise an
   // Unfit without a reason leaves Reception unable to act on it.
@@ -1515,21 +1773,13 @@ export async function recordHospitalClearance(
   const outcome: "Cleared" | "Unfit" =
     input.clearanceStatus === "Unfit" ? "Unfit" : "Cleared";
 
-  // Per project-overview.md, the three outcomes notify different people:
-  // Fit goes to Training School alone; Fit with Conditions goes to Training
-  // School *and* Reception, because the conditions are Reception's to manage;
-  // Unfit goes to Reception only, since the record stays at Hospital.
-  // Reception used to hear nothing at all about a conditional clearance.
-  const trainingRecipients =
-    outcome === "Cleared"
-      ? await getStaffByWorkflowRoles(["TrainingStaff"])
-      : [];
+  // Conditional/Unfit outcomes still notify Reception regardless of the next required stage.
   const receptionRecipients =
     input.clearanceStatus === "Fit"
       ? []
-      : await getStaffByWorkflowRoles(["Receptionist"]);
+      : await getStaffByWorkflowRoles(["Receptionist"], client);
 
-  const updated = await db.transaction(async (tx) => {
+  return client.transaction(async (tx) => {
     // Row lock — the pre-check above is just a friendly fast path; this is
     // the real guard against a concurrent clearance submission racing this
     // one (e.g. two Cleared/Unfit decisions in flight at once). Whichever
@@ -1541,9 +1791,11 @@ export async function recordHospitalClearance(
       .from(engagements)
       .where(eq(engagements.id, engagementId))
       .for("update");
+
     if (!engagement) {
       throw new Error("Engagement not found");
     }
+
     if (
       engagement.workflowState !== "AtHospital" ||
       (engagement.accessPurpose !== "Work" &&
@@ -1563,9 +1815,29 @@ export async function recordHospitalClearance(
       )
       .orderBy(desc(workflowCycles.cycleNumber))
       .limit(1);
+
     if (!cycle) {
       throw new Error("No active workflow cycle for this engagement");
     }
+
+    const exemptions = await getActiveWorkflowExemptions(engagementId, tx);
+
+    if (exemptions.some((exemption) => exemption.stage === "Hospital")) {
+      throw new Error("Hospital is exempted for this workflow cycle");
+    }
+
+    const destination = hospitalDestination(
+      exemptions.map((exemption) => exemption.stage),
+    );
+
+    const nextRole = outcome === "Cleared" ? destination.nextRole : null;
+
+    const nextRecipients = nextRole
+      ? await getStaffByWorkflowRoles([nextRole], tx)
+      : [];
+
+    const destinationLabel =
+      destination.nextRole === "SecurityStaff" ? "Security" : "Training School";
 
     await tx.insert(hospitalClearances).values({
       workflowCycleId: cycle.id,
@@ -1574,10 +1846,11 @@ export async function recordHospitalClearance(
     });
 
     let updatedEngagement = engagement;
+
     if (outcome === "Cleared") {
       [updatedEngagement] = await tx
         .update(engagements)
-        .set({ workflowState: "AtTraining" })
+        .set({ workflowState: destination.nextState })
         .where(eq(engagements.id, engagementId))
         .returning();
 
@@ -1585,7 +1858,7 @@ export async function recordHospitalClearance(
         engagementId,
         workflowCycleId: cycle.id,
         fromState: "AtHospital",
-        toState: "AtTraining",
+        toState: destination.nextState,
         performedBy,
         comments: `Hospital clearance: ${input.clearanceStatus}`,
       });
@@ -1595,13 +1868,13 @@ export async function recordHospitalClearance(
     const receptionMessage =
       outcome === "Unfit"
         ? "Hospital marked this record Unfit. It remains at Hospital."
-        : "Hospital cleared this record Fit with Conditions. It has moved to Training School.";
+        : `Hospital cleared this record Fit with Conditions. It has moved to ${destinationLabel}.`;
 
     const dashboardNotices = [
-      ...trainingRecipients.map((recipient) => ({
+      ...nextRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: "Hospital clearance recorded and routed to Training School.",
+        message: `Hospital clearance recorded and routed to ${destinationLabel}.`,
       })),
       ...receptionRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
@@ -1614,15 +1887,14 @@ export async function recordHospitalClearance(
       await tx.insert(notifications).values(dashboardNotices);
     }
 
-    return updatedEngagement;
+    return {
+      engagement: updatedEngagement,
+      nextRecipients,
+      nextRole,
+      receptionRecipients,
+      outcome,
+    };
   });
-
-  return {
-    engagement: updated,
-    trainingRecipients,
-    receptionRecipients,
-    outcome,
-  };
 }
 
 export type InductionRecord = typeof inductionRecords.$inferSelect;
@@ -1647,8 +1919,9 @@ export type ClearanceAge =
 
 export async function checkHospitalClearanceAge(
   engagementId: string,
+  client: DbClient = db,
 ): Promise<ClearanceAge> {
-  const engagement = await getEngagementById(engagementId);
+  const engagement = await getEngagementById(engagementId, client);
 
   if (
     !engagement ||
@@ -1658,7 +1931,13 @@ export async function checkHospitalClearanceAge(
     return { applicable: false };
   }
 
-  const clearance = await getLatestHospitalClearance(engagementId);
+  const exemptions = await getActiveWorkflowExemptions(engagementId, client);
+
+  if (exemptions.some((exemption) => exemption.stage === "Hospital")) {
+    return { applicable: false };
+  }
+
+  const clearance = await getLatestHospitalClearance(engagementId, client);
 
   if (!clearance) {
     return { applicable: false };
@@ -1759,10 +2038,188 @@ export async function listRecentInductions(
   return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
-export async function exportTrainingCsv(): Promise<string> {
+export async function exportSecurityCsv(
+  client: DbClient = db,
+): Promise<string> {
   const batchSize = 500;
 
-  return db.transaction(
+  return client.transaction(
+    async (tx) => {
+      const chunks = ["\uFEFF", csvRow(SECURITY_REPORT_HEADERS)];
+
+      for (let offset = 0; ; offset += batchSize) {
+        const rows = await tx
+          .select({
+            engagement: engagements,
+            name: persons.fullName,
+            passport: persons.passportNo,
+          })
+          .from(engagements)
+          .innerJoin(persons, eq(engagements.personId, persons.id))
+          .where(
+            or(
+              and(
+                eq(engagements.workflowState, "AtSecurity"),
+                inArray(engagements.accessPurpose, [
+                  "Work",
+                  "WorkMine",
+                  "VisitMine",
+                ]),
+              ),
+              exists(
+                tx
+                  .select({ id: accessProvisionings.id })
+                  .from(accessProvisionings)
+                  .innerJoin(
+                    workflowCycles,
+                    eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+                  )
+                  .where(eq(workflowCycles.engagementId, engagements.id)),
+              ),
+              exists(
+                tx
+                  .select({ id: terminationRequests.id })
+                  .from(terminationRequests)
+                  .where(
+                    and(
+                      eq(terminationRequests.engagementId, engagements.id),
+                      eq(terminationRequests.status, "Pending"),
+                    ),
+                  ),
+              ),
+            ),
+          )
+          .orderBy(engagements.id)
+          .limit(batchSize)
+          .offset(offset);
+
+        if (rows.length === 0) break;
+
+        const ids = rows.map(({ engagement }) => engagement.id);
+
+        const cards = await tx
+          .select({
+            engagementId: workflowCycles.engagementId,
+            workflowCycleId: accessProvisionings.workflowCycleId,
+            idType: accessProvisionings.idType,
+            accessCardNumber: accessProvisionings.accessCardNumber,
+            accessCardExpiry: accessProvisionings.accessCardExpiry,
+            activatedAt: accessProvisionings.activatedAt,
+          })
+          .from(accessProvisionings)
+          .innerJoin(
+            workflowCycles,
+            eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+          )
+          .where(inArray(workflowCycles.engagementId, ids))
+          .orderBy(
+            desc(accessProvisionings.activatedAt),
+            desc(accessProvisionings.id),
+          );
+
+        const audits = await tx
+          .select({
+            engagementId: workflowTransitions.engagementId,
+            workflowCycleId: workflowTransitions.workflowCycleId,
+            performedBy: staffUsers.displayName,
+            comments: workflowTransitions.comments,
+          })
+          .from(workflowTransitions)
+          .leftJoin(
+            staffUsers,
+            eq(workflowTransitions.performedBy, staffUsers.id),
+          )
+          .where(
+            and(
+              inArray(workflowTransitions.engagementId, ids),
+              eq(workflowTransitions.fromState, "AtSecurity"),
+              eq(workflowTransitions.toState, "Completed"),
+            ),
+          )
+          .orderBy(
+            desc(workflowTransitions.performedAt),
+            desc(workflowTransitions.id),
+          );
+
+        const requests = await tx
+          .select()
+          .from(terminationRequests)
+          .where(inArray(terminationRequests.engagementId, ids))
+          .orderBy(
+            desc(terminationRequests.requestedAt),
+            desc(terminationRequests.id),
+          );
+
+        const actorIds = [
+          ...new Set(
+            requests.flatMap((request) =>
+              request.decidedBy
+                ? [request.requestedBy, request.decidedBy]
+                : [request.requestedBy],
+            ),
+          ),
+        ];
+
+        const actors =
+          actorIds.length > 0
+            ? await tx
+                .select({ id: staffUsers.id, name: staffUsers.displayName })
+                .from(staffUsers)
+                .where(inArray(staffUsers.id, actorIds))
+            : [];
+
+        const actorNames = new Map(
+          actors.map((actor) => [actor.id, actor.name]),
+        );
+
+        const exemptions = await listWorkflowExemptionDetails(
+          inArray(workflowExemptions.engagementId, ids),
+          tx,
+        );
+
+        for (const row of securityReportRows(
+          rows.map(({ engagement, name, passport }) => ({
+            id: engagement.id,
+            name,
+            passport,
+            // SAFETY: receptionData is saved from the validated ReceptionData form contract.
+            company:
+              (engagement.receptionData as ReceptionData).companyName ?? "",
+            purpose: engagement.accessPurpose,
+            arrival: engagement.arrivalDate,
+            departure: engagement.departureDate,
+            workflowState: engagement.workflowState,
+            accessState: engagement.accessState,
+          })),
+          cards,
+          audits,
+          requests.map((request) => ({
+            ...request,
+            requestedBy: actorNames.get(request.requestedBy) ?? "",
+            decidedBy: request.decidedBy
+              ? (actorNames.get(request.decidedBy) ?? "")
+              : "",
+          })),
+          exemptions,
+        )) {
+          chunks.push(csvRow(row));
+        }
+
+        if (rows.length < batchSize) break;
+      }
+
+      return chunks.join("");
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+export async function exportTrainingCsv(
+  client: DbClient = db,
+): Promise<string> {
+  const batchSize = 500;
+
+  return client.transaction(
     async (tx) => {
       const chunks = ["\uFEFF", csvRow(TRAINING_REPORT_HEADERS)];
 
@@ -1788,7 +2245,11 @@ export async function exportTrainingCsv(): Promise<string> {
               and(
                 isNull(workflowCycles.archivedAt),
                 eq(engagements.workflowState, "AtTraining"),
-                inArray(engagements.accessPurpose, ["Work", "VisitMine"]),
+                inArray(engagements.accessPurpose, [
+                  "Work",
+                  "WorkMine",
+                  "VisitMine",
+                ]),
               ),
               exists(
                 tx
@@ -1796,6 +2257,17 @@ export async function exportTrainingCsv(): Promise<string> {
                   .from(inductionRecords)
                   .where(
                     eq(inductionRecords.workflowCycleId, workflowCycles.id),
+                  ),
+              ),
+              exists(
+                tx
+                  .select({ id: workflowExemptions.id })
+                  .from(workflowExemptions)
+                  .where(
+                    and(
+                      eq(workflowExemptions.workflowCycleId, workflowCycles.id),
+                      eq(workflowExemptions.stage, "Training"),
+                    ),
                   ),
               ),
             ),
@@ -1812,6 +2284,12 @@ export async function exportTrainingCsv(): Promise<string> {
         if (cycles.length === 0) break;
 
         const cycleIds = cycles.map((cycle) => cycle.id);
+
+        const exemptions = await listWorkflowExemptionDetails(
+          inArray(workflowExemptions.workflowCycleId, cycleIds),
+          tx,
+        );
+
         const inductions = await tx
           .select({
             workflowCycleId: inductionRecords.workflowCycleId,
@@ -1871,6 +2349,7 @@ export async function exportTrainingCsv(): Promise<string> {
           inductions,
           audits,
           clearanceForms,
+          exemptions,
         )) {
           chunks.push(csvRow(row));
         }
@@ -1892,8 +2371,9 @@ export async function recordInductionCompletion(
     trainerComments: string;
   },
   performedBy: string,
+  client: DbClient = db,
 ): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
-  const preCheck = await getEngagementById(engagementId);
+  const preCheck = await getEngagementById(engagementId, client);
 
   if (!preCheck) {
     throw new Error("Engagement not found");
@@ -1906,7 +2386,7 @@ export async function recordInductionCompletion(
   // The medical has to still be valid at sign-off, not merely at the moment
   // Hospital cleared them — otherwise a record can sit here for months and
   // reach Security on an expired clearance.
-  const clearance = await checkHospitalClearanceAge(engagementId);
+  const clearance = await checkHospitalClearanceAge(engagementId, client);
 
   if (clearance.applicable && clearance.expired) {
     throw new Error(
@@ -1914,9 +2394,9 @@ export async function recordInductionCompletion(
     );
   }
 
-  const recipients = await getStaffByWorkflowRoles(["SecurityStaff"]);
+  const recipients = await getStaffByWorkflowRoles(["SecurityStaff"], client);
 
-  const updated = await db.transaction(async (tx) => {
+  const updated = await client.transaction(async (tx) => {
     // Same row lock as Hospital's: the pre-check is a fast path, this is the
     // guard against two sign-offs racing each other.
     const [engagement] = await tx
@@ -1947,6 +2427,20 @@ export async function recordInductionCompletion(
 
     if (!cycle) {
       throw new Error("No active workflow cycle for this engagement");
+    }
+
+    const exemptions = await getActiveWorkflowExemptions(engagementId, tx);
+
+    if (exemptions.some((exemption) => exemption.stage === "Training")) {
+      throw new Error("Training School is exempted for this workflow cycle");
+    }
+
+    const currentClearance = await checkHospitalClearanceAge(engagementId, tx);
+
+    if (currentClearance.applicable && currentClearance.expired) {
+      throw new Error(
+        "Hospital clearance has expired. This record must return to Hospital before induction can be signed off",
+      );
     }
 
     await tx.insert(inductionRecords).values({

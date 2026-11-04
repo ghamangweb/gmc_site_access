@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import {
   applyStakeholderApprovalAction,
+  applyStakeholderExemptionAction,
   rejectStakeholderApprovalAction,
   requestDelegatedApprovalAction,
   requestStakeholderApprovalAction,
@@ -27,7 +28,8 @@ import {
   SignatureField,
   type SignatureValue,
 } from "@/components/workflow/signature-field";
-import type { ApproverRole } from "@/lib/domain/types";
+import { StakeholderExemptionDialog } from "@/components/workflow/stakeholder-exemption-dialog";
+import type { AccessPurpose, ApproverRole } from "@/lib/domain/types";
 import type {
   StakeholderApproval,
   StakeholderRejection,
@@ -37,6 +39,8 @@ type StakeholderPanelProps = {
   engagementId: string;
   approvals: StakeholderApproval[];
   approveAs: ApproverRole | null;
+  canExempt: boolean;
+  accessPurpose: AccessPurpose;
   /** Reception has asked and nobody has decided yet. */
   approvalRequested: boolean;
   /** The rejection that still stands, if the last decision was a rejection. */
@@ -52,6 +56,8 @@ export function StakeholderPanel({
   returnHref = "/dashboard/reception",
   approvals,
   approveAs,
+  canExempt,
+  accessPurpose,
   approvalRequested,
   rejection,
   canRequestApproval,
@@ -243,6 +249,21 @@ export function StakeholderPanel({
         {approveAs && (
           <>
             <Button onClick={() => setApproveOpen(true)}>Approve</Button>
+            {canExempt && (
+              <StakeholderExemptionDialog
+                key={engagementId}
+                accessPurpose={accessPurpose}
+                onApprove={(input) =>
+                  applyStakeholderExemptionAction(engagementId, input)
+                }
+                onApproved={() => {
+                  redirectTimeoutRef.current = setTimeout(
+                    () => router.push(returnHref),
+                    2000,
+                  );
+                }}
+              />
+            )}
             <Button
               type="button"
               variant="outline"

@@ -3,15 +3,18 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   integer,
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
 import { encryptedJson, encryptedText } from "@/lib/db/encrypted-columns";
+import type { WorkflowExemptionStage } from "@/lib/domain/types";
 
 export const staffUsers = pgTable("staff_users", {
   id: uuid().defaultRandom().primaryKey(),
@@ -96,14 +99,23 @@ export const engagements = pgTable(
   ],
 );
 
-export const workflowCycles = pgTable("workflow_cycles", {
-  id: uuid().defaultRandom().primaryKey(),
-  engagementId: uuid()
-    .notNull()
-    .references(() => engagements.id),
-  cycleNumber: integer().notNull(),
-  archivedAt: timestamp({ withTimezone: true }),
-});
+export const workflowCycles = pgTable(
+  "workflow_cycles",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    engagementId: uuid()
+      .notNull()
+      .references(() => engagements.id),
+    cycleNumber: integer().notNull(),
+    archivedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [
+    unique("workflow_cycles_id_engagement_unique").on(
+      table.id,
+      table.engagementId,
+    ),
+  ],
+);
 
 export const documents = pgTable(
   "documents",
@@ -143,24 +155,71 @@ export const documents = pgTable(
   ],
 );
 
-export const stakeholderApprovals = pgTable("stakeholder_approvals", {
-  id: uuid().defaultRandom().primaryKey(),
-  engagementId: uuid()
-    .notNull()
-    .unique()
-    .references(() => engagements.id),
-  approverRole: text().notNull(),
-  approverStaffUserId: uuid()
-    .notNull()
-    .references(() => staffUsers.id),
-  approverName: text().notNull(),
-  signature: encryptedText().notNull(),
-  approvedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
-  isDelegated: boolean().notNull().default(false),
-  delegatedBy: uuid().references(() => staffUsers.id),
-  delegatedAt: timestamp({ withTimezone: true }),
-  delegationReason: encryptedText(),
-});
+export const stakeholderApprovals = pgTable(
+  "stakeholder_approvals",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    engagementId: uuid()
+      .notNull()
+      .unique()
+      .references(() => engagements.id),
+    approverRole: text().notNull(),
+    approverStaffUserId: uuid()
+      .notNull()
+      .references(() => staffUsers.id),
+    approverName: text().notNull(),
+    signature: encryptedText().notNull(),
+    approvedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    isDelegated: boolean().notNull().default(false),
+    delegatedBy: uuid().references(() => staffUsers.id),
+    delegatedAt: timestamp({ withTimezone: true }),
+    delegationReason: encryptedText(),
+  },
+  (table) => [
+    unique("stakeholder_approvals_id_engagement_unique").on(
+      table.id,
+      table.engagementId,
+    ),
+  ],
+);
+
+// Exemptions apply only to this cycle. The linked approval supplies the actor,
+// role, signature and timestamp; both composite references enforce engagement ownership.
+export const workflowExemptions = pgTable(
+  "workflow_exemptions",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    engagementId: uuid().notNull(),
+    workflowCycleId: uuid().notNull(),
+    stakeholderApprovalId: uuid().notNull(),
+    stage: text().$type<WorkflowExemptionStage>().notNull(),
+    // Non-blank plaintext validation belongs in the service before encryption.
+    reason: encryptedText().notNull(),
+  },
+  (table) => [
+    uniqueIndex("workflow_exemptions_cycle_stage_unique").on(
+      table.workflowCycleId,
+      table.stage,
+    ),
+    check(
+      "workflow_exemptions_stage_check",
+      sql`${table.stage} in ('Hospital', 'Training')`,
+    ),
+    foreignKey({
+      name: "workflow_exemptions_cycle_engagement_fk",
+      columns: [table.workflowCycleId, table.engagementId],
+      foreignColumns: [workflowCycles.id, workflowCycles.engagementId],
+    }),
+    foreignKey({
+      name: "workflow_exemptions_approval_engagement_fk",
+      columns: [table.stakeholderApprovalId, table.engagementId],
+      foreignColumns: [
+        stakeholderApprovals.id,
+        stakeholderApprovals.engagementId,
+      ],
+    }),
+  ],
+);
 
 // One row per rejection, kept as history: a record can be rejected, fixed by
 // Reception, requested again and rejected again. Unlike an approval there is

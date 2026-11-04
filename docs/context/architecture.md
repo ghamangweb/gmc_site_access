@@ -473,6 +473,28 @@ rejected again). The live state is `engagements.approval_rejected_at`; a rejecti
 | cycle_number | int | |
 | archived_at | timestamptz | Null while active |
 
+### `workflow_exemptions` (2026-11-04)
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| engagement_id | uuid | Must match both referenced approval and workflow cycle |
+| workflow_cycle_id | uuid | Composite FK with engagement_id to workflow_cycles |
+| stakeholder_approval_id | uuid | Composite FK with engagement_id to stakeholder_approvals; supplies actor, role, signature and time |
+| stage | text | Hospital or Training; unique per cycle/stage |
+| reason | encrypted text | Required plaintext comment validated before encryption |
+
+Exemptions apply only to their workflow cycle. The service validates non-Guest
+CSO/HCM/GMM/EM authority against the current staff record and saves approval,
+exemptions and routing/audit under an engagement row lock in one transaction.
+Hospital routes to Security when Training is exempted. Medical-age checks ignore
+Hospital exemptions only for the active cycle. No medical or induction outcome
+is fabricated for an exempted stage. Exemption dashboard notices commit with the
+decision and target active Receptionists only; emails use the saved event snapshot
+after commit. Delivery/refresh failures return saved-approval warnings. Normal
+approval recipients are not used for an exemption event. Approval checkpoints and
+test scope are recorded in `stakeholder-exemptions-plan.md`.
+
 ### `hospital_clearances`
 
 | Column | Type | Notes |

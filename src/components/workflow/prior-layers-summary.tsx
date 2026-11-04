@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { WorkflowExemptionNotice } from "@/components/workflow/workflow-exemption-notice";
 import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
@@ -8,6 +9,7 @@ import type {
   HospitalClearance,
   InductionRecord,
   StakeholderApproval,
+  WorkflowExemptionDetails,
 } from "@/lib/services/workflow-service";
 
 // What the earlier layers decided, read-only. Security audits this before
@@ -31,12 +33,22 @@ export function PriorLayersSummary({
   approval,
   clearance,
   induction,
+  exemptions,
 }: {
   approval: StakeholderApproval | undefined;
   // Absent for a visit+mine visitor: they never went through Hospital.
   clearance: HospitalClearance | undefined;
   induction: InductionRecord | undefined;
+  exemptions: WorkflowExemptionDetails[];
 }) {
+  const hospitalExemption = exemptions.find(
+    (exemption) => exemption.stage === "Hospital",
+  );
+
+  const trainingExemption = exemptions.find(
+    (exemption) => exemption.stage === "Training",
+  );
+
   // SAFETY: clearance_status is a text column written only from the
   // HospitalClearanceStatus union by `recordHospitalClearance`.
   const clearanceStatus = clearance?.clearanceStatus as
@@ -65,7 +77,9 @@ export function PriorLayersSummary({
       </Row>
 
       <Row label="Hospital Clearance">
-        {clearance ? (
+        {hospitalExemption ? (
+          <WorkflowExemptionNotice exemption={hospitalExemption} />
+        ) : clearance ? (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <Badge
@@ -95,7 +109,9 @@ export function PriorLayersSummary({
       </Row>
 
       <Row label="Induction">
-        {induction ? (
+        {trainingExemption ? (
+          <WorkflowExemptionNotice exemption={trainingExemption} />
+        ) : induction ? (
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-status-success-bg text-status-success-fg">

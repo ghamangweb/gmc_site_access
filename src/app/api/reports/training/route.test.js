@@ -1,10 +1,5 @@
-import { beforeEach, expect, mock, test } from "bun:test";
-
-const requireWriteAccess = mock(async () => ({}));
-const exportTrainingCsv = mock(async () => '\uFEFF"Name"\r\n');
-
-mock.module("@/lib/auth/guards", () => ({ requireWriteAccess }));
-mock.module("@/lib/services/workflow-service", () => ({ exportTrainingCsv }));
+import { beforeEach, expect, test } from "bun:test";
+import { exportTrainingCsv, requireWriteAccess } from "../report-test-mocks";
 
 const { GET } = await import("./route");
 

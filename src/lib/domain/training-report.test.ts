@@ -5,6 +5,7 @@ import {
   type TrainingReportCycle,
   trainingReportRows,
 } from "./training-report";
+import type { WorkflowExemptionReportRecord } from "./workflow-exemption-report";
 
 const cycle: TrainingReportCycle = {
   id: "cycle-1",
@@ -41,7 +42,7 @@ test("completed training and current workflow stage remain distinct", () => {
   );
 
   assert.equal(row.length, TRAINING_REPORT_HEADERS.length);
-  assert.deepEqual(row.slice(3), [
+  assert.deepEqual(row.slice(3, 14), [
     "Completed",
     "Security",
     "Yes",
@@ -71,7 +72,7 @@ test("awaiting cycle does not inherit an earlier cycle's induction, audit or doc
   );
 
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows[1].slice(3), [
+  assert.deepEqual(rows[1].slice(3, 14), [
     "Awaiting",
     "Training",
     "",
@@ -114,4 +115,69 @@ test("multiple historical records still produce one row per cycle using newest-f
 
 test("empty training report has no data rows", () => {
   assert.deepEqual(trainingReportRows([], [], [], []), []);
+});
+
+const trainingExemption: WorkflowExemptionReportRecord = {
+  engagementId: cycle.engagementId,
+  workflowCycleId: cycle.id,
+  stage: "Training",
+  reason: "Existing induction verified",
+  approverName: "Stakeholder One",
+  approverRole: "GMM",
+  approvedAt: completedAt,
+  archivedAt: null,
+};
+
+test("exempted Training is explicit without fabricated induction completion or clearance", () => {
+  const [row] = trainingReportRows(
+    [cycle],
+    [induction],
+    [audit],
+    [],
+    [trainingExemption],
+  );
+  assert.equal(row.length, TRAINING_REPORT_HEADERS.length);
+  assert.equal(row[3], "Exempted");
+  assert.deepEqual(row.slice(5, 13), Array(8).fill(""));
+  assert.equal(row[13], "Not required");
+  assert.deepEqual(row.slice(14), [
+    "Training School",
+    "Training School: Existing induction verified",
+    "Stakeholder One (GMM)",
+    completedAt.toISOString(),
+  ]);
+});
+
+test("exemption reporting matches both the cycle and engagement, including historical cycles", () => {
+  const nextCycle = { ...cycle, id: "cycle-2", cycleNumber: 2 };
+  const rows = trainingReportRows(
+    [cycle, nextCycle],
+    [],
+    [],
+    [],
+    [
+      { ...trainingExemption, archivedAt: new Date() },
+      {
+        ...trainingExemption,
+        workflowCycleId: nextCycle.id,
+        engagementId: "wrong-engagement",
+      },
+    ],
+  );
+  assert.equal(rows[0][3], "Exempted");
+  assert.equal(rows[1][3], "Awaiting");
+  assert.deepEqual(rows[1].slice(14), ["", "", "", ""]);
+});
+
+test("Hospital-only exemption keeps actual Training completion and includes its authorisation", () => {
+  const [row] = trainingReportRows(
+    [cycle],
+    [induction],
+    [audit],
+    [],
+    [{ ...trainingExemption, stage: "Hospital" }],
+  );
+  assert.equal(row[3], "Completed");
+  assert.equal(row[8], "Trainer One");
+  assert.equal(row[14], "Hospital");
 });
