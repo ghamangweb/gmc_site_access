@@ -704,6 +704,7 @@ export async function activateAccessAction(
     biometricCaptured: boolean;
     accessCardNumber: string;
     accessCardExpiry: string;
+    comments: string;
   },
 ): Promise<ActionResult> {
   try {

@@ -1269,6 +1269,24 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Security access card expiry (2026-11-04)
+
+- [x] Access Setup shows the departure date as the card expiry, removes the date picker,
+      and submits that date automatically when activating access.
+- [x] Past departure dates still block activation; existing activated cards keep their saved expiry.
+- [x] Access Setup expiry date uses the existing status badge colors: light green for future
+      dates, light red when due today or overdue. Activation validation is unchanged.
+- [ ] Manual check: open Security Review, confirm expiry matches departure and no picker appears.
+
+## Security activation comments (2026-11-04)
+
+- [x] Required Comments field immediately before Set Access Active; blank or whitespace-only
+      input blocks activation in both client and service. Comments are trimmed and saved
+      with the activation transition in workflow history; workflow seed supplies comments.
+- [ ] Manual check: confirm activation requires comments and saved comments appear in history.
+
+---
+
 ## Department Head approval of submissions (2026-11-03)
 
 - [x] Submissions are inserted `PendingDepartmentApproval`; only the department's Head(s) are
