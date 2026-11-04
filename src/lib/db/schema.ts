@@ -293,6 +293,26 @@ export const accessProvisionings = pgTable("access_provisionings", {
   activatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
+// One row per change Security makes to an issued card's expiry, kept as
+// history — usually after a stakeholder extends the stay. The card row's
+// `access_card_expiry` is moved in the same transaction.
+export const accessCardExpiryUpdates = pgTable("access_card_expiry_updates", {
+  id: uuid().defaultRandom().primaryKey(),
+  engagementId: uuid()
+    .notNull()
+    .references(() => engagements.id),
+  accessProvisioningId: uuid()
+    .notNull()
+    .references(() => accessProvisionings.id),
+  previousExpiry: date().notNull(),
+  newExpiry: date().notNull(),
+  comments: encryptedText().notNull(),
+  updatedBy: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
+
 export const workflowTransitions = pgTable("workflow_transitions", {
   id: uuid().defaultRandom().primaryKey(),
   engagementId: uuid()

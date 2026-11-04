@@ -532,6 +532,22 @@ that are not Cancelled or Revoked qualify; Expired access does. The access card 
 changed — Security is notified to update it. Notified (dashboard + email): Security, Reception,
 HSE and the record's HOD. Not a workflow_state move, so no `workflow_transitions` row.
 
+### `access_card_expiry_updates` (2026-11-04)
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| engagement_id | uuid | FK → engagements |
+| access_provisioning_id | uuid | FK → access_provisionings — the card re-dated (must be in the active cycle) |
+| previous_expiry / new_expiry | date | New is today or later and ≤ `engagements.departure_date` |
+| comments | encrypted text | Required |
+| updated_by | uuid | FK → staff_users (Security) |
+| updated_at | timestamptz | |
+
+`updateCardExpiry` (rules in `src/lib/domain/card-expiry.ts`) locks the engagement, requires
+Completed with access Active or Expired, moves `access_provisionings.access_card_expiry`, and
+sets a stored `Expired` back to `Active`. Reception and HSE are notified. No transition row.
+
 ### `hospital_clearances`
 
 | Column | Type | Notes |

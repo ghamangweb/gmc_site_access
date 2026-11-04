@@ -2268,3 +2268,15 @@ dialogs are controlled and rendered beside the menu, never inside `DropdownMenuC
 closing the menu doesn't unmount them. Extend Stay mirrors the exemption dialog: required reason
 + `SignatureField`, "Confirm Extension" disabled until all are filled; `DatePicker` `minDate` is
 `earliestExtensionDate(departure)`. `StayExtensionsCard` renders nothing when there are no rows.
+
+### GrantedRowActions / UpdateCardExpiryDialog / CardExpiryUpdatesCard (2026-11-04)
+
+Files: src/app/dashboard/(workflow)/security/granted-row-actions.tsx,
+src/components/workflow/update-card-expiry-dialog.tsx,
+src/components/workflow/card-expiry-updates-card.tsx
+Last updated: 2026-11-04
+
+Same patterns as `ApprovalRowActions` / `ExtendStayDialog` / `StayExtensionsCard` above: a
+`MoreVerticalIcon` ghost icon menu with View plus one action that stays visible but disabled
+when unusable; the dialog is controlled and rendered beside the menu; the history card renders
+nothing when empty. `DatePicker` now also takes `maxDate` (days after it are disabled).

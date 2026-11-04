@@ -21,6 +21,7 @@ import { searchQueryTokens } from "@/lib/crypto";
 import { csvRow } from "@/lib/csv";
 import { type DbClient, db } from "@/lib/db/client";
 import {
+  accessCardExpiryUpdates,
   accessProvisionings,
   documents,
   engagements,
@@ -39,6 +40,11 @@ import {
   workflowExemptions,
   workflowTransitions,
 } from "@/lib/db/schema";
+import {
+  type CardExpiryUpdateInput,
+  isCardExpiryUpdatable,
+  validateCardExpiryUpdate,
+} from "@/lib/domain/card-expiry";
 import {
   DEFAULT_PAGE_SIZE,
   type Page,
@@ -3320,6 +3326,9 @@ export type ProvisioningRow = {
   provisioning: AccessProvisioning;
   engagement: Engagement;
   person: typeof persons.$inferSelect;
+  // Set when the card belongs to an earlier cycle — history, not the card
+  // the record holds now, so it can't be re-dated.
+  cycleArchivedAt: Date | null;
 };
 
 export async function listRecentProvisionings(
@@ -3335,6 +3344,7 @@ export async function listRecentProvisionings(
         provisioning: accessProvisionings,
         engagement: engagements,
         person: persons,
+        cycleArchivedAt: workflowCycles.archivedAt,
       })
       .from(accessProvisionings)
       .innerJoin(
@@ -3360,6 +3370,133 @@ export async function listRecentProvisionings(
   ]);
 
   return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+export type CardExpiryUpdate = typeof accessCardExpiryUpdates.$inferSelect;
+
+// Every re-dating of this record's cards, newest first.
+export async function getCardExpiryUpdates(
+  engagementId: string,
+): Promise<CardExpiryUpdate[]> {
+  return db
+    .select()
+    .from(accessCardExpiryUpdates)
+    .where(eq(accessCardExpiryUpdates.engagementId, engagementId))
+    .orderBy(desc(accessCardExpiryUpdates.updatedAt));
+}
+
+// Security re-dates the card a record holds now, usually after a stakeholder
+// extended the stay. A lapsed card that is re-dated is live again, so a stored
+// Expired goes back to Active (the new date is today or later). Not a
+// workflow_state move, so no transition row — `access_card_expiry_updates` is
+// the history.
+export async function updateCardExpiry(
+  engagementId: string,
+  accessProvisioningId: string,
+  input: CardExpiryUpdateInput,
+  performedBy: string,
+): Promise<{
+  update: CardExpiryUpdate;
+  receptionRecipients: StaffUser[];
+  hseRecipients: StaffUser[];
+}> {
+  return db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement) {
+      throw new Error("Engagement not found");
+    }
+
+    // SAFETY: workflow_state and access_state are written only from their
+    // unions by this service.
+    if (
+      !isCardExpiryUpdatable({
+        workflowState: engagement.workflowState as WorkflowState,
+        accessState: engagement.accessState as AccessState,
+      })
+    ) {
+      throw new Error(
+        "Only an active or expired card on a completed record can be re-dated",
+      );
+    }
+
+    const [current] = await tx
+      .select({ provisioning: accessProvisionings })
+      .from(accessProvisionings)
+      .innerJoin(
+        workflowCycles,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .where(
+        and(
+          eq(accessProvisionings.id, accessProvisioningId),
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      );
+
+    if (!current) {
+      throw new Error("This card is not the one the record currently holds");
+    }
+
+    const valid = validateCardExpiryUpdate(input, {
+      accessCardExpiry: current.provisioning.accessCardExpiry,
+      departureDate: engagement.departureDate,
+    });
+
+    await tx
+      .update(accessProvisionings)
+      .set({ accessCardExpiry: valid.newExpiry })
+      .where(eq(accessProvisionings.id, accessProvisioningId));
+
+    if (engagement.accessState === "Expired") {
+      await tx
+        .update(engagements)
+        .set({ accessState: "Active" })
+        .where(eq(engagements.id, engagementId));
+    }
+
+    const [update] = await tx
+      .insert(accessCardExpiryUpdates)
+      .values({
+        engagementId,
+        accessProvisioningId,
+        previousExpiry: current.provisioning.accessCardExpiry,
+        newExpiry: valid.newExpiry,
+        comments: valid.comments,
+        updatedBy: performedBy,
+      })
+      .returning();
+
+    // The same audiences told when access was activated.
+    const receptionRecipients = await getStaffByWorkflowRoles(
+      ["Receptionist"],
+      tx,
+    );
+    const hseRecipients = withoutAlreadyNotified(
+      await getStaffByWorkflowRoles(["HSE"], tx),
+      receptionRecipients,
+    );
+
+    const message = `Security updated the access card expiry to ${valid.newExpiry}.`;
+    const notices = [...receptionRecipients, ...hseRecipients].map(
+      (recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message,
+      }),
+    );
+
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
+    }
+
+    return { update, receptionRecipients, hseRecipients };
+  });
 }
 
 // The last step, taken by Security: access becomes live. Both the workflow and

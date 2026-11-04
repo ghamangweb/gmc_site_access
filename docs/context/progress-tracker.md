@@ -1595,7 +1595,18 @@ Dashboard + email for each audience; each email links to a page that audience ca
 - [x] `stay_extensions` history table (migration `0031_stay_extensions`), shown on Reception,
       Approvals and Security record pages (`StayExtensionsCard`)
 - [x] Notified: Security (asked to update the card), Reception, HSE, HOD
-- [ ] Security has no in-app way to change an issued card's expiry after activation
+- [x] Security can now re-date an issued card — see "Security: Update Card Expiry" below
+
+## Security: Update Card Expiry (2026-11-04)
+
+- [x] "Site Access Granted" rows get a vertical-ellipsis menu (`GrantedRowActions`): View,
+      Update Card Expiry. Enabled only on the record's current card (active cycle), Completed,
+      access Active or Expired, non-Guest Security
+- [x] `UpdateCardExpiryDialog`: new expiry (today → departure date; `DatePicker` gains
+      `maxDate`), required comments. A stay that already ended says to extend it first
+- [x] `updateCardExpiry` moves `access_card_expiry`, sets a stored Expired back to Active, keeps
+      history in `access_card_expiry_updates` (migration `0032`), shown on Security's record page
+- [x] Reception and HSE notified (dashboard + email "Access Card Updated")
 
 ---
 

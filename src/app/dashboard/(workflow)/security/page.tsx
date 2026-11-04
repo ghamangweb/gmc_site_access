@@ -2,6 +2,7 @@ import { BanIcon, IdCardIcon, ShieldCheckIcon } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { GrantedRowActions } from "@/app/dashboard/(workflow)/security/granted-row-actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { RevokeAccessButton } from "@/components/workflow/revoke-access-button";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { isCardExpiryUpdatable } from "@/lib/domain/card-expiry";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
@@ -27,6 +29,7 @@ import {
   type AccessPurpose,
   type AccessState,
   getEffectiveAccessState,
+  type WorkflowState,
 } from "@/lib/domain/types";
 import {
   countEngagementsForLayer,
@@ -75,6 +78,9 @@ export default async function SecurityQueuePage({
   }
 
   const { view, q, page } = await searchParams;
+
+  // Guests see Security's register read-only.
+  const canWrite = session.systemRole !== "Guest";
 
   const activeView =
     view === "granted" || view === "revocations" ? view : "awaiting";
@@ -233,63 +239,86 @@ export default async function SecurityQueuePage({
                   <TableHead>Access Until</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Access</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {granted.rows.map(({ provisioning, engagement, person }) => {
-                  // SAFETY: access_state is a text column written only from
-                  // the AccessState union.
-                  const accessState = getEffectiveAccessState(
-                    engagement.accessState as AccessState,
-                    provisioning.accessCardExpiry,
-                  );
+                {granted.rows.map(
+                  ({ provisioning, engagement, person, cycleArchivedAt }) => {
+                    // SAFETY: access_state is a text column written only from
+                    // the AccessState union.
+                    const accessState = getEffectiveAccessState(
+                      engagement.accessState as AccessState,
+                      provisioning.accessCardExpiry,
+                    );
 
-                  // SAFETY: access_purpose is a text column written only from
-                  // the AccessPurpose union by `createEngagement`.
-                  const purposeLabel =
-                    ACCESS_PURPOSE_LABELS[
-                      engagement.accessPurpose as AccessPurpose
-                    ] ?? engagement.accessPurpose;
+                    // SAFETY: access_purpose is a text column written only from
+                    // the AccessPurpose union by `createEngagement`.
+                    const purposeLabel =
+                      ACCESS_PURPOSE_LABELS[
+                        engagement.accessPurpose as AccessPurpose
+                      ] ?? engagement.accessPurpose;
 
-                  return (
-                    <TableRow
-                      key={provisioning.id}
-                      className="hover:bg-muted/50"
-                    >
-                      <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{purposeLabel}</TableCell>
-                      <TableCell>{provisioning.accessCardNumber}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatQueueDate(provisioning.activatedAt)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {provisioning.accessCardExpiry}
-                      </TableCell>
-                      <TableCell>
-                        {accessDuration(
-                          provisioning.activatedAt,
-                          provisioning.accessCardExpiry,
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            accessState === "Active"
-                              ? "bg-status-success-bg text-status-success-fg"
-                              : accessState === "TerminationRequested"
-                                ? "bg-status-warning-bg text-status-warning-fg"
-                                : accessState === "Expired" ||
-                                    accessState === "Terminated"
-                                  ? "bg-status-danger-bg text-status-danger-fg"
-                                  : "bg-status-neutral-bg text-status-neutral-fg"
-                          }
-                        >
-                          {ACCESS_STATE_LABELS[accessState]}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                    return (
+                      <TableRow
+                        key={provisioning.id}
+                        className="hover:bg-muted/50"
+                      >
+                        <TableCell>{person.fullName}</TableCell>
+                        <TableCell>{purposeLabel}</TableCell>
+                        <TableCell>{provisioning.accessCardNumber}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatQueueDate(provisioning.activatedAt)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {provisioning.accessCardExpiry}
+                        </TableCell>
+                        <TableCell>
+                          {accessDuration(
+                            provisioning.activatedAt,
+                            provisioning.accessCardExpiry,
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              accessState === "Active"
+                                ? "bg-status-success-bg text-status-success-fg"
+                                : accessState === "TerminationRequested"
+                                  ? "bg-status-warning-bg text-status-warning-fg"
+                                  : accessState === "Expired" ||
+                                      accessState === "Terminated"
+                                    ? "bg-status-danger-bg text-status-danger-fg"
+                                    : "bg-status-neutral-bg text-status-neutral-fg"
+                            }
+                          >
+                            {ACCESS_STATE_LABELS[accessState]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <GrantedRowActions
+                            engagementId={engagement.id}
+                            accessProvisioningId={provisioning.id}
+                            personName={person.fullName}
+                            currentExpiry={provisioning.accessCardExpiry}
+                            departureDate={engagement.departureDate}
+                            // The card the record holds now, live or lapsed,
+                            // and a viewer who can write.
+                            canUpdate={
+                              canWrite &&
+                              cycleArchivedAt === null &&
+                              isCardExpiryUpdatable({
+                                workflowState:
+                                  engagement.workflowState as WorkflowState,
+                                accessState,
+                              })
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  },
+                )}
               </TableBody>
             </Table>
           )}

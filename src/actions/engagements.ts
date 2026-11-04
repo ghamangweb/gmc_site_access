@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requirePinConfirmed, requireWriteAccess } from "@/lib/auth/guards";
+import type { CardExpiryUpdateInput } from "@/lib/domain/card-expiry";
 import type { StayExtensionInput } from "@/lib/domain/stay-extensions";
 import {
   type ActionResult,
@@ -17,6 +18,7 @@ import { sendEmail } from "@/lib/email/send";
 import {
   accessActivatedTemplate,
   accessRevokedTemplate,
+  cardExpiryUpdatedTemplate,
   delegatedApprovalRequestedTemplate,
   hospitalClearedTemplate,
   hospitalFitWithConditionsTemplate,
@@ -60,6 +62,7 @@ import {
   revokeAccess,
   type StakeholderApprovalResult,
   submitForStakeholderApproval,
+  updateCardExpiry,
   updateReceptionData,
 } from "@/lib/services/workflow-service";
 
@@ -1123,6 +1126,65 @@ export async function extendStayAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to extend stay",
+    };
+  }
+}
+
+export async function updateCardExpiryAction(
+  engagementId: string,
+  accessProvisioningId: string,
+  input: CardExpiryUpdateInput,
+): Promise<ActionResult> {
+  try {
+    const session = await requireWriteAccess("SecurityStaff");
+
+    const { update, receptionRecipients, hseRecipients } =
+      await updateCardExpiry(
+        engagementId,
+        accessProvisioningId,
+        input,
+        session.staffUserId,
+      );
+
+    const detail = await getEngagementDetail(engagementId);
+    const failedEmails = new Set<string>();
+
+    if (detail) {
+      const groups: [StaffUser[], "Receptionist" | "HSE", string][] = [
+        [receptionRecipients, "Receptionist", "Reception"],
+        [hseRecipients, "HSE", "HSE"],
+      ];
+
+      for (const [recipients, audience, label] of groups) {
+        for (const recipient of recipients) {
+          const sent = await sendEmail({
+            to: recipient.email,
+            ...cardExpiryUpdatedTemplate({
+              personName: detail.person.fullName,
+              engagementId,
+              previousExpiry: update.previousExpiry,
+              newExpiry: update.newExpiry,
+              audience,
+            }),
+          });
+
+          if (!sent) failedEmails.add(label);
+        }
+      }
+    }
+
+    revalidatePath("/dashboard/security");
+    revalidatePath(`/dashboard/security/${engagementId}`);
+    revalidatePath("/dashboard/reception");
+    revalidatePath("/dashboard/overview");
+
+    return notificationResult("Card expiry updated", [], [...failedEmails]);
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to update card expiry",
     };
   }
 }

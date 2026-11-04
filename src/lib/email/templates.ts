@@ -519,6 +519,25 @@ export function stayExtendedTemplate(opts: {
   };
 }
 
+// Security re-dated an issued card. Reception and HSE are told, as they are
+// when access is first activated.
+export function cardExpiryUpdatedTemplate(opts: {
+  personName: string;
+  engagementId: string;
+  previousExpiry: string;
+  newExpiry: string;
+  audience: "Receptionist" | "HSE";
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const from = escapeHtml(opts.previousExpiry);
+  const to = escapeHtml(opts.newExpiry);
+
+  return {
+    subject: subject(`Access Card Updated - ${opts.personName}`),
+    html: `${HELLO}<p>Security has updated the access card for ${personName}. The card is now valid until ${to} (previously ${from}).</p><p>This notification is for your information.</p>${button(medicalAudienceLink(opts.audience, opts.engagementId), "View Application Records")}`,
+  };
+}
+
 // To Security, who carry the revocation out.
 export function terminationRequestedTemplate(opts: {
   personName: string;

@@ -24,6 +24,7 @@ mock.module("@/lib/services/workflow-service", () => ({
       "cancelEngagement",
       "createEngagement",
       "extendStay",
+      "updateCardExpiry",
       "getActiveEngagementForPassport",
       "getEngagementDetail",
       "recordHospitalClearance",

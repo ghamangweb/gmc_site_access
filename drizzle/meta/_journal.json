@@ -225,6 +225,13 @@
       "when": 1793810673753,
       "tag": "0031_stay_extensions",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793811302873,
+      "tag": "0032_access_card_expiry_updates",
+      "breakpoints": true
     }
   ]
 }

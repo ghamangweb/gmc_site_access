@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { AccessActivationForm } from "@/components/workflow/access-activation-form";
+import { CardExpiryUpdatesCard } from "@/components/workflow/card-expiry-updates-card";
 import { PriorLayersSummary } from "@/components/workflow/prior-layers-summary";
 import { ReceptionDetailsPreview } from "@/components/workflow/reception-details-preview";
 import type { ReceptionFormValues } from "@/components/workflow/reception-form";
@@ -12,6 +13,7 @@ import type { AccessPurpose, ReceptionData } from "@/lib/domain/types";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import {
   getAccessProvisioning,
+  getCardExpiryUpdates,
   getEngagementDetail,
   getLatestHospitalClearance,
   getLatestInductionRecord,
@@ -38,14 +40,21 @@ export default async function SecurityDetailPage({
 
   const { engagement, person, approvals, exemptions } = detail;
 
-  const [documents, clearance, induction, provisioning, stayExtensions] =
-    await Promise.all([
-      getDocumentsForEngagement(engagementId),
-      getLatestHospitalClearance(engagementId),
-      getLatestInductionRecord(engagementId),
-      getAccessProvisioning(engagementId),
-      getStayExtensions(engagementId),
-    ]);
+  const [
+    documents,
+    clearance,
+    induction,
+    provisioning,
+    stayExtensions,
+    cardExpiryUpdates,
+  ] = await Promise.all([
+    getDocumentsForEngagement(engagementId),
+    getLatestHospitalClearance(engagementId),
+    getLatestInductionRecord(engagementId),
+    getAccessProvisioning(engagementId),
+    getStayExtensions(engagementId),
+    getCardExpiryUpdates(engagementId),
+  ]);
 
   // SAFETY: reception_data is jsonb written only from the Reception form's own
   // values; anything missing renders as "—" in the preview.
@@ -86,6 +95,7 @@ export default async function SecurityDetailPage({
         {/* Security updates the access card after an extension, so it sees
             what was extended, to when, and why. */}
         <StayExtensionsCard extensions={stayExtensions} />
+        <CardExpiryUpdatesCard updates={cardExpiryUpdates} />
         <ReceptionDetailsPreview
           values={previewValues}
           documentsTitle="Documents"
