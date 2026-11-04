@@ -112,7 +112,7 @@ export default async function ApprovalsQueuePage({
         title={`Welcome back, ${firstName}!`}
         subtitle={
           stakeholderRole
-            ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM or EM is enough."
+            ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM, EM or MM is enough."
             : "Engagements delegated to you for sign-off."
         }
       />
