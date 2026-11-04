@@ -17,10 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { type Attention, danger } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import { ACCESS_PURPOSE_LABELS, type AccessPurpose } from "@/lib/domain/types";
 import {
+  checkHospitalClearanceAge,
   countEngagementsForLayer,
   listEngagementsForLayer,
   listRecentInductions,
@@ -56,6 +59,32 @@ export default async function TrainingQueuePage({
       : undefined,
     activeView === "recorded" ? listRecentInductions(request) : undefined,
   ]);
+
+  // The medical has to be valid at sign-off, so a lapsed or lapsing one is
+  // flagged — the same check that blocks the induction. Bounded by the page.
+  const clearanceFlags = new Map<string, Attention>();
+
+  await Promise.all(
+    (awaiting?.rows ?? []).map(async ({ engagement }) => {
+      const age = await checkHospitalClearanceAge(engagement.id);
+
+      if (!age.applicable) return;
+
+      if (age.expired) {
+        clearanceFlags.set(
+          engagement.id,
+          danger("Medical clearance expired — must return to Hospital"),
+        );
+      } else if (age.expiringSoon) {
+        clearanceFlags.set(
+          engagement.id,
+          danger(
+            `Medical clearance expires in ${age.daysRemaining} day${age.daysRemaining === 1 ? "" : "s"}`,
+          ),
+        );
+      }
+    }),
+  );
 
   const views = [
     {
@@ -125,9 +154,13 @@ export default async function TrainingQueuePage({
                   return (
                     <TableRow key={engagement.id} className="hover:bg-muted/50">
                       <TableCell>
-                        <Link href={`/dashboard/training/${engagement.id}`}>
-                          {person.fullName}
-                        </Link>
+                        <NameWithAttention
+                          attention={clearanceFlags.get(engagement.id)}
+                        >
+                          <Link href={`/dashboard/training/${engagement.id}`}>
+                            {person.fullName}
+                          </Link>
+                        </NameWithAttention>
                       </TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{engagement.arrivalDate}</TableCell>

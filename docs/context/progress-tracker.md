@@ -1613,6 +1613,15 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Attention dots on queue rows (2026-11-04)
+
+- [x] Pulsing dot before the name (`AttentionDot`, `animate-ping`, static under reduce-motion):
+      red = wrong/urgent, green = new and waiting on this viewer; tooltip + screen-reader label;
+      one per row, red wins (`pickAttention`). Signals per dashboard in `ui-registry.md`
+- [x] `getLatestClearanceStatuses` — one batched query for a page's latest clearance outcomes
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

@@ -2280,3 +2280,35 @@ Same patterns as `ApprovalRowActions` / `ExtendStayDialog` / `StayExtensionsCard
 `MoreVerticalIcon` ghost icon menu with View plus one action that stays visible but disabled
 when unusable; the dialog is controlled and rendered beside the menu; the history card renders
 nothing when empty. `DatePicker` now also takes `maxDate` (days after it are disabled).
+
+### AttentionDot / NameWithAttention (2026-11-04)
+
+File: src/components/workflow/attention-dot.tsx (rules: src/lib/domain/attention.ts)
+Last updated: 2026-11-04
+
+| Property | Class |
+|---|---|
+| Background | dot + ring `bg-status-danger` (danger) / `bg-status-success` (success) |
+| Border | none |
+| Border radius | `rounded-full` |
+| Text — primary | none — label is `title` tooltip + `sr-only` text |
+| Text — secondary | none |
+| Spacing | `size-2`, name cell `inline-flex items-center gap-2` |
+| Hover state | native tooltip (`title`) |
+| Shadow | none — this system never uses `shadow-*` |
+| Status / accent usage | ring `animate-ping opacity-75`, hidden under `motion-reduce` |
+
+**Pattern notes:**
+Queue rows only, before the person's name. Danger = wrong or urgent; success = new and waiting on
+this viewer. One dot per row — `pickAttention` takes the first danger, else the first success.
+`NameWithAttention` always reserves the dot's `size-2` slot so names line up. Don't flag a tab
+whose every row is the same condition (Reception's Rejected tab, Security's Revocations tab).
+
+| Dashboard | Danger | Success |
+|---|---|---|
+| Reception (Engagements) | revocation requested, Unfit, approval rejected | — |
+| Hospital | Awaiting: previously Unfit | Awaiting Review: review due today / overdue |
+| Training (Awaiting) | medical expired / expiring (≤ 30 days) | — |
+| Security (Granted, current card) | revocation requested, access expired | stay extended — update the card |
+| Approvals (Awaiting) | — | waiting more than 3 days |
+| Site Access Records | revocation requested, Unfit (not exempted), access expired | — |

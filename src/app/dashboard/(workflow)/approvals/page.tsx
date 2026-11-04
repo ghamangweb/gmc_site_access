@@ -16,7 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   isStayExtendable,
@@ -41,6 +43,13 @@ import {
   listRecentStakeholderApprovals,
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
+
+// Past this, a record waiting for sign-off is flagged on the queue.
+const LONG_WAIT_DAYS = 3;
+
+function wholeDaysSince(value: Date): number {
+  return Math.floor((Date.now() - value.getTime()) / (1000 * 60 * 60 * 24));
+}
 
 function daysWaiting(requestedAt: Date): string {
   const days = Math.floor(
@@ -174,7 +183,21 @@ export default async function ApprovalsQueuePage({
 
                   return (
                     <TableRow key={engagement.id} className="hover:bg-muted/50">
-                      <TableCell>{person.fullName}</TableCell>
+                      <TableCell>
+                        <NameWithAttention
+                          attention={
+                            engagement.approvalRequestedAt &&
+                            wholeDaysSince(engagement.approvalRequestedAt) >
+                              LONG_WAIT_DAYS
+                              ? success(
+                                  `Waiting ${wholeDaysSince(engagement.approvalRequestedAt)} days for sign-off`,
+                                )
+                              : undefined
+                          }
+                        >
+                          {person.fullName}
+                        </NameWithAttention>
+                      </TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{engagement.arrivalDate}</TableCell>
                       <TableCell className="text-muted-foreground">

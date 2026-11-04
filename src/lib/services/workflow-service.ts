@@ -2007,6 +2007,48 @@ function validateHospitalClearanceInput(
   return nextReviewDate;
 }
 
+// The latest clearance outcome in each engagement's active cycle, for a page
+// of queue rows at once — one query, not one per row. Engagements with no
+// clearance yet are simply absent from the map.
+export async function getLatestClearanceStatuses(
+  engagementIds: string[],
+): Promise<Map<string, HospitalClearanceStatus>> {
+  const statuses = new Map<string, HospitalClearanceStatus>();
+
+  if (engagementIds.length === 0) return statuses;
+
+  const rows = await db
+    .select({
+      engagementId: workflowCycles.engagementId,
+      clearanceStatus: hospitalClearances.clearanceStatus,
+    })
+    .from(hospitalClearances)
+    .innerJoin(
+      workflowCycles,
+      eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+    )
+    .where(
+      and(
+        inArray(workflowCycles.engagementId, engagementIds),
+        isNull(workflowCycles.archivedAt),
+      ),
+    )
+    .orderBy(desc(hospitalClearances.clearanceDate));
+
+  for (const row of rows) {
+    if (!statuses.has(row.engagementId)) {
+      // SAFETY: clearance_status is written only from the
+      // HospitalClearanceStatus union by `recordHospitalClearance`.
+      statuses.set(
+        row.engagementId,
+        row.clearanceStatus as HospitalClearanceStatus,
+      );
+    }
+  }
+
+  return statuses;
+}
+
 export async function recordHospitalClearance(
   engagementId: string,
   input: HospitalClearanceInput,

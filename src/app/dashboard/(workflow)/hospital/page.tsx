@@ -29,17 +29,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { danger, success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
+  isoToday,
   WORKFLOW_STATE_LABELS,
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
   countAwaitingHospitalReviews,
   countEngagementsForLayer,
+  getLatestClearanceStatuses,
   listAwaitingHospitalReviews,
   listEngagementsForLayer,
   listRecentHospitalClearances,
@@ -91,6 +95,13 @@ export default async function HospitalQueuePage({
         ? listRecentHospitalClearances(request)
         : undefined,
     ]);
+
+  // Awaiting rows that were already marked Unfit are back for re-clearance —
+  // flagged red, so they don't read like fresh arrivals.
+  const awaitingStatuses = await getLatestClearanceStatuses(
+    awaiting?.rows.map(({ engagement }) => engagement.id) ?? [],
+  );
+  const today = isoToday();
 
   const views = [
     {
@@ -158,9 +169,17 @@ export default async function HospitalQueuePage({
                 {awaiting.rows.map(({ engagement, person }) => (
                   <TableRow key={engagement.id} className="hover:bg-muted/50">
                     <TableCell>
-                      <Link href={`/dashboard/hospital/${engagement.id}`}>
-                        {person.fullName}
-                      </Link>
+                      <NameWithAttention
+                        attention={
+                          awaitingStatuses.get(engagement.id) === "Unfit"
+                            ? danger("Marked Unfit — awaiting re-clearance")
+                            : undefined
+                        }
+                      >
+                        <Link href={`/dashboard/hospital/${engagement.id}`}>
+                          {person.fullName}
+                        </Link>
+                      </NameWithAttention>
                     </TableCell>
                     <TableCell>{engagement.arrivalDate}</TableCell>
                     <TableCell>{engagement.departureDate}</TableCell>
@@ -211,11 +230,24 @@ export default async function HospitalQueuePage({
                   ({ clearance, engagement, person, recordedByName }) => (
                     <TableRow key={clearance.id} className="hover:bg-muted/50">
                       <TableCell>
-                        <Link
-                          href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
+                        <NameWithAttention
+                          attention={
+                            clearance.nextReviewDate &&
+                            clearance.nextReviewDate <= today
+                              ? success(
+                                  clearance.nextReviewDate < today
+                                    ? "Review overdue"
+                                    : "Review due today",
+                                )
+                              : undefined
+                          }
                         >
-                          {person.fullName}
-                        </Link>
+                          <Link
+                            href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
+                          >
+                            {person.fullName}
+                          </Link>
+                        </NameWithAttention>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatQueueDate(clearance.clearanceDate)}

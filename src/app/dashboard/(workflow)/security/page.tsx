@@ -19,8 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { RevokeAccessButton } from "@/components/workflow/revoke-access-button";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { danger, pickAttention, success } from "@/lib/domain/attention";
 import {
   hasPendingStayExtension,
   isCardExpiryUpdatable,
@@ -274,7 +276,32 @@ export default async function SecurityQueuePage({
                         key={provisioning.id}
                         className="hover:bg-muted/50"
                       >
-                        <TableCell>{person.fullName}</TableCell>
+                        <TableCell>
+                          <NameWithAttention
+                            attention={
+                              // The card the record holds now; an earlier
+                              // cycle's card is history.
+                              cycleArchivedAt === null
+                                ? pickAttention(
+                                    accessState === "TerminationRequested" &&
+                                      danger("Revocation requested"),
+                                    accessState === "Expired" &&
+                                      danger("Access expired"),
+                                    hasPendingStayExtension({
+                                      cardActivatedAt: provisioning.activatedAt,
+                                      latestExtensionAt,
+                                      latestCardUpdateAt,
+                                    }) &&
+                                      success(
+                                        "Stay extended — update the card expiry",
+                                      ),
+                                  )
+                                : undefined
+                            }
+                          >
+                            {person.fullName}
+                          </NameWithAttention>
+                        </TableCell>
                         <TableCell>{purposeLabel}</TableCell>
                         <TableCell>{provisioning.accessCardNumber}</TableCell>
                         <TableCell className="text-muted-foreground">
