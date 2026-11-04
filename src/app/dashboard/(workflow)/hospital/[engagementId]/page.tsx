@@ -67,10 +67,7 @@ export default async function HospitalDetailPage({
 
     return (
       <div>
-        <PageHeader
-          title={person.fullName}
-          subtitle={`Passport ${person.passportNo}`}
-        />
+        <PageHeader title={person.fullName} />
         <div className="flex flex-col gap-6">
           <HospitalHandoff
             clearance={reviewed}
@@ -107,10 +104,7 @@ export default async function HospitalDetailPage({
 
     return (
       <div>
-        <PageHeader
-          title={person.fullName}
-          subtitle={`Passport ${person.passportNo}`}
-        />
+        <PageHeader title={person.fullName} />
         <HospitalHandoff clearance={clearance} title="Recorded Clearance" />
       </div>
     );
@@ -127,10 +121,7 @@ export default async function HospitalDetailPage({
     <div>
       {/* Identity only: Hospital records a clearance, it doesn't review the
           engagement. The full record lives with Reception. */}
-      <PageHeader
-        title={person.fullName}
-        subtitle={`Passport ${person.passportNo}`}
-      />
+      <PageHeader title={person.fullName} />
       <div className="flex flex-col gap-6">
         <WorkflowExemptionsSummary exemptions={activeExemptions} />
         <HospitalForm
