@@ -1,5 +1,15 @@
 # UI Registry
 
+### Dashboard header logo (2026-11-04)
+
+`src/components/layout/dashboard-topbar.tsx`: the home link displays
+`/logo_whitebg.png` in light mode (`dark:hidden`) and `/logo.png` in dark mode
+(`hidden dark:block`). Both images keep the existing 80 x 38 dimensions and GMC alt text.
+
+The same theme visibility pattern applies in `src/components/layout/public-shell.tsx`
+(sign-in, PIN, other auth pages, and 404) and `src/app/register/page.tsx` (visitor
+registration). Each retains its existing logo dimensions and responsive sizing.
+
 ## Notifications bell: clear + scroll (2026-11-03)
 
 `dashboard-topbar.tsx`: each notification is a `flex items-start gap-1` row holding the

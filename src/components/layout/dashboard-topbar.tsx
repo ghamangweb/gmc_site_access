@@ -184,6 +184,15 @@ export function DashboardTopbar({
             width={80}
             height={38}
             priority
+            className="dark:hidden"
+          />
+          <Image
+            src="/logo.png"
+            alt="GMC"
+            width={80}
+            height={38}
+            priority
+            className="hidden dark:block"
           />
         </Link>
         <div className="flex items-center gap-2">
