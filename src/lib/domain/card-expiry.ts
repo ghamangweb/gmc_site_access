@@ -63,3 +63,23 @@ export function validateCardExpiryUpdate(
 
   return { newExpiry, comments: parsed.data.comments.trim() };
 }
+
+// Security never extends a stay on its own: a card can only be re-dated once
+// a stakeholder has extended the stay *after* the card was issued (an
+// extension before activation was already reflected in the card Security
+// issued), and Security hasn't acted on it yet. Each extension unlocks one
+// update; the next needs another extension.
+export function hasPendingStayExtension(opts: {
+  cardActivatedAt: Date;
+  latestExtensionAt: Date | null;
+  latestCardUpdateAt: Date | null;
+}): boolean {
+  if (!opts.latestExtensionAt) return false;
+
+  const lastHandled =
+    opts.latestCardUpdateAt && opts.latestCardUpdateAt > opts.cardActivatedAt
+      ? opts.latestCardUpdateAt
+      : opts.cardActivatedAt;
+
+  return opts.latestExtensionAt > lastHandled;
+}

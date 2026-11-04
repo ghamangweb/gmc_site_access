@@ -42,6 +42,7 @@ import {
 } from "@/lib/db/schema";
 import {
   type CardExpiryUpdateInput,
+  hasPendingStayExtension,
   isCardExpiryUpdatable,
   validateCardExpiryUpdate,
 } from "@/lib/domain/card-expiry";
@@ -3329,7 +3330,26 @@ export type ProvisioningRow = {
   // Set when the card belongs to an earlier cycle — history, not the card
   // the record holds now, so it can't be re-dated.
   cycleArchivedAt: Date | null;
+  // What `hasPendingStayExtension` needs: Security may only re-date a card
+  // after a stakeholder extends the stay.
+  latestExtensionAt: Date | null;
+  latestCardUpdateAt: Date | null;
 };
+
+const toDateOrNull = (value: string | Date | null): Date | null =>
+  value === null ? null : new Date(value);
+
+function latestStayExtensionAt() {
+  return sql<Date | null>`(select max(${stayExtensions.extendedAt}) from ${stayExtensions} where ${stayExtensions.engagementId} = ${engagements.id})`.mapWith(
+    toDateOrNull,
+  );
+}
+
+function latestCardUpdateAt() {
+  return sql<Date | null>`(select max(${accessCardExpiryUpdates.updatedAt}) from ${accessCardExpiryUpdates} where ${accessCardExpiryUpdates.accessProvisioningId} = ${accessProvisionings.id})`.mapWith(
+    toDateOrNull,
+  );
+}
 
 export async function listRecentProvisionings(
   request: PageRequest = {},
@@ -3345,6 +3365,8 @@ export async function listRecentProvisionings(
         engagement: engagements,
         person: persons,
         cycleArchivedAt: workflowCycles.archivedAt,
+        latestExtensionAt: latestStayExtensionAt(),
+        latestCardUpdateAt: latestCardUpdateAt(),
       })
       .from(accessProvisionings)
       .innerJoin(
@@ -3441,6 +3463,31 @@ export async function updateCardExpiry(
 
     if (!current) {
       throw new Error("This card is not the one the record currently holds");
+    }
+
+    const [timing] = await tx
+      .select({
+        latestExtensionAt: latestStayExtensionAt(),
+        latestCardUpdateAt: latestCardUpdateAt(),
+      })
+      .from(accessProvisionings)
+      .innerJoin(
+        workflowCycles,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .where(eq(accessProvisionings.id, accessProvisioningId));
+
+    if (
+      !hasPendingStayExtension({
+        cardActivatedAt: current.provisioning.activatedAt,
+        latestExtensionAt: timing?.latestExtensionAt ?? null,
+        latestCardUpdateAt: timing?.latestCardUpdateAt ?? null,
+      })
+    ) {
+      throw new Error(
+        "Security can only update the card after a stakeholder extends the stay",
+      );
     }
 
     const valid = validateCardExpiryUpdate(input, {

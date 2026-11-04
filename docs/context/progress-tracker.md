@@ -1607,6 +1607,9 @@ Dashboard + email for each audience; each email links to a page that audience ca
 - [x] `updateCardExpiry` moves `access_card_expiry`, sets a stored Expired back to Active, keeps
       history in `access_card_expiry_updates` (migration `0032`), shown on Security's record page
 - [x] Reception and HSE notified (dashboard + email "Access Card Updated")
+- [x] Security never re-dates a card on its own: Update Card Expiry is enabled (and accepted by
+      the server) only when a stakeholder has extended the stay after the card was issued and
+      Security hasn't updated it since (`hasPendingStayExtension`). One extension, one update
 
 ---
 

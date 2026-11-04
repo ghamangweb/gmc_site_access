@@ -21,7 +21,10 @@ import {
 } from "@/components/ui/table";
 import { RevokeAccessButton } from "@/components/workflow/revoke-access-button";
 import { requirePinConfirmed } from "@/lib/auth/guards";
-import { isCardExpiryUpdatable } from "@/lib/domain/card-expiry";
+import {
+  hasPendingStayExtension,
+  isCardExpiryUpdatable,
+} from "@/lib/domain/card-expiry";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
@@ -244,7 +247,14 @@ export default async function SecurityQueuePage({
               </TableHeader>
               <TableBody>
                 {granted.rows.map(
-                  ({ provisioning, engagement, person, cycleArchivedAt }) => {
+                  ({
+                    provisioning,
+                    engagement,
+                    person,
+                    cycleArchivedAt,
+                    latestExtensionAt,
+                    latestCardUpdateAt,
+                  }) => {
                     // SAFETY: access_state is a text column written only from
                     // the AccessState union.
                     const accessState = getEffectiveAccessState(
@@ -303,10 +313,17 @@ export default async function SecurityQueuePage({
                             currentExpiry={provisioning.accessCardExpiry}
                             departureDate={engagement.departureDate}
                             // The card the record holds now, live or lapsed,
-                            // and a viewer who can write.
+                            // a viewer who can write, and only once a
+                            // stakeholder has extended the stay since the card
+                            // was issued or last updated.
                             canUpdate={
                               canWrite &&
                               cycleArchivedAt === null &&
+                              hasPendingStayExtension({
+                                cardActivatedAt: provisioning.activatedAt,
+                                latestExtensionAt,
+                                latestCardUpdateAt,
+                              }) &&
                               isCardExpiryUpdatable({
                                 workflowState:
                                   engagement.workflowState as WorkflowState,

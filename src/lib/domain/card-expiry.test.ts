@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isCardExpiryUpdatable, validateCardExpiryUpdate } from "./card-expiry";
+import {
+  hasPendingStayExtension,
+  isCardExpiryUpdatable,
+  validateCardExpiryUpdate,
+} from "./card-expiry";
 import { isoToday } from "./types";
 
 function daysFromToday(days: number): string {
@@ -91,5 +95,58 @@ test("the new expiry is today or later, within the stay, and actually changes", 
         current,
       ),
     /Comments are required/,
+  );
+});
+
+test("Security can only re-date a card once a stakeholder extends the stay after it", () => {
+  const issued = new Date("2026-11-01T09:00:00Z");
+  const before = new Date("2026-10-30T09:00:00Z");
+  const after = new Date("2026-11-03T09:00:00Z");
+  const later = new Date("2026-11-05T09:00:00Z");
+
+  // No extension at all.
+  assert.equal(
+    hasPendingStayExtension({
+      cardActivatedAt: issued,
+      latestExtensionAt: null,
+      latestCardUpdateAt: null,
+    }),
+    false,
+  );
+  // Extended before the card was issued: already reflected in it.
+  assert.equal(
+    hasPendingStayExtension({
+      cardActivatedAt: issued,
+      latestExtensionAt: before,
+      latestCardUpdateAt: null,
+    }),
+    false,
+  );
+  // Extended after issue, not yet acted on.
+  assert.equal(
+    hasPendingStayExtension({
+      cardActivatedAt: issued,
+      latestExtensionAt: after,
+      latestCardUpdateAt: null,
+    }),
+    true,
+  );
+  // Security already updated after that extension.
+  assert.equal(
+    hasPendingStayExtension({
+      cardActivatedAt: issued,
+      latestExtensionAt: after,
+      latestCardUpdateAt: later,
+    }),
+    false,
+  );
+  // A newer extension unlocks one more update.
+  assert.equal(
+    hasPendingStayExtension({
+      cardActivatedAt: issued,
+      latestExtensionAt: new Date("2026-11-07T09:00:00Z"),
+      latestCardUpdateAt: later,
+    }),
+    true,
   );
 });

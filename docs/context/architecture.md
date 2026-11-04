@@ -547,6 +547,8 @@ HSE and the record's HOD. Not a workflow_state move, so no `workflow_transitions
 `updateCardExpiry` (rules in `src/lib/domain/card-expiry.ts`) locks the engagement, requires
 Completed with access Active or Expired, moves `access_provisionings.access_card_expiry`, and
 sets a stored `Expired` back to `Active`. Reception and HSE are notified. No transition row.
+Allowed only while a stakeholder stay extension is pending — the latest `stay_extensions.extended_at`
+is after both the card's `activated_at` and its latest update (`hasPendingStayExtension`).
 
 ### `hospital_clearances`
 
