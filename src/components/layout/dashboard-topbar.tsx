@@ -23,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export type NotificationItem = {
   id: string;
@@ -31,9 +30,6 @@ export type NotificationItem = {
   readAt: Date | null;
   createdAt: Date;
 };
-
-// Beyond this many, the list scrolls instead of growing down the page.
-const MAX_VISIBLE_NOTIFICATIONS = 4;
 
 function initials(name: string) {
   return name
@@ -137,10 +133,17 @@ export function DashboardTopbar({
   }
 
   const notificationList = notifications.map((notification) => (
-    <div key={notification.id} className="flex items-start gap-1">
+    // The highlight lives on the row, not the item, so it covers the X too:
+    // Radix drops an item's focus when the pointer leaves it, which moving
+    // onto the X would do. The X stays a sibling so clicking it never fires
+    // the item's mark-as-read select.
+    <div
+      key={notification.id}
+      className="relative rounded-sm hover:bg-accent has-[[data-slot=dropdown-menu-item]:focus]:bg-accent"
+    >
       <DropdownMenuItem
         onSelect={() => !notification.readAt && handleMarkRead(notification.id)}
-        className="flex min-w-0 flex-1 flex-col items-start gap-1 whitespace-normal"
+        className="flex w-full flex-col items-start gap-1 whitespace-normal pr-9 focus:bg-transparent"
       >
         <div className="flex w-full items-start gap-2">
           {!notification.readAt && (
@@ -166,7 +169,7 @@ export function DashboardTopbar({
         size="icon"
         onClick={() => handleClear(notification.id)}
         disabled={isPending}
-        className="mt-1 h-7 w-7 shrink-0 text-muted-foreground"
+        className="absolute top-1 right-1 h-7 w-7 text-muted-foreground"
       >
         <X className="h-4 w-4" />
         <span className="sr-only">Clear notification</span>
@@ -205,7 +208,13 @@ export function DashboardTopbar({
               )}
               <span className="sr-only">Notifications</span>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+            {/* About 4 notifications tall (header + the old 18rem list), never
+                taller than the space Radix leaves below the bell. The menu's
+                own overflow-y-auto is the only scroll bar. */}
+            <DropdownMenuContent
+              align="end"
+              className="max-h-[min(21rem,var(--radix-dropdown-menu-content-available-height))] w-80"
+            >
               <DropdownMenuLabel className="flex items-center justify-between font-normal">
                 <span className="text-sm font-medium text-foreground">
                   Notifications
@@ -238,13 +247,6 @@ export function DashboardTopbar({
                 <p className="px-2 py-6 text-center text-sm text-muted-foreground">
                   No notifications yet
                 </p>
-              ) : notifications.length > MAX_VISIBLE_NOTIFICATIONS ? (
-                // Radix sizes the viewport to 100% of the root, which a
-                // max-height alone doesn't define, so the cap goes on the
-                // viewport itself.
-                <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-72">
-                  {notificationList}
-                </ScrollArea>
               ) : (
                 notificationList
               )}

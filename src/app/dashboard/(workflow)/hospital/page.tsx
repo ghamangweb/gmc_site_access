@@ -1,4 +1,10 @@
-import { ClipboardListIcon, Stethoscope } from "lucide-react";
+import { parseISO } from "date-fns";
+import {
+  CalendarClockIcon,
+  ClipboardListIcon,
+  MoreVerticalIcon,
+  Stethoscope,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -8,6 +14,12 @@ import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   Table,
@@ -26,7 +38,9 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
+  countAwaitingHospitalReviews,
   countEngagementsForLayer,
+  listAwaitingHospitalReviews,
   listEngagementsForLayer,
   listRecentHospitalClearances,
 } from "@/lib/services/workflow-service";
@@ -56,20 +70,27 @@ export default async function HospitalQueuePage({
 
   // One queue at a time, like Reception. Awaiting is the default: it is the
   // work, and the recorded tab is the reference.
-  const activeView = view === "recorded" ? "recorded" : "awaiting";
+  const activeView =
+    view === "recorded" || view === "review" ? view : "awaiting";
+
   const request = toPageRequest(q, page);
 
-  // The awaiting pill must show outstanding work on either tab, so the count
-  // is its own query.
-  const [awaitingCount, awaiting, recorded] = await Promise.all([
-    countEngagementsForLayer("AtHospital", ["Work", "WorkMine"]),
-    activeView === "awaiting"
-      ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
-      : undefined,
-    activeView === "recorded"
-      ? listRecentHospitalClearances(request)
-      : undefined,
-  ]);
+  // The awaiting pills must show outstanding work on every tab, so the counts
+  // are their own queries.
+  const [awaitingCount, reviewCount, awaiting, awaitingReview, recorded] =
+    await Promise.all([
+      countEngagementsForLayer("AtHospital", ["Work", "WorkMine"]),
+      countAwaitingHospitalReviews(),
+      activeView === "awaiting"
+        ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
+        : undefined,
+      activeView === "review"
+        ? listAwaitingHospitalReviews(request)
+        : undefined,
+      activeView === "recorded"
+        ? listRecentHospitalClearances(request)
+        : undefined,
+    ]);
 
   const views = [
     {
@@ -77,6 +98,12 @@ export default async function HospitalQueuePage({
       value: "awaiting",
       href: "/dashboard/hospital",
       count: awaitingCount,
+    },
+    {
+      label: "Awaiting Review",
+      value: "review",
+      href: "/dashboard/hospital?view=review",
+      count: reviewCount,
     },
     {
       label: "Recorded Clearances",
@@ -100,7 +127,9 @@ export default async function HospitalQueuePage({
           placeholder={
             activeView === "awaiting"
               ? "Search the queue"
-              : "Search recorded clearances"
+              : activeView === "review"
+                ? "Search awaiting reviews"
+                : "Search recorded clearances"
           }
         />
       </div>
@@ -121,7 +150,9 @@ export default async function HospitalQueuePage({
                   <TableHead>Passport No.</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Departure</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  {/* w-px shrinks the column to the button, so the header
+                      starts where "Record Clearance" starts, at the right. */}
+                  <TableHead className="w-px">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -135,7 +166,7 @@ export default async function HospitalQueuePage({
                     <TableCell>{person.passportNo}</TableCell>
                     <TableCell>{engagement.arrivalDate}</TableCell>
                     <TableCell>{engagement.departureDate}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell>
                       <Button asChild size="sm">
                         <Link href={`/dashboard/hospital/${engagement.id}`}>
                           Record Clearance
@@ -157,6 +188,82 @@ export default async function HospitalQueuePage({
         </div>
       )}
 
+      {activeView === "review" && awaitingReview && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {awaitingReview.rows.length === 0 ? (
+            <EmptyState
+              icon={CalendarClockIcon}
+              title="No reviews awaiting"
+              description="Fit with Conditions clearances appear here, soonest review date first, until their review is recorded."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Passport No.</TableHead>
+                  <TableHead>Recorded</TableHead>
+                  <TableHead>Cleared By</TableHead>
+                  <TableHead>Next Review Date</TableHead>
+                  <TableHead>Stage</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {awaitingReview.rows.map(
+                  ({ clearance, engagement, person, recordedByName }) => (
+                    <TableRow key={clearance.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <Link
+                          href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
+                        >
+                          {person.fullName}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{person.passportNo}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatQueueDate(clearance.clearanceDate)}
+                      </TableCell>
+                      <TableCell>{recordedByName ?? "-"}</TableCell>
+                      <TableCell>
+                        {clearance.nextReviewDate
+                          ? formatQueueDate(parseISO(clearance.nextReviewDate))
+                          : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {
+                          // SAFETY: workflow_state is a text column the state
+                          // machine alone writes, always a WorkflowState.
+                          WORKFLOW_STATE_LABELS[
+                            engagement.workflowState as WorkflowState
+                          ]
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <Button asChild size="sm">
+                          <Link
+                            href={`/dashboard/hospital/${engagement.id}?review=${clearance.id}`}
+                          >
+                            Record Review
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ),
+                )}
+              </TableBody>
+            </Table>
+          )}
+          <QueuePagination
+            page={awaitingReview.page}
+            pageSize={awaitingReview.pageSize}
+            total={awaitingReview.total}
+            pageParam="page"
+            searchParams={{ q, view }}
+          />
+        </div>
+      )}
+
       {activeView === "recorded" && recorded && (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           {recorded.rows.length === 0 ? (
@@ -173,50 +280,108 @@ export default async function HospitalQueuePage({
                   <TableHead>Passport No.</TableHead>
                   <TableHead>Outcome</TableHead>
                   <TableHead>Recorded</TableHead>
+                  <TableHead>Cleared By</TableHead>
+                  <TableHead>Next Review Date</TableHead>
                   <TableHead>Stage</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recorded.rows.map(({ clearance, engagement, person }) => {
-                  // SAFETY: clearance_status is a text column written only
-                  // from the HospitalClearanceStatus union by
-                  // `recordHospitalClearance`, and the table's check
-                  // constraint allows nothing else.
-                  const status =
-                    clearance.clearanceStatus as HospitalClearanceStatus;
+                {recorded.rows.map(
+                  ({
+                    clearance,
+                    engagement,
+                    person,
+                    recordedByName,
+                    isLatest,
+                  }) => {
+                    // SAFETY: clearance_status is a text column written only
+                    // from the HospitalClearanceStatus union by
+                    // `recordHospitalClearance`, and the table's check
+                    // constraint allows nothing else.
+                    const status =
+                      clearance.clearanceStatus as HospitalClearanceStatus;
+                    // Only Fit with Conditions is reviewed, and only its
+                    // latest clearance while the record is past Hospital —
+                    // the same rule `recordHospitalReview` enforces.
 
-                  return (
-                    <TableRow key={clearance.id} className="hover:bg-muted/50">
-                      <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{person.passportNo}</TableCell>
-                      <TableCell>
-                        <Badge className={CLEARANCE_BADGE[status]}>
-                          {HOSPITAL_CLEARANCE_LABELS[status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatQueueDate(clearance.clearanceDate)}
-                      </TableCell>
-                      <TableCell>
-                        {
-                          // SAFETY: workflow_state is a text column the state
-                          // machine alone writes, always a WorkflowState.
-                          WORKFLOW_STATE_LABELS[
-                            engagement.workflowState as WorkflowState
-                          ]
-                        }
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/dashboard/hospital/${engagement.id}`}>
-                            View
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                    const reviewable =
+                      status === "FitWithConditions" &&
+                      isLatest &&
+                      engagement.workflowState !== "AtHospital";
+
+                    return (
+                      <TableRow
+                        key={clearance.id}
+                        className="hover:bg-muted/50"
+                      >
+                        <TableCell>{person.fullName}</TableCell>
+                        <TableCell>{person.passportNo}</TableCell>
+                        <TableCell>
+                          <Badge className={CLEARANCE_BADGE[status]}>
+                            {HOSPITAL_CLEARANCE_LABELS[status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatQueueDate(clearance.clearanceDate)}
+                        </TableCell>
+                        <TableCell>{recordedByName ?? "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {clearance.nextReviewDate
+                            ? formatQueueDate(
+                                parseISO(clearance.nextReviewDate),
+                              )
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {
+                            // SAFETY: workflow_state is a text column the state
+                            // machine alone writes, always a WorkflowState.
+                            WORKFLOW_STATE_LABELS[
+                              engagement.workflowState as WorkflowState
+                            ]
+                          }
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                              >
+                                <MoreVerticalIcon />
+                                <span className="sr-only">Open menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
+                                >
+                                  View
+                                </Link>
+                              </DropdownMenuItem>
+                              {reviewable ? (
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={`/dashboard/hospital/${engagement.id}?review=${clearance.id}`}
+                                  >
+                                    Review
+                                  </Link>
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem disabled>
+                                  Review
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  },
+                )}
               </TableBody>
             </Table>
           )}

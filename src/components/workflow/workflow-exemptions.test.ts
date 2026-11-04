@@ -68,6 +68,10 @@ test("Security displays authorised exemptions instead of missing or completed ou
         clearanceStatus: "Fit",
         doctorComments: "Stale medical",
         clearanceDate: new Date(),
+        recordedBy: null,
+        nextReviewDate: null,
+        reviewReminderDayBeforeSentAt: null,
+        reviewReminderDueSentAt: null,
       },
       induction: {
         id: "induction",

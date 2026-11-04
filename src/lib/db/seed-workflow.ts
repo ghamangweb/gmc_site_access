@@ -220,7 +220,14 @@ async function seedWorkflow() {
 
       await recordHospitalClearance(
         engagement.id,
-        { clearanceStatus: clearance, doctorComments: comments },
+        {
+          clearanceStatus: clearance,
+          doctorComments: comments,
+          // Fit with Conditions needs a future review date; a month out.
+          nextReviewDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .slice(0, 10),
+        },
         hospitalId,
       );
 

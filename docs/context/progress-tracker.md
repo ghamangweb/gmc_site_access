@@ -126,6 +126,105 @@
 - [ ] Browser check: download from every Security tab and confirm the same combined
       report, Excel readability, access statuses, and Guest button visibility.
 
+## Branch updated from main (2026-11-04)
+
+- [x] Fast-forwarded `feature/unfit-comments` to `origin/main` (stakeholder exemptions, PR #60)
+      and re-applied the uncommitted hospital review / Inngest work; conflicts resolved
+- [x] Migrations renumbered: this branch's former 0029–0031 clashed with main's
+      `0029_workflow_exemptions` (and main's timestamp fell between them, so a DB already on
+      main's 0029 would have skipped two). Now one `0030_hospital_review_fields.sql`, idempotent
+      (`IF NOT EXISTS` + guarded FK), with the `recorded_by` backfill. No-op on the shared dev DB,
+      which already has the columns
+- [x] tsc, Biome lint, `bun run build` pass. `bun test`: 47 pass, 1 fail — main's security
+      report route test, which passes alone (known Bun module-mock collision)
+- [ ] Run `bun run db:migrate` once (records 0030 on the dev DB; changes nothing)
+
+## Hospital — Awaiting Review tab (2026-11-04)
+
+- [x] New tab `?view=review` lists Fit with Conditions clearances still owed a review, soonest
+      Next Review Date first, with a count pill. Action "Record Review" opens the review form
+- [x] `listAwaitingHospitalReviews` / `countAwaitingHospitalReviews` share one filter
+      (`awaitingHospitalReviewConditions`) with the reminder job: latest clearance, review date set,
+      past Hospital, not Cancelled, not Terminated
+- [x] Reminder wording: "Medical review for {name} is due today." / "…is due tomorrow." (bell + email)
+- [ ] Verify in browser
+- Note: FwC clearances recorded before `next_review_date` existed have no date, so they don't
+  appear here (they can still be reviewed from Recorded Clearances)
+
+## Hospital review reminders — Inngest background job (2026-11-04)
+
+- [x] Installed `inngest@4.26.2` and the official skills (`inngest-setup`, `inngest-durable-functions`,
+      `inngest-steps`) into `.claude/skills/`; rules recorded in library-docs.md
+- [x] `/api/inngest` recorded as the one non-upload API route exception in architecture.md
+- [x] `hospital-review-reminders` function: daily 07:00 Africa/Accra, `concurrency: 1`. Finds latest
+      Fit with Conditions clearances (record past Hospital, not cancelled/revoked) due tomorrow → "due
+      tomorrow"; due today or overdue → "due". All Hospital staff, bell + email (link opens the
+      Review form). One step per reminder; steps return ids/counts only
+- [x] No double-sends: `claimHospitalReviewReminder` claims via `review_reminder_*_sent_at IS NULL`
+      in the same transaction as the bell notices. Migration `0031_hospital_review_reminders_sent.sql`.
+      **Written, NOT applied**
+- [x] `INNGEST_DEV=1` set in the `dev` script, not `.env.development` (so production, if it decrypts
+      that file, stays in Cloud mode with the encrypted Inngest keys already there);
+      `bun run inngest:dev` starts the local Inngest dev server
+- [x] `tsc --noEmit`, `biome check`, `next build` pass; no new anti-slop findings
+- [ ] **Apply `bun run db:migrate` (0029–0031)**
+- [ ] Manual check: `bun run dev` + `bun run inngest:dev`, open http://localhost:8288, invoke
+      `hospital-review-reminders` with a FwC clearance whose review date is tomorrow / today
+- [ ] Production: set `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` on the host, then sync the app
+      URL (`https://<host>/api/inngest`) in the Inngest Cloud dashboard
+- Known gap: a FwC recorded *after* that morning's run with a review date of tomorrow gets only
+  the "due" reminder, not the day-before one
+
+## Hospital: Next Review Date, review action, row menu (2026-11-04)
+
+- [x] Fit with Conditions shows a required "Next Review Date" `DatePicker` (tomorrow onward);
+      `validateHospitalClearanceInput` requires a future YYYY-MM-DD for FwC, stores NULL otherwise
+- [x] New nullable `hospital_clearances.next_review_date` (plain `date`, not encrypted, so a job can
+      query it). Migration `0030_hospital_clearance_next_review_date.sql`. **Written, NOT applied**
+- [x] Recorded tab: "Next Review Date" column ("-" for Fit / Unfit); View button replaced by a
+      vertical-ellipsis menu with View and Review. Review is disabled unless the row is Fit with
+      Conditions, the engagement's latest clearance (`isLatest`), and the record is past Hospital
+- [x] Review opens `/dashboard/hospital/[id]?review=<clearanceId>`: the clearance under review plus
+      `HospitalForm` in review mode → `submitHospitalReviewAction` → `recordHospitalReview`. Saves a
+      new clearance row (with recorder and, for FwC, a new review date); **no stage, access or
+      transition change**. Unfit review notifies Reception (bell + new `hospitalReviewUnfitTemplate`)
+- [x] `HospitalHandoff` shows Next Review Date when set (Training sees it too); `DatePicker` gained
+      optional `minDate`
+- [x] `seed-workflow.ts` FwC sample gets a review date 30 days out
+- [x] `tsc --noEmit`, `biome check` clean; no new anti-slop findings on changed lines
+- [ ] **Apply `bun run db:migrate` (0029 + 0030), dev then production**
+- [ ] Manual check: FwC requires a future date; Review enabled only on the latest FwC row; a review
+      leaves Stage unchanged; Unfit review notifies Reception
+- [x] Review reminders via Inngest (see "Hospital review reminders" above)
+- [ ] Decide: a review row becomes the "latest clearance", so it restarts Training's 90-day
+      validity clock and is what Training/Security see; an Unfit review does not stop Training
+      from signing off induction (stage is untouched by design)
+
+## Hospital: "Cleared By" on recorded clearances (2026-11-04)
+
+- [x] New nullable `hospital_clearances.recorded_by` (FK `staff_users`), set from `performedBy` in
+      `recordHospitalClearance`
+- [x] Recorded tab gets a "Cleared By" column (`staff_users.display_name` via left join; "-" when
+      unknown)
+- [x] Migration `0029_hospital_clearance_recorded_by.sql`: ADD COLUMN + FK, then backfills past
+      Fit / Fit with Conditions rows from their same-transaction AtHospital → AtTraining transition.
+      Past Unfit rows stay NULL (no transition was ever written). **Written, NOT applied**
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] **Apply `bun run db:migrate` (dev), then production.** Until then the recorded tab and
+      clearance submit fail (column missing)
+- [ ] Manual check: two different Hospital users record clearances → each row shows its own name
+
+## Hospital: View on recorded clearances opens the clearance, not the form (2026-11-04)
+
+- [x] Recorded tab View links to `/dashboard/hospital/[id]?clearance=<clearanceId>`; the detail
+      page then renders only that clearance read-only (`HospitalHandoff`, titled "Recorded
+      Clearance") with no form — Unfit records still at Hospital included
+- [x] `getHospitalClearanceForEngagement` scopes the clearance to the engagement via its cycle;
+      a mismatched id 404s. Earlier-cycle clearances viewable too
+- [x] Record Clearance (awaiting tab) and the name link are unchanged
+- [x] `tsc --noEmit`, `biome check` clean
+- [ ] Manual check: View on a Fit, a Fit with Conditions and an Unfit row shows that clearance only
+
 ## Dashboard header dark-mode logo (2026-11-04)
 
 - [x] Keep `/logo_whitebg.png` in light mode; show `/logo.png` in dark mode using theme visibility classes.
