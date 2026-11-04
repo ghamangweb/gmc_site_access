@@ -2059,6 +2059,18 @@ the "Site Access Granted" tab. Earlier notes in this file that mention `ItForm`,
 `ForwardToITButton`, `/dashboard/it` or Security's "Forwarded to IT" tab describe components that
 no longer exist.
 
+Access Setup update (2026-11-04): `AccessActivationForm` displays Access Card Expiry
+as the departure date in a `Badge` with `w-fit`, with the existing `Label` above it.
+Future dates use `bg-status-success-bg text-status-success-fg` (light green);
+dates due today or overdue use `bg-status-danger-bg text-status-danger-fg` (light red).
+The date picker and redundant departure-date helper are removed. Activation submits
+the departure date automatically; past dates still block activation.
+
+Access Setup comments (2026-11-04): required `Textarea` labelled "Comments *"
+immediately before "Set Access Active", using the existing `flex flex-col gap-2`
+field pattern. Disabled for read-only/pending states. Whitespace-only comments block
+activation in the client and service; trimmed comments are saved in workflow history.
+
 ### ProtectedDocumentPages (2026-10-21)
 
 File: `src/components/workflow/protected-document-pages.tsx`. Fetches a document from

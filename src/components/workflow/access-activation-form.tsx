@@ -5,9 +5,9 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { activateAccessAction } from "@/actions/engagements";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { DocumentSelector } from "@/components/workflow/document-selector";
 import {
   CARD_TYPES,
@@ -38,7 +39,7 @@ export function AccessActivationForm({
 }: {
   engagementId: string;
   uploadedDocuments: Document[];
-  /** The access card may not outlive the visit. */
+  /** The access card expires on the departure date. */
   departureDate: string;
   provisioning?: AccessProvisioning;
   readOnly: boolean;
@@ -47,7 +48,7 @@ export function AccessActivationForm({
   const [cardType, setCardType] = useState<CardType>("Visitor Card");
   const [biometricCaptured, setBiometricCaptured] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
+  const [comments, setComments] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const disabled = readOnly || isPending;
@@ -58,24 +59,25 @@ export function AccessActivationForm({
 
   // Mirrors the server-side rule so the problem is visible before submitting
   // rather than coming back as an error.
-  const expiryTooLate = cardExpiry !== "" && cardExpiry > departureDate;
-  const expiryInPast = cardExpiry !== "" && cardExpiry < isoToday();
+  const expiryInPast = departureDate < isoToday();
 
   const canSubmit =
     !disabled &&
     missingDocs.length === 0 &&
     cardNumber.trim().length > 0 &&
-    cardExpiry !== "" &&
-    !expiryTooLate &&
+    comments.trim().length > 0 &&
+    departureDate !== "" &&
     !expiryInPast;
 
   function handleSubmit() {
+    if (!canSubmit) return;
     startTransition(async () => {
       const result = await activateAccessAction(engagementId, {
         idType: cardType,
         biometricCaptured,
         accessCardNumber: cardNumber.trim(),
-        accessCardExpiry: cardExpiry,
+        accessCardExpiry: departureDate,
+        comments: comments.trim(),
       });
 
       if (!result.success) {
@@ -182,22 +184,18 @@ export function AccessActivationForm({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Access Card Expiry *</Label>
-            <DatePicker
-              value={cardExpiry}
-              onChange={setCardExpiry}
-              disabled={disabled}
-            />
-            {expiryTooLate ? (
-              <p className="text-destructive text-xs">
-                Cannot be later than the departure date ({departureDate}).
-              </p>
-            ) : expiryInPast ? (
+            <Label>Access Card Expiry</Label>
+            <Badge
+              className={`w-fit ${
+                departureDate <= isoToday()
+                  ? "bg-status-danger-bg text-status-danger-fg"
+                  : "bg-status-success-bg text-status-success-fg"
+              }`}
+            >
+              {departureDate}
+            </Badge>
+            {expiryInPast && (
               <p className="text-destructive text-xs">Cannot be in the past.</p>
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                Departure date is {departureDate}.
-              </p>
             )}
           </div>
 
@@ -219,6 +217,17 @@ export function AccessActivationForm({
               </Label>
             </div>
           </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="access-comments">Comments *</Label>
+          <Textarea
+            id="access-comments"
+            value={comments}
+            onChange={(event) => setComments(event.target.value)}
+            disabled={disabled}
+            required
+          />
         </div>
 
         {!readOnly && (

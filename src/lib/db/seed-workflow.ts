@@ -280,6 +280,7 @@ async function seedWorkflow() {
         biometricCaptured: true,
         accessCardNumber: `GMC-${String(1000 + progressed).padStart(5, "0")}`,
         accessCardExpiry: input.departureDate,
+        comments: "Security checks completed; access approved for activation.",
       },
       admin.id,
     );

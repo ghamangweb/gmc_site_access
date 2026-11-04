@@ -2109,9 +2109,17 @@ export async function activateAccess(
     biometricCaptured: boolean;
     accessCardNumber: string;
     accessCardExpiry: string;
+    comments: string;
   },
   performedBy: string,
 ): Promise<{ engagement: Engagement; recipients: StaffUser[] }> {
+  const comments =
+    typeof input.comments === "string" ? input.comments.trim() : "";
+
+  if (!comments) {
+    throw new Error("Comments are required before activating access");
+  }
+
   const preCheck = await getEngagementById(engagementId);
 
   if (!preCheck) {
@@ -2199,7 +2207,7 @@ export async function activateAccess(
       fromState: "AtSecurity",
       toState: "Completed",
       performedBy,
-      comments: `Access activated, card ${input.accessCardNumber}`,
+      comments: `Access activated, card ${input.accessCardNumber}\n${comments}`,
     });
 
     if (recipients.length > 0) {
