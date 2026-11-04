@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { SecurityExportButton } from "@/components/layout/security-export-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -132,6 +133,9 @@ export default async function SecurityQueuePage({
       <PageHeader
         title="Security"
         subtitle="Review completed requirements, issue site access and revoke it when asked."
+        actions={
+          session.systemRole !== "Guest" ? <SecurityExportButton /> : undefined
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { HospitalHandoff } from "@/components/workflow/hospital-handoff";
 import { TrainingForm } from "@/components/workflow/training-form";
+import { WorkflowExemptionsSummary } from "@/components/workflow/workflow-exemptions-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import {
@@ -31,7 +32,7 @@ export default async function TrainingDetailPage({
     notFound();
   }
 
-  const { engagement, person } = detail;
+  const { engagement, person, exemptions } = detail;
 
   const [
     clearance,
@@ -51,8 +52,18 @@ export default async function TrainingDetailPage({
     session.workflowRoles.includes("TrainingStaff") &&
     session.systemRole !== "Guest";
 
+  const activeExemptions = exemptions.filter(
+    (exemption) => exemption.workflowCycleId === activeCycle?.id,
+  );
+
+  const hospitalExempted = activeExemptions.some(
+    (exemption) => exemption.stage === "Hospital",
+  );
+
   const readOnly =
-    engagement.workflowState !== "AtTraining" || !isTrainingStaff;
+    engagement.workflowState !== "AtTraining" ||
+    !isTrainingStaff ||
+    activeExemptions.some((exemption) => exemption.stage === "Training");
 
   return (
     <div>
@@ -67,7 +78,10 @@ export default async function TrainingDetailPage({
       <div className="flex flex-col gap-6">
         {/* A visit+mine visitor never went through Hospital, so there is
             nothing to hand over and the card is not rendered at all. */}
-        {hospitalClearance && <HospitalHandoff clearance={hospitalClearance} />}
+        <WorkflowExemptionsSummary exemptions={activeExemptions} />
+        {hospitalClearance && !hospitalExempted && (
+          <HospitalHandoff clearance={hospitalClearance} />
+        )}
         <TrainingForm
           engagementId={engagementId}
           clearance={clearance}

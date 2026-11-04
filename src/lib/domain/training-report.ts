@@ -2,6 +2,11 @@ import {
   ACCESS_PURPOSE_LABELS,
   WORKFLOW_STATE_LABELS,
 } from "@/lib/domain/types";
+import {
+  WORKFLOW_EXEMPTION_REPORT_HEADERS,
+  type WorkflowExemptionReportRecord,
+  workflowExemptionReportValues,
+} from "@/lib/domain/workflow-exemption-report";
 
 export const TRAINING_REPORT_HEADERS = [
   "Name",
@@ -18,6 +23,7 @@ export const TRAINING_REPORT_HEADERS = [
   "Next Stage",
   "Audit Note",
   "Clearance Form Uploaded",
+  ...WORKFLOW_EXEMPTION_REPORT_HEADERS,
 ] as const;
 
 export type TrainingReportCycle = {
@@ -61,12 +67,23 @@ export function trainingReportRows(
   inductions: TrainingReportInduction[],
   audits: TrainingReportAudit[],
   documents: TrainingReportDocument[],
+  exemptions: WorkflowExemptionReportRecord[] = [],
 ): string[][] {
   return cycles.map((cycle) => {
-    // Queries supply newest first so historical duplicates still produce one row per cycle.
-    const induction = inductions.find(
-      (row) => row.workflowCycleId === cycle.id,
+    const cycleExemptions = exemptions.filter(
+      (exemption) =>
+        exemption.workflowCycleId === cycle.id &&
+        exemption.engagementId === cycle.engagementId,
     );
+
+    const trainingExempted = cycleExemptions.some(
+      (exemption) => exemption.stage === "Training",
+    );
+
+    // Queries supply newest first so historical duplicates still produce one row per cycle.
+    const induction = trainingExempted
+      ? undefined
+      : inductions.find((row) => row.workflowCycleId === cycle.id);
 
     const audit = induction
       ? audits.find(
@@ -86,7 +103,7 @@ export function trainingReportRows(
       cycle.name,
       cycle.passport,
       labelFor(ACCESS_PURPOSE_LABELS, cycle.purpose),
-      induction ? "Completed" : "Awaiting",
+      trainingExempted ? "Exempted" : induction ? "Completed" : "Awaiting",
       labelFor(WORKFLOW_STATE_LABELS, cycle.workflowState),
       induction ? (induction.generalSiteInduction ? "Yes" : "No") : "",
       induction ? (induction.otherInductions ? "Yes" : "No") : "",
@@ -96,7 +113,8 @@ export function trainingReportRows(
       audit ? labelFor(WORKFLOW_STATE_LABELS, audit.fromState) : "",
       audit ? labelFor(WORKFLOW_STATE_LABELS, audit.toState) : "",
       audit?.comments ?? "",
-      hasClearance ? "Yes" : "No",
+      trainingExempted ? "Not required" : hasClearance ? "Yes" : "No",
+      ...workflowExemptionReportValues(cycleExemptions),
     ];
   });
 }

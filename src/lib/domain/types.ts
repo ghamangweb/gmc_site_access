@@ -44,6 +44,23 @@ export type ActionResult =
 
 export type AccessPurpose = "Work" | "WorkMine" | "Visit" | "VisitMine";
 
+export const WORKFLOW_EXEMPTION_STAGES = ["Hospital", "Training"] as const;
+
+export type WorkflowExemptionStage = (typeof WORKFLOW_EXEMPTION_STAGES)[number];
+
+export const WORKFLOW_EXEMPTION_STAGE_LABELS: Record<
+  WorkflowExemptionStage,
+  string
+> = {
+  Hospital: "Hospital",
+  Training: "Training School",
+};
+
+export type WorkflowExemptionInput = {
+  stages: WorkflowExemptionStage[];
+  reason: string;
+};
+
 export const ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string> = {
   Work: "Require mine site access",
   WorkMine: "Require mine site access to work",

@@ -7,6 +7,7 @@ import { ReceptionDetailsPreview } from "@/components/workflow/reception-details
 import type { ReceptionFormValues } from "@/components/workflow/reception-form";
 import { ReceptionForm } from "@/components/workflow/reception-form";
 import { StakeholderPanel } from "@/components/workflow/stakeholder-panel";
+import { WorkflowExemptionsSummary } from "@/components/workflow/workflow-exemptions-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import {
   type AccessPurpose,
@@ -15,6 +16,10 @@ import {
   type ReceptionData,
   STAKEHOLDER_ROLES,
 } from "@/lib/domain/types";
+import {
+  canGrantWorkflowExemption,
+  requiredWorkflowStages,
+} from "@/lib/domain/workflow-exemptions";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import { getEngagementDetail } from "@/lib/services/workflow-service";
 
@@ -56,7 +61,7 @@ export async function EngagementDetail({
     notFound();
   }
 
-  const { engagement, person, approvals, latestRejection } = detail;
+  const { engagement, person, approvals, latestRejection, exemptions } = detail;
 
   // Reception's record is Reception's. The approvals route is for whoever
   // signs off: a stakeholder, or the delegate this one engagement was granted
@@ -105,6 +110,15 @@ export async function EngagementDetail({
       : undefined;
   const canRequestApproval = noApprovalYet && isReceptionist;
 
+  // SAFETY: accessPurpose is written from the validated AccessPurpose union.
+  const accessPurpose = engagement.accessPurpose as AccessPurpose;
+
+  const canExempt =
+    !!approveAs &&
+    approvalRequested &&
+    canGrantWorkflowExemption(session) &&
+    requiredWorkflowStages(accessPurpose).length > 0;
+
   const defaultValues: Partial<ReceptionFormValues> = {
     passportNo: person.passportNo,
     fullName: person.fullName,
@@ -115,7 +129,7 @@ export async function EngagementDetail({
     phone: person.phone,
     emergencyContactName: person.emergencyContactName,
     emergencyContactPhone: person.emergencyContactPhone,
-    accessPurpose: engagement.accessPurpose as AccessPurpose,
+    accessPurpose,
     arrivalDate: engagement.arrivalDate,
     departureDate: engagement.departureDate,
     ...receptionData,
@@ -164,6 +178,8 @@ export async function EngagementDetail({
           engagementId={engagementId}
           approvals={approvals}
           approveAs={approveAs}
+          canExempt={canExempt}
+          accessPurpose={accessPurpose}
           approvalRequested={approvalRequested}
           rejection={rejection}
           canRequestApproval={canRequestApproval}
@@ -171,6 +187,7 @@ export async function EngagementDetail({
           // there; a Receptionist belongs in Reception's.
           returnHref={queueHref}
         />
+        <WorkflowExemptionsSummary exemptions={exemptions} />
       </div>
     </div>
   );

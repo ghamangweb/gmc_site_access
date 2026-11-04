@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { requirePinConfirmed, requireWriteAccess } from "@/lib/auth/guards";
 import type { ActionResult, HospitalClearanceStatus } from "@/lib/domain/types";
+import {
+  canGrantWorkflowExemption,
+  type WorkflowExemptionApprovalInput,
+  workflowExemptionApprovalSchema,
+} from "@/lib/domain/workflow-exemptions";
 import { sendEmail } from "@/lib/email/send";
 import {
   accessActivatedTemplate,
@@ -16,6 +21,7 @@ import {
   stakeholderApprovalReceivedTemplate,
   stakeholderApprovalRejectedTemplate,
   stakeholderApprovalRequestedTemplate,
+  stakeholderExemptionApprovedTemplate,
   terminationRequestedTemplate,
 } from "@/lib/email/templates";
 import { findPersonByPassport } from "@/lib/services/person-registry-service";
@@ -28,6 +34,7 @@ import {
 import {
   activateAccess,
   applyStakeholderApproval,
+  applyStakeholderExemption,
   cancelEngagement,
   createEngagement,
   getActiveEngagementForPassport,
@@ -39,6 +46,7 @@ import {
   requestDelegatedApproval,
   requestTermination,
   revokeAccess,
+  type StakeholderApprovalResult,
   submitForStakeholderApproval,
   updateReceptionData,
 } from "@/lib/services/workflow-service";
@@ -306,6 +314,119 @@ export async function applyStakeholderApprovalAction(
   }
 }
 
+export async function applyStakeholderExemptionAction(
+  engagementId: string,
+  input: WorkflowExemptionApprovalInput,
+): Promise<ActionResult> {
+  let decision: StakeholderApprovalResult;
+
+  try {
+    const session = await requirePinConfirmed();
+
+    if (!canGrantWorkflowExemption(session)) {
+      return {
+        success: false,
+        error:
+          "Only CSO, HCM, GMM or EM stakeholders with write access can grant exemptions",
+      };
+    }
+
+    const parsed = workflowExemptionApprovalSchema.safeParse(input);
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid exemption approval",
+      };
+    }
+
+    decision = await applyStakeholderExemption(
+      engagementId,
+      session,
+      parsed.data,
+      session.staffUserId,
+    );
+  } catch (error) {
+    console.error("[actions/engagements/exemption]", error);
+
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to approve with exemption",
+    };
+  }
+
+  // The decision has committed. Delivery or refresh failures must not invite a duplicate approval.
+  const warnings: string[] = [];
+
+  if (decision.recipients.length === 0) {
+    warnings.push(
+      "Approved with exemption, but no active Receptionist is provisioned, so Reception was not notified.",
+    );
+  } else if (!decision.exemptionMessage) {
+    warnings.push(
+      "Approved with exemption, but the Reception email could not be prepared.",
+    );
+  } else {
+    let emailFailed = false;
+
+    for (const recipient of decision.recipients) {
+      try {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...stakeholderExemptionApprovedTemplate(decision.exemptionMessage),
+        });
+
+        if (!sent) emailFailed = true;
+      } catch (error) {
+        console.error("[actions/engagements/exemption-email]", error);
+        emailFailed = true;
+      }
+    }
+
+    if (emailFailed)
+      warnings.push(
+        "Approved with exemption, but some Reception notification emails may not have sent.",
+      );
+  }
+
+  let refreshFailed = false;
+
+  for (const route of [
+    "approvals",
+    "reception",
+    "hospital",
+    "training",
+    "security",
+  ]) {
+    try {
+      revalidatePath(`/dashboard/${route}`);
+      revalidatePath(`/dashboard/${route}/${engagementId}`);
+    } catch (error) {
+      console.error("[actions/engagements/exemption-refresh]", error);
+      refreshFailed = true;
+    }
+  }
+
+  try {
+    revalidatePath("/dashboard", "layout");
+  } catch (error) {
+    console.error("[actions/engagements/exemption-refresh]", error);
+    refreshFailed = true;
+  }
+
+  if (refreshFailed)
+    warnings.push(
+      "The approval is saved. Refresh the dashboard to see the latest status.",
+    );
+
+  return warnings.length
+    ? { success: true, warning: warnings.join(" ") }
+    : { success: true };
+}
+
 export async function rejectStakeholderApprovalAction(
   engagementId: string,
   reason: string,
@@ -436,18 +557,22 @@ export async function submitHospitalClearanceAction(
 ): Promise<ActionResult> {
   try {
     const session = await requireWriteAccess("HospitalStaff");
-    const { trainingRecipients, receptionRecipients, outcome } =
+
+    const { nextRecipients, nextRole, receptionRecipients, outcome } =
       await recordHospitalClearance(engagementId, input, session.staffUserId);
+
     const detail = await getEngagementDetail(engagementId);
 
     let allSent = true;
+
     if (detail) {
-      for (const recipient of trainingRecipients) {
+      for (const recipient of nextRecipients) {
         const sent = await sendEmail({
           to: recipient.email,
           ...hospitalClearedTemplate({
             personName: detail.person.fullName,
             engagementId,
+            nextRole: nextRole ?? "TrainingStaff",
           }),
         });
         if (!sent) allSent = false;
@@ -466,6 +591,7 @@ export async function submitHospitalClearanceAction(
             : hospitalFitWithConditionsTemplate({
                 personName: detail.person.fullName,
                 engagementId,
+                nextRole: nextRole ?? "TrainingStaff",
               })),
         });
 
@@ -475,17 +601,21 @@ export async function submitHospitalClearanceAction(
 
     revalidatePath("/dashboard/hospital");
     revalidatePath(`/dashboard/hospital/${engagementId}`);
-    // The record lands in Training's queue and, when Reception is told, on
-    // their dashboard too.
+    // Refresh both possible destinations, including Security when Training is exempted.
     revalidatePath("/dashboard/training");
+    revalidatePath("/dashboard/security");
     revalidatePath("/dashboard/reception");
 
     // Whoever should have been told but could not be. Reporting plain success
     // here is how a record goes quiet in a queue nobody is watching.
     const unreachable: string[] = [];
 
-    if (outcome === "Cleared" && trainingRecipients.length === 0) {
-      unreachable.push("no Training School user is provisioned");
+    if (outcome === "Cleared" && nextRecipients.length === 0) {
+      unreachable.push(
+        nextRole === "SecurityStaff"
+          ? "no Security user is provisioned"
+          : "no Training School user is provisioned",
+      );
     }
 
     if (input.clearanceStatus !== "Fit" && receptionRecipients.length === 0) {

@@ -3,8 +3,13 @@ import {
   ROLE_LABELS,
   SYSTEM_ROLE_LABELS,
   type SystemRole,
+  WORKFLOW_EXEMPTION_STAGE_LABELS,
   type WorkflowRole,
 } from "@/lib/domain/types";
+import {
+  type WorkflowExemptionMessage,
+  workflowExemptionNextStageLabel,
+} from "@/lib/domain/workflow-exemptions";
 
 export type EmailTemplate = {
   to: string;
@@ -41,6 +46,21 @@ function button(href: string, label: string): string {
 }
 
 const HELLO = "<p>Hello,</p>";
+
+export function stakeholderExemptionApprovedTemplate(
+  opts: WorkflowExemptionMessage,
+): MessageTemplate {
+  const stages = opts.stages
+    .map((stage) => WORKFLOW_EXEMPTION_STAGE_LABELS[stage])
+    .join(", ");
+
+  const comment = escapeHtml(opts.reason).replace(/\r\n|\r|\n/g, "<br>");
+
+  return {
+    subject: subject(`Workflow Exemption Approved - ${opts.personName}`),
+    html: `${HELLO}<p>An approval with exemption has been granted for the following visitor:</p><p><strong>Visitor:</strong> ${escapeHtml(opts.personName)}<br><strong>Passport/ID:</strong> ${escapeHtml(opts.passportNo)}<br><strong>Exempted stages:</strong> ${escapeHtml(stages)}<br><strong>Approved by:</strong> ${escapeHtml(opts.approverName)} (${escapeHtml(opts.approverRole)})<br><strong>Approved at (UTC):</strong> ${opts.approvedAt.toISOString()}</p><p><strong>Stakeholder's comment:</strong><br>${comment}</p><p>The engagement has moved to <strong>${escapeHtml(workflowExemptionNextStageLabel(opts.nextState))}</strong> for processing.</p>${button(engagementLink(encodeURIComponent(opts.engagementId)), "View Engagement")}`,
+  };
+}
 
 // Approver roles are stored as text and include values no longer in the
 // list ("Delegated", the retired "DMD"), so an unknown one shows as stored.
@@ -254,7 +274,17 @@ export function delegatedApprovalGrantedTemplate(opts: {
 export function hospitalClearedTemplate(opts: {
   personName: string;
   engagementId: string;
+  nextRole?: "TrainingStaff" | "SecurityStaff";
 }): MessageTemplate {
+  if (opts.nextRole === "SecurityStaff") {
+    const personName = escapeHtml(opts.personName);
+
+    return {
+      subject: subject(`Medical Clearance Completed - ${opts.personName}`),
+      html: `${HELLO}<p>${personName} has completed medical clearance and is ready for Security processing.</p><p>Please review the individual's records and complete the necessary actions.</p>${button(securityEngagementLink(opts.engagementId), "Review Records")}`,
+    };
+  }
+
   return dueForInductionTemplate(opts);
 }
 
@@ -284,12 +314,18 @@ export function hospitalUnfitTemplate(opts: {
 export function hospitalFitWithConditionsTemplate(opts: {
   personName: string;
   engagementId: string;
+  nextRole?: "TrainingStaff" | "SecurityStaff";
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
 
+  const destination =
+    opts.nextRole === "SecurityStaff"
+      ? "ready for Security processing"
+      : "now due for induction";
+
   return {
     subject: subject(`Medical Assessment Update - ${opts.personName}`),
-    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Fit with Conditions. The individual is now due for induction.</p><p>Please review the application and take any necessary follow-up action.</p>${button(engagementLink(opts.engagementId), "View Hospital Record")}`,
+    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Fit with Conditions. The individual is ${destination}.</p><p>Please review the application and take any necessary follow-up action.</p>${button(engagementLink(opts.engagementId), "View Hospital Record")}`,
   };
 }
 

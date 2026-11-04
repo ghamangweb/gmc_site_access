@@ -1,5 +1,69 @@
 # UI Registry
 
+## Stakeholder exemption UI (2026-11-04)
+
+Approved design: `stakeholder-exemptions-plan.md`. Shared stage labels are Hospital
+and Training School (`WORKFLOW_EXEMPTION_STAGE_LABELS`). Submission is connected to
+the guarded exemption action and Reception-only dashboard/email delivery.
+Production build and render tests passed; manual light/dark dialog interaction
+checks are tracked in `stakeholder-exemptions-verification.md`.
+
+### StakeholderExemptionDialog
+
+File: `src/components/workflow/stakeholder-exemption-dialog.tsx`, opened from StakeholderPanel.
+
+| Property | Pattern |
+|---|---|
+| Surface, border, radius | Inherit shared DialogContent tokens |
+| Text | `text-sm text-foreground`, legends `font-medium`, delivery hint `text-muted-foreground` |
+| Spacing | Field groups `flex flex-col gap-2`, checkbox group `gap-3`, checkbox/label `gap-2` |
+| Actions | Outline trigger/Cancel, default confirmation with shared loading/hover/focus/disabled states |
+| Shadow | No custom shadow |
+
+Fieldsets/legends group stage choices and the existing SignatureField; comment and
+checkbox labels use `useId` associations. Only applicable stages are offered. An
+`output` previews the next stage. Close resets values; engagement key resets between
+records. Dialog scrolls to keep the signature and actions reachable. Button eligibility
+requires a pending requested approval and CSO/HCM/GMM/EM write authority.
+Confirmation requires stages, a trimmed comment and a captured signature. Pending
+submission disables editing and closing; success closes the dialog and the parent
+returns to its own queue after the existing two-second feedback interval. Sonner
+shows success, saved-approval warnings or errors. Uncertain network results advise
+refreshing the record before retrying. No department other than Reception receives
+the exemption approval messages; subsequent handoffs keep normal notifications.
+
+### WorkflowExemptionsSummary and WorkflowExemptionNotice
+
+Files: `src/components/workflow/workflow-exemptions-summary.tsx` and
+`src/components/workflow/workflow-exemption-notice.tsx`.
+
+| Property | Pattern |
+|---|---|
+| Surface, border, radius | Shared Card tokens; entries `border-b border-border`, last entry clears border |
+| Text | Heading `text-lg font-semibold text-foreground`; stage `text-sm font-medium`; reason `text-sm text-foreground whitespace-pre-wrap` |
+| Secondary text | Actor/time and cycle `text-xs text-muted-foreground` |
+| Spacing | Card `p-6 gap-5`; entries/notice `gap-2`, entry `pb-4 last:pb-0` |
+| Status | Exempted badge `w-fit bg-status-warning-bg text-status-warning-fg` |
+| Shadow and interaction | No custom shadow; read-only |
+
+Notice shows escaped comment, captured approver/role and UTC date/time in a `time`
+element. Empty summary renders nothing. Reception/stakeholder summary includes cycle
+history; Hospital/Training show active-cycle exemptions. Security's PriorLayersSummary
+reuses the notice inside Hospital/Induction rows, with exemption taking precedence
+over stale outcomes. Exemptions are never styled as completed medicals or inductions.
+
+## SecurityExportButton (2026-11-04)
+
+File: `src/components/layout/security-export-button.tsx`, in Security PageHeader actions.
+
+Matches TrainingExportButton: shared `Button` with `variant="outline"`, default
+size, `Download` icon with `aria-hidden`, and `loading` disabling repeat clicks.
+Uses shared Button tokens, spacing, border, radius, hover, and focus styles; no
+custom colors or shadows. Label changes from "Export Security Report" to
+"Exporting..."; download failures use the existing Sonner error toast.
+Visible to non-Guest Security users. Exports the combined report across all tabs,
+search results, and pages as `security-report-YYYY-MM-DD.csv`.
+
 ### Dashboard header logo (2026-11-04)
 
 `src/components/layout/dashboard-topbar.tsx`: the home link displays

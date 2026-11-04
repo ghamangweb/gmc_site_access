@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { HospitalForm } from "@/components/workflow/hospital-form";
+import { WorkflowExemptionsSummary } from "@/components/workflow/workflow-exemptions-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import type { HospitalClearanceStatus } from "@/lib/domain/types";
 import {
@@ -25,14 +26,27 @@ export default async function HospitalDetailPage({
   if (!detail) {
     notFound();
   }
-  const { engagement, person } = detail;
+
+  const { engagement, person, exemptions } = detail;
+
+  const activeExemptions = exemptions.filter(
+    (exemption) => exemption.archivedAt === null,
+  );
+
+  const hospitalExempted = activeExemptions.some(
+    (exemption) => exemption.stage === "Hospital",
+  );
+
   const latestClearance = await getLatestHospitalClearance(engagementId);
 
   const isHospitalStaff =
     session.workflowRoles.includes("HospitalStaff") &&
     session.systemRole !== "Guest";
+
   const readOnly =
-    engagement.workflowState !== "AtHospital" || !isHospitalStaff;
+    engagement.workflowState !== "AtHospital" ||
+    !isHospitalStaff ||
+    hospitalExempted;
 
   return (
     <div>
@@ -43,10 +57,11 @@ export default async function HospitalDetailPage({
         subtitle={`Passport ${person.passportNo}`}
       />
       <div className="flex flex-col gap-6">
+        <WorkflowExemptionsSummary exemptions={activeExemptions} />
         <HospitalForm
           engagementId={engagementId}
           latestClearance={
-            latestClearance
+            latestClearance && !hospitalExempted
               ? {
                   clearanceStatus:
                     latestClearance.clearanceStatus as HospitalClearanceStatus,

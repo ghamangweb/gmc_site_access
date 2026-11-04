@@ -34,7 +34,7 @@ export default async function SecurityDetailPage({
     notFound();
   }
 
-  const { engagement, person, approvals } = detail;
+  const { engagement, person, approvals, exemptions } = detail;
 
   const [documents, clearance, induction, provisioning] = await Promise.all([
     getDocumentsForEngagement(engagementId),
@@ -78,6 +78,9 @@ export default async function SecurityDetailPage({
           approval={approvals[0]}
           clearance={clearance}
           induction={induction}
+          exemptions={exemptions.filter(
+            (exemption) => exemption.archivedAt === null,
+          )}
         />
         <ReceptionDetailsPreview
           values={previewValues}

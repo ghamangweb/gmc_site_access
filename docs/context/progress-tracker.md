@@ -1,5 +1,131 @@
 # Progress Tracker
 
+## Stakeholder exemptions - final verification checkpoint (2026-11-04)
+
+- [x] User approved final verification. `bun run build` passed: Next.js compilation,
+      TypeScript, static page generation and both report routes.
+- [x] Reviewed the approved scope, server authority, cycle-scoped atomic persistence,
+      Reception-only exemption messages, post-commit warnings and UI/report behavior.
+      No new implementation issues found in this review.
+- [x] Prior successful checks remain current: targeted Biome/TypeScript, 56 source
+      tests and 21 rolled-back PostgreSQL integration scenarios. No source changes
+      were made after those checks other than formatting before the final build.
+- [x] Saved `stakeholder-exemptions-verification.md` with evidence, review findings
+      and the user-controlled browser/mailbox checklist. No dev server was started
+      or fetched, and no live email was sent during tests.
+- [ ] User browser/mailbox verification: role visibility, dialog interaction, all
+      exemption paths, Reception-only messages, saved summaries and both CSVs.
+
+## Stakeholder exemptions - Reception messaging/submission checkpoint (2026-11-04)
+
+- [x] Connected the dialog to `applyStakeholderExemptionAction`. Client requires
+      selected stages/comment/signature; server validates payload, PIN/write authority,
+      stage applicability and current staff authority through the existing locked service.
+- [x] Approval, exemptions, routing/audit and encrypted dashboard messages commit
+      together. Only active Receptionists are recipients for the exemption event.
+- [x] Captured saved visitor/passport, approver/role/time, stages, trimmed reason and
+      destination form an immutable event snapshot for the Reception email template.
+      HTML is escaped, line breaks preserved, and the record link targets Reception.
+- [x] Missing Reception users, failed mail or failed cache refresh produce success
+      warnings after commit. Other Reception emails are still attempted after a failure;
+      duplicate/rejected decisions do not send mail. No fallback department is notified.
+- [x] Pending controls/closing disabled; success closes the dialog and uses the parent's
+      existing queue-return timer. Uncertain network outcomes advise refreshing the record.
+- [x] 56 source tests passed, including recipient addresses, message escaping and failure
+      handling. Mail is mocked; no real messages were sent during tests.
+- [x] Final email copy is in `stakeholder-exemption-email-example.md`.
+- [x] Full isolated PostgreSQL suite: 21 scenarios passed for active/inactive Reception
+      selection, notification encryption, atomic rollback, routing, report queries and
+      competing submissions. All temporary fixtures rolled back. Report count assertions
+      compare fixture deltas so the full suite includes earlier scenarios correctly.
+- [x] TypeScript and targeted Biome checks passed. New messaging functions and dialog
+      follow the existing UI/code patterns; unrelated existing anti-slop findings remain.
+- [x] User approved the final verification checkpoint; automated build/review passed.
+      Manual browser/mailbox results remain pending in the verification checklist.
+
+## Stakeholder exemptions - interface/visibility checkpoint (2026-11-04)
+
+- [x] Eligible pending approvals show Approve with Exemption. Dialog uses applicable
+      stage checkboxes, required comment/signature and next-destination preview.
+      Closing or changing engagement resets the dialog. Visit-only, MM, Guest and
+      delegated-only approvers are excluded by the existing server-side eligibility rules.
+- [x] Confirmation stays disabled with an availability message until the separately
+      approved Reception-only notification/email and browser submission checkpoint.
+- [x] Saved summaries show stage, encrypted-at-rest comment, approver/role, UTC time
+      and current/previous workflow cycle. History is visible to Reception/stakeholders;
+      downstream views use active-cycle exemptions. Exempt stages are read-only.
+- [x] Security's prior-layer summary explicitly displays Exempted, its reason and
+      authorisation instead of missing clearance or fabricated induction completion.
+- [x] Training/Security CSVs append exemption stage/comment/approver/time columns.
+      Training includes exempted cycles without induction records, labels them Exempted,
+      preserves Hospital-only exemptions alongside actual Training results, and includes
+      awaiting WorkMine inductions. Report data is scoped to its engagement/cycle.
+- [x] TypeScript, targeted Biome, 46 source tests and an isolated PostgreSQL report-query
+      scenario passed. All temporary fixtures rolled back; no visitor records changed.
+- [ ] Manual browser check: eligible stakeholder opens dialog, stage selection previews
+      the correct destination, comment/signature clear on close, and confirmation remains
+      disabled. Check exemption summaries and both CSVs once records are approved.
+- [ ] Await user approval for Reception-only messages and enabling submission.
+
+## Stakeholder exemptions - workflow rules checkpoint (2026-11-04)
+
+- [x] Required reason, stage applicability, duplicate-stage and captured-signature
+      validation. Only PIN-confirmed non-Guest CSO/HCM/GMM/EM users can grant exemptions;
+      current staff authority is rechecked. MM and delegates keep normal approval only.
+- [x] Approval/exemptions/routing/audit are atomic under the engagement row lock;
+      existing rejection and approval first-decision protection is retained.
+- [x] Hospital routes cleared records directly to Security when Training is exempted;
+      Unfit still blocks. Normal handoff notices/emails identify the actual destination.
+- [x] Medical expiry ignores Hospital exemptions only in the active cycle. Induction
+      rechecks expiry under lock and refuses to sign off an exempted Training stage.
+- [x] `applyStakeholderExemption` is server-only service logic; no new browser action,
+      interface or exemption approval messages are exposed at this checkpoint.
+- [x] TypeScript, targeted Biome and 37 source tests passed; 19 database integration
+      scenarios passed using temporary tables with all fixtures rolled back.
+      Overlapping requests use serialized savepoints in a single-session fixture;
+      separate-session lock contention has not been stress-tested.
+- [x] Existing anti-slop findings outside the new code remain; no new changed-line findings.
+- [ ] Await user approval for the interface/visibility checkpoint, then separately
+      for Reception-only exemption notification/email delivery.
+
+## Stakeholder exemptions - storage checkpoint (2026-11-04)
+
+- [x] User approved the design and storage preparation only; see
+      `stakeholder-exemptions-plan.md` for the remaining approval checkpoints.
+- [x] Added `workflow_exemptions`: cycle-scoped stage, encrypted reason, linked
+      stakeholder approval. Unique cycle/stage, allowed-stage check, and composite
+      foreign keys prevent duplicate stages and mismatched engagement references.
+- [x] Shared stage tuple, labels and input type. No action, routing or UI changes yet.
+- [x] Prepared `0029_workflow_exemptions.sql`, snapshot and journal entry.
+      Reordered parent unique constraints before dependent foreign keys.
+- [x] TypeScript, targeted Biome and anti-slop checks passed. Drizzle migration
+      history check passed; a second generation found no schema/snapshot drift.
+      All checks were offline; database constraint execution awaits migration approval.
+- [x] User approved application to the database configured in `.env.development`.
+      Migration `0029` applied on 2026-11-04; verified the migration hash, validated
+      primary/check/composite foreign-key constraints, and cycle/stage unique index.
+      No pending migrations remain. No visitor data updates were included.
+- [x] Implement non-blank reason, stakeholder authority, applicable-stage and
+      active-cycle validation in the workflow-rules checkpoint.
+
+## Security combined CSV export (2026-11-04)
+
+- [x] Security header **Export Security Report** follows Training's outline button,
+      loading state, dated filename, and error toast.
+- [x] `/api/reports/security` requires SecurityStaff write access (PIN-confirmed,
+      active account, non-Guest); no caching. Ignores tab, search, and pagination.
+- [x] Combined report covers awaiting Security review, issued access (including
+      expired/revoked), and pending revocations. One row per engagement with the
+      latest card, activation actor/comments, and applicable latest revocation details.
+- [x] Read-only repeatable-read transaction, 500-engagement batches, existing CSV
+      escaping/formula protection and UTF-8 BOM. Effective expiry computed without writes.
+- [x] TypeScript and targeted Biome checks passed; 20 report, CSV, and endpoint tests passed
+      together. Report route tests share a fixture to prevent Bun module-mock collisions.
+- [x] New export code has no anti-slop findings; the full changed-file check still reports
+      existing findings elsewhere in `workflow-service.ts`.
+- [ ] Browser check: download from every Security tab and confirm the same combined
+      report, Excel readability, access statuses, and Guest button visibility.
+
 ## Dashboard header dark-mode logo (2026-11-04)
 
 - [x] Keep `/logo_whitebg.png` in light mode; show `/logo.png` in dark mode using theme visibility classes.
