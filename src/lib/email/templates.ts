@@ -176,6 +176,35 @@ function hospitalReviewLink(engagementId: string, clearanceId: string): string {
   return `${baseUrl()}/dashboard/hospital/${engagementId}?review=${clearanceId}`;
 }
 
+// Who hears about a medical outcome besides Hospital itself. Each gets a link
+// it can open: Reception the record, the HOD its department dashboard (it
+// cannot open a Reception record), Training / Security their own queue (the
+// record may not be at their stage), HSE the Site Access Records overview.
+export type MedicalAudience =
+  | "Receptionist"
+  | "DepartmentHead"
+  | "TrainingStaff"
+  | "SecurityStaff"
+  | "HSE";
+
+function medicalAudienceLink(
+  audience: MedicalAudience,
+  engagementId: string,
+): string {
+  switch (audience) {
+    case "Receptionist":
+      return engagementLink(engagementId);
+    case "DepartmentHead":
+      return `${baseUrl()}/dashboard/department`;
+    case "TrainingStaff":
+      return `${baseUrl()}/dashboard/training`;
+    case "SecurityStaff":
+      return `${baseUrl()}/dashboard/security`;
+    case "HSE":
+      return `${baseUrl()}/dashboard/overview`;
+  }
+}
+
 function trainingEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/training/${engagementId}`;
 }
@@ -304,33 +333,50 @@ export function inductionCompletedTemplate(opts: {
   };
 }
 
+// Reception's wording, also sent to the record's Department Head with a link
+// to their own dashboard.
 export function hospitalUnfitTemplate(opts: {
   personName: string;
   engagementId: string;
+  audience?: "Receptionist" | "DepartmentHead";
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
+  const link = medicalAudienceLink(
+    opts.audience ?? "Receptionist",
+    opts.engagementId,
+  );
   return {
     subject: subject(`Medical Assessment Update - ${opts.personName}`),
-    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Unfit. The application is currently pending re-evaluation.</p><p>Please review the application for the latest status and any further action required.</p>${button(engagementLink(opts.engagementId), "View Application Records")}`,
+    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Unfit. The application is currently pending re-evaluation.</p><p>Please review the application for the latest status and any further action required.</p>${button(link, "View Application Records")}`,
   };
 }
 
 // A review, not a clearance: the record has not been moved back to Hospital,
 // so this must not say it is "pending re-evaluation" like the Unfit template.
-export function hospitalReviewUnfitTemplate(opts: {
+// Unfit asks the reader to act; Fit and Fit with Conditions are for their
+// information.
+export function hospitalReviewTemplate(opts: {
   personName: string;
   engagementId: string;
+  outcomeLabel: string;
+  unfit: boolean;
+  audience: MedicalAudience;
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
+  const outcome = escapeHtml(opts.outcomeLabel);
+  const next = opts.unfit
+    ? "<p>Please review the application and decide on any further action required.</p>"
+    : "<p>This notification is for your information.</p>";
 
   return {
     subject: subject(`Medical Review Update - ${opts.personName}`),
-    html: `${HELLO}<p>A follow-up medical review for ${personName} has been recorded as Unfit. Their workflow stage has not been changed.</p><p>Please review the application and decide on any further action required.</p>${button(engagementLink(opts.engagementId), "View Application Records")}`,
+    html: `${HELLO}<p>A follow-up medical review for ${personName} has been recorded as ${outcome}. Their workflow stage has not been changed.</p>${next}${button(medicalAudienceLink(opts.audience, opts.engagementId), "View Application Records")}`,
   };
 }
 
-// From the daily review-reminder job, to Hospital: a day ahead, then on the
-// day. Links straight to the review form for that clearance.
+// From the daily review-reminder job: a day ahead, then on the day. Hospital's
+// links straight to the review form for that clearance; everyone else is told
+// for information, with a link to a dashboard they can open.
 export function hospitalReviewReminderTemplate(opts: {
   personName: string;
   engagementId: string;
@@ -338,16 +384,26 @@ export function hospitalReviewReminderTemplate(opts: {
   /** Already formatted for display. */
   reviewDate: string;
   dueToday: boolean;
+  audience: "HospitalStaff" | MedicalAudience;
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   const reviewDate = escapeHtml(opts.reviewDate);
   const when = opts.dueToday ? "is due today" : "is due tomorrow";
+  const reviewSubject = subject(
+    `Medical Review ${opts.dueToday ? "Due Today" : "Due Tomorrow"} - ${opts.personName}`,
+  );
+  const due = `<p>The follow-up medical review for ${personName}, who was cleared Fit with Conditions, ${when} (${reviewDate}).</p>`;
+
+  if (opts.audience === "HospitalStaff") {
+    return {
+      subject: reviewSubject,
+      html: `${HELLO}${due}<p>Please carry out the review and record the outcome.</p>${button(hospitalReviewLink(opts.engagementId, opts.clearanceId), "Record Review")}`,
+    };
+  }
 
   return {
-    subject: subject(
-      `Medical Review ${opts.dueToday ? "Due Today" : "Due Tomorrow"} - ${opts.personName}`,
-    ),
-    html: `${HELLO}<p>The follow-up medical review for ${personName}, who was cleared Fit with Conditions, ${when} (${reviewDate}).</p><p>Please carry out the review and record the outcome.</p>${button(hospitalReviewLink(opts.engagementId, opts.clearanceId), "Record Review")}`,
+    subject: reviewSubject,
+    html: `${HELLO}${due}<p>Hospital will record the outcome. This notification is for your information.</p>${button(medicalAudienceLink(opts.audience, opts.engagementId), "Go To Dashboard")}`,
   };
 }
 
@@ -355,6 +411,7 @@ export function hospitalFitWithConditionsTemplate(opts: {
   personName: string;
   engagementId: string;
   nextRole?: "TrainingStaff" | "SecurityStaff";
+  audience?: "Receptionist" | "DepartmentHead";
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
 
@@ -365,7 +422,7 @@ export function hospitalFitWithConditionsTemplate(opts: {
 
   return {
     subject: subject(`Medical Assessment Update - ${opts.personName}`),
-    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Fit with Conditions. The individual is ${destination}.</p><p>Please review the application and take any necessary follow-up action.</p>${button(engagementLink(opts.engagementId), "View Hospital Record")}`,
+    html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Fit with Conditions. The individual is ${destination}.</p><p>Please review the application and take any necessary follow-up action.</p>${button(medicalAudienceLink(opts.audience ?? "Receptionist", opts.engagementId), "View Hospital Record")}`,
   };
 }
 
@@ -390,7 +447,11 @@ export function accessActivatedTemplate(opts: {
 // pages to open. No health or card details: those stay on the layers' screens.
 export function hseRecordUpdateTemplate(opts: {
   personName: string;
-  event: "MedicalClearance" | "InductionCompleted" | "AccessActivated";
+  event:
+    | "MedicalClearance"
+    | "MedicalReview"
+    | "InductionCompleted"
+    | "AccessActivated";
 }): MessageTemplate {
   const personName = escapeHtml(opts.personName);
   const dashboard = button(
@@ -404,6 +465,13 @@ export function hseRecordUpdateTemplate(opts: {
     return {
       subject: subject(`Medical Clearance Recorded - ${opts.personName}`),
       html: `${HELLO}<p>Hospital has recorded the medical clearance for ${personName}.</p>${viewStatus}${dashboard}`,
+    };
+  }
+
+  if (opts.event === "MedicalReview") {
+    return {
+      subject: subject(`Medical Review Recorded - ${opts.personName}`),
+      html: `${HELLO}<p>Hospital has recorded a follow-up medical review for ${personName}.</p>${viewStatus}${dashboard}`,
     };
   }
 
