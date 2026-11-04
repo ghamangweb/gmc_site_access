@@ -172,6 +172,10 @@ function hospitalEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/hospital/${engagementId}`;
 }
 
+function hospitalReviewLink(engagementId: string, clearanceId: string): string {
+  return `${baseUrl()}/dashboard/hospital/${engagementId}?review=${clearanceId}`;
+}
+
 function trainingEngagementLink(engagementId: string): string {
   return `${baseUrl()}/dashboard/training/${engagementId}`;
 }
@@ -308,6 +312,42 @@ export function hospitalUnfitTemplate(opts: {
   return {
     subject: subject(`Medical Assessment Update - ${opts.personName}`),
     html: `${HELLO}<p>The medical assessment for ${personName} has been recorded as Unfit. The application is currently pending re-evaluation.</p><p>Please review the application for the latest status and any further action required.</p>${button(engagementLink(opts.engagementId), "View Application Records")}`,
+  };
+}
+
+// A review, not a clearance: the record has not been moved back to Hospital,
+// so this must not say it is "pending re-evaluation" like the Unfit template.
+export function hospitalReviewUnfitTemplate(opts: {
+  personName: string;
+  engagementId: string;
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+
+  return {
+    subject: subject(`Medical Review Update - ${opts.personName}`),
+    html: `${HELLO}<p>A follow-up medical review for ${personName} has been recorded as Unfit. Their workflow stage has not been changed.</p><p>Please review the application and decide on any further action required.</p>${button(engagementLink(opts.engagementId), "View Application Records")}`,
+  };
+}
+
+// From the daily review-reminder job, to Hospital: a day ahead, then on the
+// day. Links straight to the review form for that clearance.
+export function hospitalReviewReminderTemplate(opts: {
+  personName: string;
+  engagementId: string;
+  clearanceId: string;
+  /** Already formatted for display. */
+  reviewDate: string;
+  dueToday: boolean;
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const reviewDate = escapeHtml(opts.reviewDate);
+  const when = opts.dueToday ? "is due today" : "is due tomorrow";
+
+  return {
+    subject: subject(
+      `Medical Review ${opts.dueToday ? "Due Today" : "Due Tomorrow"} - ${opts.personName}`,
+    ),
+    html: `${HELLO}<p>The follow-up medical review for ${personName}, who was cleared Fit with Conditions, ${when} (${reviewDate}).</p><p>Please carry out the review and record the outcome.</p>${button(hospitalReviewLink(opts.engagementId, opts.clearanceId), "Record Review")}`,
   };
 }
 

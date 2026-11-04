@@ -2,6 +2,7 @@ import {
   and,
   arrayContains,
   arrayOverlaps,
+  asc,
   count,
   desc,
   eq,
@@ -13,6 +14,7 @@ import {
   notInArray,
   or,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import type { SessionUser } from "@/lib/auth/session";
 import { searchQueryTokens } from "@/lib/crypto";
@@ -870,6 +872,12 @@ export type HospitalClearanceRow = {
   clearance: HospitalClearance;
   engagement: Engagement;
   person: typeof persons.$inferSelect;
+  /** Display name of the staff user who recorded it; null for rows stored
+   * before `recorded_by` existed that couldn't be backfilled. */
+  recordedByName: string | null;
+  /** No later clearance exists for this engagement, in any cycle. Only the
+   * latest Fit with Conditions clearance can be reviewed. */
+  isLatest: boolean;
 };
 
 export async function listRecentHospitalClearances(
@@ -887,6 +895,16 @@ export async function listRecentHospitalClearances(
         clearance: hospitalClearances,
         engagement: engagements,
         person: persons,
+        recordedByName: staffUsers.displayName,
+        // Inside the subquery the table is aliased, so the bare
+        // "hospital_clearances" reference resolves to the outer row.
+        isLatest: sql<boolean>`not exists (
+          select 1 from ${hospitalClearances} as later
+          inner join ${workflowCycles} as later_cycle
+            on later.workflow_cycle_id = later_cycle.id
+          where later_cycle.engagement_id = ${engagements.id}
+            and later.clearance_date > ${hospitalClearances.clearanceDate}
+        )`,
       })
       .from(hospitalClearances)
       .innerJoin(
@@ -895,6 +913,8 @@ export async function listRecentHospitalClearances(
       )
       .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
       .innerJoin(persons, eq(engagements.personId, persons.id))
+      // Left join: older rows have no recorder and must still be listed.
+      .leftJoin(staffUsers, eq(hospitalClearances.recordedBy, staffUsers.id))
       .where(where)
       .orderBy(desc(hospitalClearances.clearanceDate))
       .limit(pageSize)
@@ -912,6 +932,90 @@ export async function listRecentHospitalClearances(
   ]);
 
   return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+// Fit with Conditions clearances still owed a review: the engagement's latest
+// clearance, with a review date, while the record is past Hospital and not
+// cancelled or revoked. Only Fit with Conditions stores a review date, so the
+// date stands in for the (encrypted) status. Shared by the Awaiting Review
+// tab and the reminder job, so both see the same set.
+function awaitingHospitalReviewConditions() {
+  return and(
+    isNotNull(hospitalClearances.nextReviewDate),
+    notInArray(engagements.workflowState, ["AtHospital", "Cancelled"]),
+    sql`${engagements.accessState} <> 'Terminated'`,
+    // Same "no later clearance" test as the recorded tab's `isLatest`.
+    sql`not exists (
+      select 1 from ${hospitalClearances} as later
+      inner join ${workflowCycles} as later_cycle
+        on later.workflow_cycle_id = later_cycle.id
+      where later_cycle.engagement_id = ${engagements.id}
+        and later.clearance_date > ${hospitalClearances.clearanceDate}
+    )`,
+  );
+}
+
+// Hospital's Awaiting Review tab, soonest review first.
+export async function listAwaitingHospitalReviews(
+  request: PageRequest = {},
+): Promise<Page<HospitalClearanceRow>> {
+  const page = request.page ?? 1;
+  const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = and(
+    awaitingHospitalReviewConditions(),
+    personSearchFilter(request.search),
+  );
+
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        clearance: hospitalClearances,
+        engagement: engagements,
+        person: persons,
+        recordedByName: staffUsers.displayName,
+        // Every row here is the latest clearance, by the filter above.
+        isLatest: sql<boolean>`true`,
+      })
+      .from(hospitalClearances)
+      .innerJoin(
+        workflowCycles,
+        eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .leftJoin(staffUsers, eq(hospitalClearances.recordedBy, staffUsers.id))
+      .where(where)
+      .orderBy(asc(hospitalClearances.nextReviewDate))
+      .limit(pageSize)
+      .offset(pageOffset(page, pageSize)),
+    db
+      .select({ value: count() })
+      .from(hospitalClearances)
+      .innerJoin(
+        workflowCycles,
+        eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(where),
+  ]);
+
+  return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+// The Awaiting Review pill, shown on every tab like the Awaiting pill.
+export async function countAwaitingHospitalReviews(): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(hospitalClearances)
+    .innerJoin(
+      workflowCycles,
+      eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+    )
+    .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+    .where(awaitingHospitalReviewConditions());
+
+  return row?.value ?? 0;
 }
 
 // Whether a delegated approver has anything to show on the Approved tab.
@@ -1732,9 +1836,78 @@ export async function getLatestHospitalClearance(
   return latest;
 }
 
+// One recorded clearance, for the read-only View on Hospital's recorded tab.
+// Scoped to the engagement through its workflow cycle so a clearance id from
+// another record can't be read under this one's URL. Any cycle, not just the
+// active one: the recorded tab lists clearances from earlier cycles too.
+export async function getHospitalClearanceForEngagement(
+  engagementId: string,
+  clearanceId: string,
+): Promise<HospitalClearance | undefined> {
+  const [row] = await db
+    .select({ clearance: hospitalClearances })
+    .from(hospitalClearances)
+    .innerJoin(
+      workflowCycles,
+      eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+    )
+    .where(
+      and(
+        eq(hospitalClearances.id, clearanceId),
+        eq(workflowCycles.engagementId, engagementId),
+      ),
+    )
+    .limit(1);
+
+  return row?.clearance;
+}
+
+export type HospitalClearanceInput = {
+  clearanceStatus: HospitalClearanceStatus;
+  doctorComments: string;
+  /** YYYY-MM-DD. Required for Fit with Conditions, ignored otherwise. */
+  nextReviewDate?: string;
+};
+
+// The rules a clearance and a review share. Returns the review date to store:
+// the given one for Fit with Conditions, NULL for anything else.
+function validateHospitalClearanceInput(
+  input: HospitalClearanceInput,
+): string | null {
+  // The conditions are what Reception and Training School act on, so a
+  // conditional clearance without them tells nobody anything. Likewise an
+  // Unfit without a reason leaves Reception unable to act on it.
+  if (
+    (input.clearanceStatus === "FitWithConditions" ||
+      input.clearanceStatus === "Unfit") &&
+    !input.doctorComments.trim()
+  ) {
+    throw new Error(
+      `Doctor's comments are required for ${HOSPITAL_CLEARANCE_LABELS[input.clearanceStatus]}`,
+    );
+  }
+
+  if (input.clearanceStatus !== "FitWithConditions") {
+    return null;
+  }
+
+  // Conditions are only worth setting if someone looks at them again.
+  const nextReviewDate = input.nextReviewDate ?? "";
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextReviewDate)) {
+    throw new Error("Next review date is required for Fit with Conditions");
+  }
+
+  if (nextReviewDate <= isoToday()) {
+    throw new Error("Next review date must be in the future");
+  }
+
+  return nextReviewDate;
+}
+
 export async function recordHospitalClearance(
   engagementId: string,
-  input: { clearanceStatus: HospitalClearanceStatus; doctorComments: string },
+  input: HospitalClearanceInput,
   performedBy: string,
   client: DbClient = db,
 ): Promise<{
@@ -1757,18 +1930,7 @@ export async function recordHospitalClearance(
     throw new Error("Engagement is not awaiting Hospital clearance");
   }
 
-  // The conditions are what Reception and Training School act on, so a
-  // conditional clearance without them tells nobody anything. Likewise an
-  // Unfit without a reason leaves Reception unable to act on it.
-  if (
-    (input.clearanceStatus === "FitWithConditions" ||
-      input.clearanceStatus === "Unfit") &&
-    !input.doctorComments.trim()
-  ) {
-    throw new Error(
-      `Doctor's comments are required for ${HOSPITAL_CLEARANCE_LABELS[input.clearanceStatus]}`,
-    );
-  }
+  const nextReviewDate = validateHospitalClearanceInput(input);
 
   const outcome: "Cleared" | "Unfit" =
     input.clearanceStatus === "Unfit" ? "Unfit" : "Cleared";
@@ -1843,6 +2005,8 @@ export async function recordHospitalClearance(
       workflowCycleId: cycle.id,
       clearanceStatus: input.clearanceStatus,
       doctorComments: input.doctorComments.trim(),
+      recordedBy: performedBy,
+      nextReviewDate,
     });
 
     let updatedEngagement = engagement;
@@ -1893,6 +2057,224 @@ export async function recordHospitalClearance(
       nextRole,
       receptionRecipients,
       outcome,
+    };
+  });
+}
+
+// A Hospital review of a Fit with Conditions clearance, from the recorded
+// tab. Saved as a new clearance row for the history, but the record's
+// workflow stage and access are left as they are — so no workflow_transitions
+// row either. Only the latest clearance can be reviewed, and only while the
+// record is past Hospital: one back at Hospital needs a full clearance from
+// the awaiting tab instead.
+export async function recordHospitalReview(
+  engagementId: string,
+  reviewedClearanceId: string,
+  input: HospitalClearanceInput,
+  performedBy: string,
+): Promise<{ receptionRecipients: StaffUser[] }> {
+  const nextReviewDate = validateHospitalClearanceInput(input);
+
+  // An Unfit review is Reception's to follow up, as an Unfit clearance is.
+  const receptionRecipients =
+    input.clearanceStatus === "Unfit"
+      ? await getStaffByWorkflowRoles(["Receptionist"])
+      : [];
+
+  await db.transaction(async (tx) => {
+    // Same row lock as recordHospitalClearance, so two doctors reviewing at
+    // once can't both pass the "is it still the latest" check below.
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement) {
+      throw new Error("Engagement not found");
+    }
+
+    if (engagement.workflowState === "AtHospital") {
+      throw new Error(
+        "This record is back at the Hospital stage. Record a new clearance from Awaiting Clearance instead",
+      );
+    }
+
+    const [latest] = await tx
+      .select({ clearance: hospitalClearances, cycle: workflowCycles })
+      .from(hospitalClearances)
+      .innerJoin(
+        workflowCycles,
+        eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+      )
+      .where(eq(workflowCycles.engagementId, engagementId))
+      .orderBy(desc(hospitalClearances.clearanceDate))
+      .limit(1);
+
+    if (!latest || latest.clearance.id !== reviewedClearanceId) {
+      throw new Error(
+        "This clearance has already been superseded. Only the latest one can be reviewed",
+      );
+    }
+
+    if (latest.clearance.clearanceStatus !== "FitWithConditions") {
+      throw new Error("Only a Fit with Conditions clearance can be reviewed");
+    }
+
+    if (latest.cycle.archivedAt) {
+      throw new Error("No active workflow cycle for this engagement");
+    }
+
+    await tx.insert(hospitalClearances).values({
+      workflowCycleId: latest.cycle.id,
+      clearanceStatus: input.clearanceStatus,
+      doctorComments: input.doctorComments.trim(),
+      recordedBy: performedBy,
+      nextReviewDate,
+    });
+
+    if (receptionRecipients.length > 0) {
+      await tx.insert(notifications).values(
+        receptionRecipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message:
+            "A Hospital review recorded this record Unfit. Its workflow stage has not changed — please follow up.",
+        })),
+      );
+    }
+  });
+
+  return { receptionRecipients };
+}
+
+export type HospitalReviewReminderKind = "DayBefore" | "Due";
+
+// The reminders the daily job owes Hospital today: a heads-up the day before
+// a Fit with Conditions review falls due, and one on the day (or the first
+// run after it, if a run was missed). Only the engagement's latest clearance
+// counts — a review already recorded supersedes it and stops the reminders —
+// and only while the record is past Hospital and not cancelled or revoked.
+// Ids only: the job keeps step results on Inngest's side, so no names or
+// health data go back.
+export async function listDueHospitalReviewReminders(): Promise<
+  { clearanceId: string; kind: HospitalReviewReminderKind }[]
+> {
+  const today = isoToday();
+  const tomorrow = new Date(`${today}T00:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowIso = tomorrow.toISOString().slice(0, 10);
+
+  const rows = await db
+    .select({
+      clearanceId: hospitalClearances.id,
+      nextReviewDate: hospitalClearances.nextReviewDate,
+      dayBeforeSentAt: hospitalClearances.reviewReminderDayBeforeSentAt,
+      dueSentAt: hospitalClearances.reviewReminderDueSentAt,
+    })
+    .from(hospitalClearances)
+    .innerJoin(
+      workflowCycles,
+      eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+    )
+    .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+    .where(
+      and(
+        awaitingHospitalReviewConditions(),
+        sql`${hospitalClearances.nextReviewDate} <= ${tomorrowIso}`,
+      ),
+    );
+
+  const due: { clearanceId: string; kind: HospitalReviewReminderKind }[] = [];
+
+  for (const row of rows) {
+    if (!row.nextReviewDate) continue;
+
+    if (row.nextReviewDate <= today) {
+      if (!row.dueSentAt) {
+        due.push({ clearanceId: row.clearanceId, kind: "Due" });
+      }
+    } else if (!row.dayBeforeSentAt) {
+      due.push({ clearanceId: row.clearanceId, kind: "DayBefore" });
+    }
+  }
+
+  return due;
+}
+
+// Claims one reminder and writes the Hospital bell notices in the same
+// transaction. The claim is an UPDATE … WHERE sent_at IS NULL, so a retried
+// step or an overlapping run gets nothing back and notifies nobody twice.
+// Returns what the caller needs to email, or undefined if already claimed.
+export async function claimHospitalReviewReminder(
+  clearanceId: string,
+  kind: HospitalReviewReminderKind,
+): Promise<
+  | {
+      recipients: StaffUser[];
+      personName: string;
+      engagementId: string;
+      nextReviewDate: string;
+    }
+  | undefined
+> {
+  const recipients = await getStaffByWorkflowRoles(["HospitalStaff"]);
+
+  const sentColumn =
+    kind === "DayBefore"
+      ? hospitalClearances.reviewReminderDayBeforeSentAt
+      : hospitalClearances.reviewReminderDueSentAt;
+
+  return db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .update(hospitalClearances)
+      .set(
+        kind === "DayBefore"
+          ? { reviewReminderDayBeforeSentAt: new Date() }
+          : { reviewReminderDueSentAt: new Date() },
+      )
+      .where(and(eq(hospitalClearances.id, clearanceId), isNull(sentColumn)))
+      .returning({
+        workflowCycleId: hospitalClearances.workflowCycleId,
+        nextReviewDate: hospitalClearances.nextReviewDate,
+      });
+
+    if (!claimed?.nextReviewDate) {
+      return undefined;
+    }
+
+    const [row] = await tx
+      .select({ engagementId: engagements.id, personName: persons.fullName })
+      .from(workflowCycles)
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .innerJoin(persons, eq(engagements.personId, persons.id))
+      .where(eq(workflowCycles.id, claimed.workflowCycleId))
+      .limit(1);
+
+    if (!row) {
+      return undefined;
+    }
+
+    if (recipients.length > 0) {
+      const message =
+        kind === "DayBefore"
+          ? `Medical review for ${row.personName} is due tomorrow.`
+          : `Medical review for ${row.personName} is due today.`;
+
+      await tx.insert(notifications).values(
+        recipients.map((recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId: row.engagementId,
+          message,
+        })),
+      );
+    }
+
+    return {
+      recipients,
+      personName: row.personName,
+      engagementId: row.engagementId,
+      nextReviewDate: claimed.nextReviewDate,
     };
   });
 }

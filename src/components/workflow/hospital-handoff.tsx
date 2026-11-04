@@ -1,3 +1,5 @@
+import { parseISO } from "date-fns";
+
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -18,10 +20,14 @@ const CLEARANCE_BADGE: Record<HospitalClearanceStatus, string> = {
 // Training was signing off inductions without ever seeing the medical it
 // depends on — "Fit with Conditions" in particular is meaningless without the
 // conditions. Hospital records the outcome only; it uploads no documents.
+// Hospital's own read-only View of a recorded clearance reuses the card under
+// its own heading.
 export function HospitalHandoff({
   clearance,
+  title = "From Hospital",
 }: {
   clearance: HospitalClearance;
+  title?: string;
 }) {
   // SAFETY: clearance_status is a text column written only from the
   // HospitalClearanceStatus union by `recordHospitalClearance`, and the
@@ -31,7 +37,7 @@ export function HospitalHandoff({
   return (
     <Card className="flex flex-col gap-5 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold text-foreground text-lg">From Hospital</h2>
+        <h2 className="font-semibold text-foreground text-lg">{title}</h2>
         <div className="flex items-center gap-2">
           <Badge className={CLEARANCE_BADGE[status]}>
             {HOSPITAL_CLEARANCE_LABELS[status]}
@@ -50,6 +56,17 @@ export function HospitalHandoff({
           {clearance.doctorComments || "-"}
         </span>
       </div>
+
+      {clearance.nextReviewDate && (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium text-muted-foreground text-xs">
+            Next Review Date
+          </span>
+          <span className="text-foreground text-sm">
+            {formatQueueDate(parseISO(clearance.nextReviewDate))}
+          </span>
+        </div>
+      )}
     </Card>
   );
 }

@@ -300,6 +300,18 @@ export const hospitalClearances = pgTable("hospital_clearances", {
   clearanceStatus: encryptedText().notNull(),
   doctorComments: encryptedText().notNull(),
   clearanceDate: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  // Several doctors share the Hospital queue, so each decision carries who
+  // made it. Nullable: rows before 0029 were stored without it, and past
+  // Unfit decisions left no transition to backfill from.
+  recordedBy: uuid().references(() => staffUsers.id),
+  // Fit with Conditions only: when Hospital wants to see them again. Plain
+  // (not encrypted) so the review-reminder job can query by date; NULL for
+  // Fit and Unfit.
+  nextReviewDate: date(),
+  // Set by the daily review-reminder job when it claims each reminder, so a
+  // retry or a second run never notifies Hospital twice.
+  reviewReminderDayBeforeSentAt: timestamp({ withTimezone: true }),
+  reviewReminderDueSentAt: timestamp({ withTimezone: true }),
 });
 
 export const terminationRequests = pgTable("termination_requests", {

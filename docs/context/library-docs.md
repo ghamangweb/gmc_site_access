@@ -228,6 +228,30 @@ the browser's own PDF viewer — and its save button — never opens. Rules:
 Server-only, used for one thing: `countUploadedPages` (`lib/uploadthing/api.ts`) reads a PDF's
 page count at upload. A parse failure returns `null` and must never fail the upload.
 
+## Inngest (`inngest` v4) — added 2026-11-04
+
+Skills: `.claude/skills/inngest-setup`, `inngest-durable-functions`, `inngest-steps` — load them first.
+
+- Client: `src/lib/inngest/client.ts`, id `gmc-site-access` (never change it — a new id is a new
+  app in Inngest). Never set `isDev` in code.
+- v4 defaults to **Cloud mode**. Local: `INNGEST_DEV=1` is set by the `dev` script (`"dev": "INNGEST_DEV=1 next dev"`), **not** in
+  `.env.development` — that file may be what production decrypts, and dev mode there would stop every job. Run
+  `bun run inngest:dev` beside `next dev`; without it `/api/inngest` returns 500 ("no signing key").
+  Production: `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` set by whoever owns hosting.
+- Serve endpoint: `src/app/api/inngest/route.ts` → `export const { GET, POST, PUT } = serve({ client, functions })`.
+  Register every new function in that `functions` array. v4 moved `signingKey`/`baseUrl` onto the client.
+- Every DB read/write and email goes inside `step.run`; nothing non-deterministic outside steps.
+  Step ids must never change after deploy.
+- **Step results are stored by Inngest** — return ids/counts only, never names or health data.
+- **Don't import `@/lib/email/send` at module top in a job file.** `graph-mail.ts` builds its Azure
+  credential on import and `next build` (pre-commit runs it with no env) loads the route's module →
+  "tenantId is a required parameter". `await import("@/lib/email/send")` inside the step.
+- Dedupe with a claim (`UPDATE … WHERE sent_at IS NULL RETURNING`) in the same transaction as the
+  bell notices, so a retried step can't notify twice. Emails after the claim are best-effort.
+- `inngest:dev` uses `npm exec`, **not `npx`**: inside `bun run`, `npx` is rewritten to `bun x`,
+  which skips install scripts, so inngest-cli never downloads its binary ("Inngest CLI binary not found").
+- Cron with timezone: `{ cron: "TZ=Africa/Accra 0 7 * * *" }`; add `concurrency: 1` to daily sweeps.
+
 ## Oxlint + anti-slop plugin
 
 Added 2026-10-09 via the `install-anti-slop` Claude Code skill — vendored
