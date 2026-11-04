@@ -17,6 +17,15 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
           width={120}
           height={20}
           priority
+          className="dark:hidden"
+        />
+        <Image
+          src="/logo.png"
+          alt="GMC logo"
+          width={120}
+          height={20}
+          priority
+          className="hidden dark:block"
         />
         {children}
       </main>

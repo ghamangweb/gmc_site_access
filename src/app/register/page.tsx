@@ -57,7 +57,15 @@ export default async function RegisterPage({
                 width={120}
                 height={57}
                 priority
-                className="h-auto w-20 xl:w-24"
+                className="h-auto w-20 xl:w-24 dark:hidden"
+              />
+              <Image
+                src="/logo.png"
+                alt="GMC logo"
+                width={120}
+                height={57}
+                priority
+                className="hidden h-auto w-20 xl:w-24 dark:block"
               />
             </div>
             <RegistrationHeadline />

@@ -1,5 +1,12 @@
 # Progress Tracker
 
+## Dashboard header dark-mode logo (2026-11-04)
+
+- [x] Keep `/logo_whitebg.png` in light mode; show `/logo.png` in dark mode using theme visibility classes.
+- [ ] Manual check: toggle the dashboard theme and confirm the header logo changes in both directions.
+- [x] Apply the same light/dark logo switch to the shared authentication shell and visitor registration page.
+- [ ] Manual check: confirm sign-in, PIN, and registration logos follow the selected theme.
+
 ## Dashboard notifications: one-week read retention, clear, scroll (2026-11-03)
 
 - [x] Read notifications drop off the bell a week after they were read (`getRecentNotifications`
