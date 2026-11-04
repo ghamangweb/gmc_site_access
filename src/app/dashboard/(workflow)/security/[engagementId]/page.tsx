@@ -69,10 +69,7 @@ export default async function SecurityDetailPage({
 
   return (
     <div>
-      <PageHeader
-        title={person.fullName}
-        subtitle={`Passport ${person.passportNo}`}
-      />
+      <PageHeader title={person.fullName} />
       <div className="flex flex-col gap-6">
         <PriorLayersSummary
           approval={approvals[0]}

@@ -1432,6 +1432,45 @@ async function getInvitingDepartmentHead(
   return row?.staffUser;
 }
 
+// The record's HOD for medical outcomes: the Head who invited the visitor, or
+// — for a record Reception keyed in directly — the active Head(s) of its GMC
+// Liaison Department. Empty when neither exists.
+async function getRecordDepartmentHeads(
+  engagementId: string,
+  client: DbClient = db,
+): Promise<StaffUser[]> {
+  const inviting = await getInvitingDepartmentHead(engagementId, client);
+
+  if (inviting) {
+    return [inviting];
+  }
+
+  const engagement = await getEngagementById(engagementId, client);
+  // SAFETY: reception_data is jsonb written only from the Reception form's
+  // own values; a record without a liaison department simply has no HOD.
+  const department = (engagement?.receptionData as Partial<ReceptionData>)
+    ?.gmcLiaisonDept;
+
+  if (!department) {
+    return [];
+  }
+
+  const heads = await getStaffByWorkflowRoles(["DepartmentHead"], client);
+
+  return heads.filter((head) => head.department === department);
+}
+
+// Keeps each person to one notice when they hold more than one of the roles
+// being told — the earlier audience wins.
+function withoutAlreadyNotified(
+  users: StaffUser[],
+  ...notified: StaffUser[][]
+): StaffUser[] {
+  const ids = new Set(notified.flat().map((user) => user.id));
+
+  return users.filter((user) => !ids.has(user.id));
+}
+
 // A stakeholder turns the request down. The record stays at Reception (this is
 // not a workflow_state move, so no transition row), leaves the stakeholder
 // queue, and reads as rejected until Reception asks again or cancels it. Like
@@ -1964,6 +2003,7 @@ export async function recordHospitalClearance(
   nextRecipients: StaffUser[];
   nextRole: "TrainingStaff" | "SecurityStaff" | null;
   receptionRecipients: StaffUser[];
+  departmentHeads: StaffUser[];
   hseRecipients: StaffUser[];
   outcome: "Cleared" | "Unfit";
 }> {
@@ -1995,6 +2035,16 @@ export async function recordHospitalClearance(
   // all. Outcome and comments stay on Hospital's screens; HSE sees the
   // outcome on the Site Access Records overview.
   const hseRecipients = await getStaffByWorkflowRoles(["HSE"], client);
+
+  // The record's HOD follows the same outcomes Reception does: a conditional
+  // clearance and an Unfit, not a plain Fit.
+  const departmentHeads =
+    input.clearanceStatus === "Fit"
+      ? []
+      : withoutAlreadyNotified(
+          await getRecordDepartmentHeads(engagementId, client),
+          receptionRecipients,
+        );
 
   return client.transaction(async (tx) => {
     // Row lock — the pre-check above is just a friendly fast path; this is
@@ -2095,7 +2145,7 @@ export async function recordHospitalClearance(
         engagementId,
         message: `Hospital clearance recorded and routed to ${destinationLabel}.`,
       })),
-      ...receptionRecipients.map((recipient) => ({
+      ...[...receptionRecipients, ...departmentHeads].map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
         message: receptionMessage,
@@ -2116,6 +2166,7 @@ export async function recordHospitalClearance(
       nextRecipients,
       nextRole,
       receptionRecipients,
+      departmentHeads,
       hseRecipients,
       outcome,
     };
@@ -2133,16 +2184,10 @@ export async function recordHospitalReview(
   reviewedClearanceId: string,
   input: HospitalClearanceInput,
   performedBy: string,
-): Promise<{ receptionRecipients: StaffUser[] }> {
+): Promise<HospitalReviewRecipients> {
   const nextReviewDate = validateHospitalClearanceInput(input);
 
-  // An Unfit review is Reception's to follow up, as an Unfit clearance is.
-  const receptionRecipients =
-    input.clearanceStatus === "Unfit"
-      ? await getStaffByWorkflowRoles(["Receptionist"])
-      : [];
-
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // Same row lock as recordHospitalClearance, so two doctors reviewing at
     // once can't both pass the "is it still the latest" check below.
     const [engagement] = await tx
@@ -2194,20 +2239,82 @@ export async function recordHospitalReview(
       nextReviewDate,
     });
 
-    if (receptionRecipients.length > 0) {
-      await tx.insert(notifications).values(
-        receptionRecipients.map((recipient) => ({
+    // Who hears depends on the outcome, mirroring a first-time clearance:
+    // Unfit → Reception, HOD, HSE. Fit with Conditions → the stage the record
+    // is at now, Reception, HSE, HOD. Fit → the stage it is at, HSE. The
+    // stage is read here, under the row lock, since the record may have moved
+    // on since it was cleared.
+    const status = input.clearanceStatus;
+    const stageRole: "TrainingStaff" | "SecurityStaff" | null =
+      status === "Unfit"
+        ? null
+        : engagement.workflowState === "AtTraining"
+          ? "TrainingStaff"
+          : engagement.workflowState === "AtSecurity"
+            ? "SecurityStaff"
+            : null;
+
+    const stageRecipients = stageRole
+      ? await getStaffByWorkflowRoles([stageRole], tx)
+      : [];
+    const receptionRecipients =
+      status === "Fit"
+        ? []
+        : withoutAlreadyNotified(
+            await getStaffByWorkflowRoles(["Receptionist"], tx),
+            stageRecipients,
+          );
+    const departmentHeads =
+      status === "Fit"
+        ? []
+        : withoutAlreadyNotified(
+            await getRecordDepartmentHeads(engagementId, tx),
+            stageRecipients,
+            receptionRecipients,
+          );
+    const hseRecipients = await getStaffByWorkflowRoles(["HSE"], tx);
+
+    const followUpMessage =
+      status === "Unfit"
+        ? "A Hospital review recorded this record Unfit. Its workflow stage has not changed — please follow up."
+        : `A Hospital review recorded this record ${HOSPITAL_CLEARANCE_LABELS[status]}. Its workflow stage has not changed.`;
+
+    const notices = [
+      ...[...stageRecipients, ...receptionRecipients, ...departmentHeads].map(
+        (recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message:
-            "A Hospital review recorded this record Unfit. Its workflow stage has not changed — please follow up.",
-        })),
-      );
-    }
-  });
+          message: followUpMessage,
+        }),
+      ),
+      ...hseRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: "Hospital recorded a medical review for this record.",
+      })),
+    ];
 
-  return { receptionRecipients };
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
+    }
+
+    return {
+      stageRole,
+      stageRecipients,
+      receptionRecipients,
+      departmentHeads,
+      hseRecipients,
+    };
+  });
 }
+
+export type HospitalReviewRecipients = {
+  stageRole: "TrainingStaff" | "SecurityStaff" | null;
+  stageRecipients: StaffUser[];
+  receptionRecipients: StaffUser[];
+  departmentHeads: StaffUser[];
+  hseRecipients: StaffUser[];
+};
 
 export type HospitalReviewReminderKind = "DayBefore" | "Due";
 
@@ -2263,7 +2370,21 @@ export async function listDueHospitalReviewReminders(): Promise<
   return due;
 }
 
-// Claims one reminder and writes the Hospital bell notices in the same
+// Everyone told about a due review: Hospital, which carries it out, and —
+// for information — Reception, Training School, Security, HSE and the
+// record's HOD. The audience picks each one's email and link.
+export type HospitalReviewReminderRecipient = {
+  user: StaffUser;
+  audience:
+    | "HospitalStaff"
+    | "Receptionist"
+    | "TrainingStaff"
+    | "SecurityStaff"
+    | "HSE"
+    | "DepartmentHead";
+};
+
+// Claims one reminder and writes everyone's bell notices in the same
 // transaction. The claim is an UPDATE … WHERE sent_at IS NULL, so a retried
 // step or an overlapping run gets nothing back and notifies nobody twice.
 // Returns what the caller needs to email, or undefined if already claimed.
@@ -2272,15 +2393,13 @@ export async function claimHospitalReviewReminder(
   kind: HospitalReviewReminderKind,
 ): Promise<
   | {
-      recipients: StaffUser[];
+      recipients: HospitalReviewReminderRecipient[];
       personName: string;
       engagementId: string;
       nextReviewDate: string;
     }
   | undefined
 > {
-  const recipients = await getStaffByWorkflowRoles(["HospitalStaff"]);
-
   const sentColumn =
     kind === "DayBefore"
       ? hospitalClearances.reviewReminderDayBeforeSentAt
@@ -2316,6 +2435,45 @@ export async function claimHospitalReviewReminder(
       return undefined;
     }
 
+    const roleAudiences = [
+      "HospitalStaff",
+      "Receptionist",
+      "TrainingStaff",
+      "SecurityStaff",
+      "HSE",
+    ] as const;
+    const byRole = await Promise.all(
+      roleAudiences.map((role) => getStaffByWorkflowRoles([role], tx)),
+    );
+    const departmentHeads = await getRecordDepartmentHeads(
+      row.engagementId,
+      tx,
+    );
+
+    // One reminder per person even if they hold several of these roles;
+    // Hospital first, so a doctor who is also HSE still gets the review link.
+    const seen = new Set<string>();
+    const recipients: HospitalReviewReminderRecipient[] = [];
+    const groups: [HospitalReviewReminderRecipient["audience"], StaffUser[]][] =
+      [
+        ...roleAudiences.map(
+          (role, index) =>
+            [role, byRole[index]] as [
+              HospitalReviewReminderRecipient["audience"],
+              StaffUser[],
+            ],
+        ),
+        ["DepartmentHead", departmentHeads],
+      ];
+
+    for (const [audience, users] of groups) {
+      for (const user of users) {
+        if (seen.has(user.id)) continue;
+        seen.add(user.id);
+        recipients.push({ user, audience });
+      }
+    }
+
     if (recipients.length > 0) {
       const message =
         kind === "DayBefore"
@@ -2324,7 +2482,7 @@ export async function claimHospitalReviewReminder(
 
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
-          recipientStaffUserId: recipient.id,
+          recipientStaffUserId: recipient.user.id,
           engagementId: row.engagementId,
           message,
         })),

@@ -8,8 +8,9 @@ import {
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
 
-// Daily at 07:00 Accra time: tells every Hospital user, on the bell and by
-// email, about Fit with Conditions reviews due tomorrow and due today. Like a
+// Daily at 07:00 Accra time: tells Hospital (to act) and Reception, Training
+// School, Security, HSE and the record's HOD (for information), on the bell
+// and by email, about Fit with Conditions reviews due tomorrow and due today. Like a
 // Server Action, this only orchestrates — the rules live in workflow-service.
 // Each reminder is its own step, so one failed email doesn't re-send the rest,
 // and the claim inside it stops a retry from notifying twice. Steps return
@@ -40,15 +41,16 @@ export const hospitalReviewReminders = inngest.createFunction(
 
         let emailsFailed = 0;
 
-        for (const recipient of claimed.recipients) {
+        for (const { user, audience } of claimed.recipients) {
           const sent = await sendEmail({
-            to: recipient.email,
+            to: user.email,
             ...hospitalReviewReminderTemplate({
               personName: claimed.personName,
               engagementId: claimed.engagementId,
               clearanceId,
               reviewDate: formatQueueDate(parseISO(claimed.nextReviewDate)),
               dueToday: kind === "Due",
+              audience,
             }),
           });
 

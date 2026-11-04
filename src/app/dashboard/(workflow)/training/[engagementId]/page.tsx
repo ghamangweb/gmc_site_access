@@ -71,10 +71,7 @@ export default async function TrainingDetailPage({
           Training still doesn't review the engagement — that is Reception's
           job — but it cannot sign off an induction without the medical the
           induction depends on. */}
-      <PageHeader
-        title={person.fullName}
-        subtitle={`Passport ${person.passportNo}`}
-      />
+      <PageHeader title={person.fullName} />
       <div className="flex flex-col gap-6">
         {/* A visit+mine visitor never went through Hospital, so there is
             nothing to hand over and the card is not rendered at all. */}

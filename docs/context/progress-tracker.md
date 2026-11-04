@@ -1565,6 +1565,24 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
 
 ---
 
+## Medical outcome notifications — HOD and every stage (2026-11-04)
+
+Dashboard + email for each audience; each email links to a page that audience can open.
+
+- [x] **Fit with Conditions** clearance → next stage (Training, or Security if Training is
+      exempted), Reception, HSE, **HOD** (Reception's wording, link → `/dashboard/department`)
+- [x] **Unfit** clearance → Reception, HSE, **HOD**
+- [x] **Review** (`recordHospitalReview`) by outcome: Unfit → Reception, HOD, HSE; Fit with
+      Conditions → the stage the record is at now, Reception, HSE, HOD; Fit → that stage, HSE.
+      `hospitalReviewTemplate` replaces `hospitalReviewUnfitTemplate`
+- [x] **Review reminders** (daily job, due tomorrow / due today) → Hospital (review link) plus,
+      for information, Reception, Training, Security, HSE and HOD — one per person
+- [x] HOD = the Department Head who issued the invitation, else the active Head(s) of the
+      record's GMC Liaison Department (`getRecordDepartmentHeads`); HOD is never required, so
+      a record without one produces no warning
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

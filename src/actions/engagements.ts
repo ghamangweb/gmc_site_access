@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { requirePinConfirmed, requireWriteAccess } from "@/lib/auth/guards";
-import type { ActionResult } from "@/lib/domain/types";
+import {
+  type ActionResult,
+  HOSPITAL_CLEARANCE_LABELS,
+} from "@/lib/domain/types";
 import {
   canGrantWorkflowExemption,
   type WorkflowExemptionApprovalInput,
@@ -16,16 +19,18 @@ import {
   delegatedApprovalRequestedTemplate,
   hospitalClearedTemplate,
   hospitalFitWithConditionsTemplate,
-  hospitalReviewUnfitTemplate,
+  hospitalReviewTemplate,
   hospitalUnfitTemplate,
   hseRecordUpdateTemplate,
   inductionCompletedTemplate,
+  type MedicalAudience,
   stakeholderApprovalReceivedTemplate,
   stakeholderApprovalRejectedTemplate,
   stakeholderApprovalRequestedTemplate,
   stakeholderExemptionApprovedTemplate,
   terminationRequestedTemplate,
 } from "@/lib/email/templates";
+import type { StaffUser } from "@/lib/services/auth-service";
 import { findPersonByPassport } from "@/lib/services/person-registry-service";
 import {
   buildEngagementInput,
@@ -589,6 +594,7 @@ export async function submitHospitalClearanceAction(
       nextRecipients,
       nextRole,
       receptionRecipients,
+      departmentHeads,
       hseRecipients,
       outcome,
     } = await recordHospitalClearance(engagementId, input, session.staffUserId);
@@ -630,6 +636,28 @@ export async function submitHospitalClearanceAction(
         });
 
         if (!sent) failedEmails.add("Reception");
+      }
+
+      // The record's HOD gets Reception's wording, linked to their own
+      // dashboard. Not required: a record keyed in directly may have none.
+      for (const recipient of departmentHeads) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...(outcome === "Unfit"
+            ? hospitalUnfitTemplate({
+                personName: detail.person.fullName,
+                engagementId,
+                audience: "DepartmentHead",
+              })
+            : hospitalFitWithConditionsTemplate({
+                personName: detail.person.fullName,
+                engagementId,
+                nextRole: nextRole ?? "TrainingStaff",
+                audience: "DepartmentHead",
+              })),
+        });
+
+        if (!sent) failedEmails.add("Department Head");
       }
 
       for (const recipient of hseRecipients) {
@@ -688,30 +716,58 @@ export async function submitHospitalReviewAction(
   try {
     const session = await requireWriteAccess("HospitalStaff");
 
-    const { receptionRecipients } = await recordHospitalReview(
+    const {
+      stageRole,
+      stageRecipients,
+      receptionRecipients,
+      departmentHeads,
+      hseRecipients,
+    } = await recordHospitalReview(
       engagementId,
       reviewedClearanceId,
       input,
       session.staffUserId,
     );
 
-    let allSent = true;
+    const detail = await getEngagementDetail(engagementId);
+    const failedEmails = new Set<string>();
+    const stageLabel =
+      stageRole === "SecurityStaff" ? "Security" : "Training School";
 
-    if (receptionRecipients.length > 0) {
-      const detail = await getEngagementDetail(engagementId);
+    if (detail) {
+      const review = {
+        personName: detail.person.fullName,
+        engagementId,
+        outcomeLabel: HOSPITAL_CLEARANCE_LABELS[input.clearanceStatus],
+        unfit: input.clearanceStatus === "Unfit",
+      };
+      const groups: [StaffUser[], MedicalAudience, string][] = [
+        [stageRecipients, stageRole ?? "TrainingStaff", stageLabel],
+        [receptionRecipients, "Receptionist", "Reception"],
+        [departmentHeads, "DepartmentHead", "Department Head"],
+      ];
 
-      if (detail) {
-        for (const recipient of receptionRecipients) {
+      for (const [recipients, audience, label] of groups) {
+        for (const recipient of recipients) {
           const sent = await sendEmail({
             to: recipient.email,
-            ...hospitalReviewUnfitTemplate({
-              personName: detail.person.fullName,
-              engagementId,
-            }),
+            ...hospitalReviewTemplate({ ...review, audience }),
           });
 
-          if (!sent) allSent = false;
+          if (!sent) failedEmails.add(label);
         }
+      }
+
+      for (const recipient of hseRecipients) {
+        const sent = await sendEmail({
+          to: recipient.email,
+          ...hseRecordUpdateTemplate({
+            personName: detail.person.fullName,
+            event: "MedicalReview",
+          }),
+        });
+
+        if (!sent) failedEmails.add("HSE");
       }
     }
 
@@ -719,21 +775,15 @@ export async function submitHospitalReviewAction(
     revalidatePath(`/dashboard/hospital/${engagementId}`);
     revalidatePath("/dashboard/reception");
 
-    if (input.clearanceStatus === "Unfit" && receptionRecipients.length === 0) {
-      return {
-        success: true,
-        warning:
-          "Review recorded, but no Receptionist is provisioned, so nobody was notified.",
-      };
-    }
-
-    return allSent
-      ? { success: true }
-      : {
-          success: true,
-          warning:
-            "Review recorded, but some notification emails may not have sent",
-        };
+    // Reception is the one audience an Unfit or conditional review can't do
+    // without — it is who follows them up.
+    return notificationResult(
+      "Review recorded",
+      input.clearanceStatus !== "Fit" && receptionRecipients.length === 0
+        ? ["Reception"]
+        : [],
+      [...failedEmails],
+    );
   } catch (error) {
     console.error("[actions/engagements]", error);
 
