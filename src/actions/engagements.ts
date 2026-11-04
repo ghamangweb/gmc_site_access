@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requirePinConfirmed, requireWriteAccess } from "@/lib/auth/guards";
+import type { StayExtensionInput } from "@/lib/domain/stay-extensions";
 import {
   type ActionResult,
   HOSPITAL_CLEARANCE_LABELS,
@@ -28,6 +29,7 @@ import {
   stakeholderApprovalRejectedTemplate,
   stakeholderApprovalRequestedTemplate,
   stakeholderExemptionApprovedTemplate,
+  stayExtendedTemplate,
   terminationRequestedTemplate,
 } from "@/lib/email/templates";
 import type { StaffUser } from "@/lib/services/auth-service";
@@ -44,6 +46,7 @@ import {
   applyStakeholderExemption,
   cancelEngagement,
   createEngagement,
+  extendStay,
   getActiveEngagementForPassport,
   getEngagementDetail,
   type HospitalClearanceInput,
@@ -1047,6 +1050,79 @@ export async function activateAccessAction(
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to activate access",
+    };
+  }
+}
+
+export async function extendStayAction(
+  engagementId: string,
+  input: StayExtensionInput,
+): Promise<ActionResult> {
+  try {
+    const session = await requirePinConfirmed();
+
+    const {
+      extension,
+      securityRecipients,
+      receptionRecipients,
+      departmentHeads,
+      hseRecipients,
+    } = await extendStay(engagementId, session, input);
+
+    const detail = await getEngagementDetail(engagementId);
+    const failedEmails = new Set<string>();
+
+    if (detail) {
+      const groups: [
+        StaffUser[],
+        "SecurityStaff" | "Receptionist" | "DepartmentHead" | "HSE",
+        string,
+      ][] = [
+        [securityRecipients, "SecurityStaff", "Security"],
+        [receptionRecipients, "Receptionist", "Reception"],
+        [departmentHeads, "DepartmentHead", "Department Head"],
+        [hseRecipients, "HSE", "HSE"],
+      ];
+
+      for (const [recipients, audience, label] of groups) {
+        for (const recipient of recipients) {
+          const sent = await sendEmail({
+            to: recipient.email,
+            ...stayExtendedTemplate({
+              personName: detail.person.fullName,
+              engagementId,
+              previousDepartureDate: extension.previousDepartureDate,
+              newDepartureDate: extension.newDepartureDate,
+              extendedBy: extension.extendedByName,
+              extendedByRole: extension.extendedByRole,
+              audience,
+            }),
+          });
+
+          if (!sent) failedEmails.add(label);
+        }
+      }
+    }
+
+    revalidatePath("/dashboard/approvals");
+    revalidatePath(`/dashboard/approvals/${engagementId}`);
+    revalidatePath("/dashboard/reception");
+    revalidatePath(`/dashboard/reception/${engagementId}`);
+    revalidatePath("/dashboard/security");
+    revalidatePath(`/dashboard/security/${engagementId}`);
+
+    // Security has to update the card, so it is the one audience this can't
+    // go without.
+    return notificationResult(
+      "Stay extended",
+      securityRecipients.length === 0 ? ["Security"] : [],
+      [...failedEmails],
+    );
+  } catch (error) {
+    console.error("[actions/engagements]", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to extend stay",
     };
   }
 }

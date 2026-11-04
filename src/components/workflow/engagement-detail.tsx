@@ -7,6 +7,7 @@ import { ReceptionDetailsPreview } from "@/components/workflow/reception-details
 import type { ReceptionFormValues } from "@/components/workflow/reception-form";
 import { ReceptionForm } from "@/components/workflow/reception-form";
 import { StakeholderPanel } from "@/components/workflow/stakeholder-panel";
+import { StayExtensionsCard } from "@/components/workflow/stay-extensions-card";
 import { WorkflowExemptionsSummary } from "@/components/workflow/workflow-exemptions-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import {
@@ -20,7 +21,10 @@ import {
   requiredWorkflowStages,
 } from "@/lib/domain/workflow-exemptions";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
-import { getEngagementDetail } from "@/lib/services/workflow-service";
+import {
+  getEngagementDetail,
+  getStayExtensions,
+} from "@/lib/services/workflow-service";
 
 // transportTo/transportFrom/otherInductions were free-text strings before
 // 2026-07-23's switch to Yes/No — records created before that change still
@@ -76,7 +80,10 @@ export async function EngagementDetail({
     redirect("/dashboard");
   }
 
-  const documents = await getDocumentsForEngagement(engagementId);
+  const [documents, stayExtensions] = await Promise.all([
+    getDocumentsForEngagement(engagementId),
+    getStayExtensions(engagementId),
+  ]);
   const receptionData = normalizeReceptionData(engagement.receptionData);
 
   const isReceptionist =
@@ -187,6 +194,7 @@ export async function EngagementDetail({
           returnHref={queueHref}
         />
         <WorkflowExemptionsSummary exemptions={exemptions} />
+        <StayExtensionsCard extensions={stayExtensions} />
       </div>
     </div>
   );

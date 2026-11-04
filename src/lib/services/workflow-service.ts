@@ -33,6 +33,7 @@ import {
   staffUsers,
   stakeholderApprovals,
   stakeholderRejections,
+  stayExtensions,
   terminationRequests,
   workflowCycles,
   workflowExemptions,
@@ -48,6 +49,12 @@ import {
   SECURITY_REPORT_HEADERS,
   securityReportRows,
 } from "@/lib/domain/security-report";
+import {
+  isStayExtendable,
+  type StayExtensionInput,
+  stayExtensionRole,
+  validateStayExtension,
+} from "@/lib/domain/stay-extensions";
 import {
   TRAINING_REPORT_HEADERS,
   trainingReportRows,
@@ -2494,6 +2501,151 @@ export async function claimHospitalReviewReminder(
       personName: row.personName,
       engagementId: row.engagementId,
       nextReviewDate: claimed.nextReviewDate,
+    };
+  });
+}
+
+export type StayExtension = typeof stayExtensions.$inferSelect;
+
+// Every extension on a record, newest first — shown on the record pages.
+export async function getStayExtensions(
+  engagementId: string,
+): Promise<StayExtension[]> {
+  return db
+    .select()
+    .from(stayExtensions)
+    .where(eq(stayExtensions.engagementId, engagementId))
+    .orderBy(desc(stayExtensions.extendedAt));
+}
+
+export type StayExtensionRecipients = {
+  securityRecipients: StaffUser[];
+  receptionRecipients: StaffUser[];
+  departmentHeads: StaffUser[];
+  hseRecipients: StaffUser[];
+};
+
+// A stakeholder moves an approved record's departure date later. Only the
+// date moves: the access card stays as Security issued it, and Security is
+// told so it can update the card. Not a workflow_state move, so no
+// transition row — `stay_extensions` is the history.
+export async function extendStay(
+  engagementId: string,
+  session: SessionUser,
+  input: StayExtensionInput,
+): Promise<{ extension: StayExtension } & StayExtensionRecipients> {
+  const role = stayExtensionRole(session);
+
+  if (!role) {
+    throw new Error(
+      "Only CSO, HCM, GMM, EM or MM stakeholders with write access can extend a stay",
+    );
+  }
+
+  return db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement) {
+      throw new Error("Engagement not found");
+    }
+
+    // SAFETY: workflow_state and access_state are written only from their
+    // unions by this service.
+    if (
+      !isStayExtendable({
+        workflowState: engagement.workflowState as WorkflowState,
+        accessState: engagement.accessState as AccessState,
+      })
+    ) {
+      throw new Error(
+        "Only an approved record that is not cancelled or revoked can have its stay extended",
+      );
+    }
+
+    // Re-read under the lock, so two stakeholders extending at once can't
+    // both move the date from the same starting point.
+    const valid = validateStayExtension(input, engagement.departureDate);
+
+    // The actor's role is re-checked against the database, not just the
+    // session: a role removed since sign-in no longer grants this.
+    const [actor] = await tx
+      .select()
+      .from(staffUsers)
+      .where(eq(staffUsers.id, session.staffUserId));
+
+    if (!actor || actor.deactivatedAt || !actor.workflowRoles.includes(role)) {
+      throw new Error("Stakeholder authority is no longer available");
+    }
+
+    const [extension] = await tx
+      .insert(stayExtensions)
+      .values({
+        engagementId,
+        previousDepartureDate: engagement.departureDate,
+        newDepartureDate: valid.newDepartureDate,
+        reason: valid.reason,
+        signature: valid.signature,
+        extendedBy: actor.id,
+        extendedByName: actor.displayName,
+        extendedByRole: role,
+      })
+      .returning();
+
+    await tx
+      .update(engagements)
+      .set({ departureDate: valid.newDepartureDate })
+      .where(eq(engagements.id, engagementId));
+
+    const securityRecipients = await getStaffByWorkflowRoles(
+      ["SecurityStaff"],
+      tx,
+    );
+    const receptionRecipients = withoutAlreadyNotified(
+      await getStaffByWorkflowRoles(["Receptionist"], tx),
+      securityRecipients,
+    );
+    const departmentHeads = withoutAlreadyNotified(
+      await getRecordDepartmentHeads(engagementId, tx),
+      securityRecipients,
+      receptionRecipients,
+    );
+    const hseRecipients = withoutAlreadyNotified(
+      await getStaffByWorkflowRoles(["HSE"], tx),
+      securityRecipients,
+      receptionRecipients,
+      departmentHeads,
+    );
+
+    const extendedTo = `Stay extended to ${valid.newDepartureDate} by ${actor.displayName} (${role}).`;
+    const notices = [
+      ...securityRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: `${extendedTo} Update the access card if needed.`,
+      })),
+      ...[...receptionRecipients, ...departmentHeads, ...hseRecipients].map(
+        (recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: extendedTo,
+        }),
+      ),
+    ];
+
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
+    }
+
+    return {
+      extension,
+      securityRecipients,
+      receptionRecipients,
+      departmentHeads,
+      hseRecipients,
     };
   });
 }

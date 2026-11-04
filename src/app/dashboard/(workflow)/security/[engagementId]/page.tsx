@@ -6,6 +6,7 @@ import { AccessActivationForm } from "@/components/workflow/access-activation-fo
 import { PriorLayersSummary } from "@/components/workflow/prior-layers-summary";
 import { ReceptionDetailsPreview } from "@/components/workflow/reception-details-preview";
 import type { ReceptionFormValues } from "@/components/workflow/reception-form";
+import { StayExtensionsCard } from "@/components/workflow/stay-extensions-card";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import type { AccessPurpose, ReceptionData } from "@/lib/domain/types";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
@@ -14,6 +15,7 @@ import {
   getEngagementDetail,
   getLatestHospitalClearance,
   getLatestInductionRecord,
+  getStayExtensions,
 } from "@/lib/services/workflow-service";
 
 export default async function SecurityDetailPage({
@@ -36,12 +38,14 @@ export default async function SecurityDetailPage({
 
   const { engagement, person, approvals, exemptions } = detail;
 
-  const [documents, clearance, induction, provisioning] = await Promise.all([
-    getDocumentsForEngagement(engagementId),
-    getLatestHospitalClearance(engagementId),
-    getLatestInductionRecord(engagementId),
-    getAccessProvisioning(engagementId),
-  ]);
+  const [documents, clearance, induction, provisioning, stayExtensions] =
+    await Promise.all([
+      getDocumentsForEngagement(engagementId),
+      getLatestHospitalClearance(engagementId),
+      getLatestInductionRecord(engagementId),
+      getAccessProvisioning(engagementId),
+      getStayExtensions(engagementId),
+    ]);
 
   // SAFETY: reception_data is jsonb written only from the Reception form's own
   // values; anything missing renders as "—" in the preview.
@@ -79,6 +83,9 @@ export default async function SecurityDetailPage({
             (exemption) => exemption.archivedAt === null,
           )}
         />
+        {/* Security updates the access card after an extension, so it sees
+            what was extended, to when, and why. */}
+        <StayExtensionsCard extensions={stayExtensions} />
         <ReceptionDetailsPreview
           values={previewValues}
           documentsTitle="Documents"

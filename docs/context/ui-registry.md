@@ -2243,3 +2243,28 @@ Read-only by design: no row links, no actions column, no record pages. Medical a
 outcomes only — never doctor's or trainer's comments. "—" means the nature of visit never goes
 through that layer; "Not recorded" means it does but hasn't yet. No passport / Ghana Card column —
 no dashboard table shows one (2026-11-04).
+
+### ApprovalRowActions / ExtendStayDialog / StayExtensionsCard (2026-11-04)
+
+Files: src/app/dashboard/(workflow)/approvals/approval-row-actions.tsx,
+src/components/workflow/extend-stay-dialog.tsx, src/components/workflow/stay-extensions-card.tsx
+Last updated: 2026-11-04
+
+| Property | Class |
+|---|---|
+| Background | dialog / `Card` defaults |
+| Border | history rows `border-border border-b pb-4 last:border-0 last:pb-0` (same as `PriorLayersSummary` rows) |
+| Border radius | component defaults |
+| Text — primary | dates `text-foreground text-sm` |
+| Text — secondary | who/when `text-muted-foreground text-xs`; reason `text-muted-foreground text-sm whitespace-pre-wrap` |
+| Spacing | dialog fields `flex flex-col gap-2`; card `flex flex-col gap-4 p-6` |
+| Hover state | menu trigger `variant="ghost" size="icon" className="size-8"` with `MoreVerticalIcon` (same as Hospital's recorded tab) |
+| Shadow | none — this system never uses `shadow-*` |
+| Status / accent usage | none |
+
+**Pattern notes:**
+Row menu items the viewer can't use stay in the menu, `disabled`, rather than disappearing. The
+dialogs are controlled and rendered beside the menu, never inside `DropdownMenuContent`, so
+closing the menu doesn't unmount them. Extend Stay mirrors the exemption dialog: required reason
++ `SignatureField`, "Confirm Extension" disabled until all are filled; `DatePicker` `minDate` is
+`earliestExtensionDate(departure)`. `StayExtensionsCard` renders nothing when there are no rows.

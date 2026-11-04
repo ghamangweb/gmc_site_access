@@ -221,6 +221,27 @@ export const workflowExemptions = pgTable(
   ],
 );
 
+// One row per stay extension, kept as history: a stakeholder can extend the
+// same record more than once. The engagement's `departure_date` is moved in
+// the same transaction; this is the record of from what, to what, why and by
+// whom. The access card is Security's to update, so it is not touched here.
+export const stayExtensions = pgTable("stay_extensions", {
+  id: uuid().defaultRandom().primaryKey(),
+  engagementId: uuid()
+    .notNull()
+    .references(() => engagements.id),
+  previousDepartureDate: date().notNull(),
+  newDepartureDate: date().notNull(),
+  reason: encryptedText().notNull(),
+  signature: encryptedText().notNull(),
+  extendedBy: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  extendedByName: text().notNull(),
+  extendedByRole: text().notNull(),
+  extendedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
+
 // One row per rejection, kept as history: a record can be rejected, fixed by
 // Reception, requested again and rejected again. Unlike an approval there is
 // no unique constraint on the engagement for that reason.

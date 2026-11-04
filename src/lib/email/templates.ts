@@ -488,6 +488,37 @@ export function hseRecordUpdateTemplate(opts: {
   };
 }
 
+// A stakeholder moved the departure date. Security is asked to update the
+// card; everyone else is told for information.
+export function stayExtendedTemplate(opts: {
+  personName: string;
+  engagementId: string;
+  previousDepartureDate: string;
+  newDepartureDate: string;
+  extendedBy: string;
+  extendedByRole: string;
+  audience: "SecurityStaff" | "Receptionist" | "DepartmentHead" | "HSE";
+}): MessageTemplate {
+  const personName = escapeHtml(opts.personName);
+  const extendedBy = escapeHtml(opts.extendedBy);
+  const role = escapeHtml(roleLabel(opts.extendedByRole));
+  const from = escapeHtml(opts.previousDepartureDate);
+  const to = escapeHtml(opts.newDepartureDate);
+  const next =
+    opts.audience === "SecurityStaff"
+      ? "<p>Please update the access card validity as required.</p>"
+      : "<p>This notification is for your information.</p>";
+  const link =
+    opts.audience === "SecurityStaff"
+      ? securityEngagementLink(opts.engagementId)
+      : medicalAudienceLink(opts.audience, opts.engagementId);
+
+  return {
+    subject: subject(`Stay Extended - ${opts.personName}`),
+    html: `${HELLO}<p>${personName}'s stay has been extended by ${extendedBy}, ${role}. The departure date has moved from ${from} to ${to}.</p>${next}${button(link, "View Application Records")}`,
+  };
+}
+
 // To Security, who carry the revocation out.
 export function terminationRequestedTemplate(opts: {
   personName: string;

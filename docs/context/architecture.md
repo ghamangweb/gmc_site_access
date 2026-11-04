@@ -512,6 +512,26 @@ after commit. Delivery/refresh failures return saved-approval warnings. Normal
 approval recipients are not used for an exemption event. Approval checkpoints and
 test scope are recorded in `stakeholder-exemptions-plan.md`.
 
+### `stay_extensions` (2026-11-04)
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| engagement_id | uuid | FK → engagements; many rows per engagement (each extension is history) |
+| previous_departure_date | date | `engagements.departure_date` before the extension |
+| new_departure_date | date | Later than the previous date, and today or later |
+| reason | encrypted text | Required |
+| signature | encrypted text | Captured `SignatureValue` JSON, as for approvals |
+| extended_by / extended_by_name / extended_by_role | uuid / text / text | The stakeholder (CSO, HCM, GMM, EM or MM — never a delegate) |
+| extended_at | timestamptz | |
+
+`extendStay` (`workflow-service.ts`, rules in `src/lib/domain/stay-extensions.ts`) locks the
+engagement, re-checks the actor's role against `staff_users`, inserts the row and moves
+`engagements.departure_date` in one transaction. Only approved records (AtHospital → Completed)
+that are not Cancelled or Revoked qualify; Expired access does. The access card is **not**
+changed — Security is notified to update it. Notified (dashboard + email): Security, Reception,
+HSE and the record's HOD. Not a workflow_state move, so no `workflow_transitions` row.
+
 ### `hospital_clearances`
 
 | Column | Type | Notes |

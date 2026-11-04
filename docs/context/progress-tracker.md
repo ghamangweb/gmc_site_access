@@ -1583,6 +1583,22 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Approvals queue row menu — Bypass and Extend Stay (2026-11-04)
+
+- [x] Approvals queue rows use a vertical-ellipsis menu (`ApprovalRowActions`): Awaiting →
+      Review, Bypass (opens `StakeholderExemptionDialog`, now with an optional controlled mode);
+      Approved → View, Extend Stay. Unusable items stay visible, disabled. Approved tab gains a
+      Departure column
+- [x] Extend Stay (`ExtendStayDialog`): new departure date (calendar), reason, signature.
+      Stakeholders only (CSO/HCM/GMM/EM/MM), approved records not Cancelled/Revoked; moves only
+      `departure_date` — Security updates the card
+- [x] `stay_extensions` history table (migration `0031_stay_extensions`), shown on Reception,
+      Approvals and Security record pages (`StayExtensionsCard`)
+- [x] Notified: Security (asked to update the card), Reception, HSE, HOD
+- [ ] Security has no in-app way to change an issued card's expiry after activation
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
