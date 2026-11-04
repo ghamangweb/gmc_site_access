@@ -52,6 +52,7 @@ import {
   DOCUMENT_LABELS,
   type DocType,
   getEffectiveAccessState,
+  HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
   isoToday,
   type ReceptionData,
@@ -1499,12 +1500,16 @@ export async function recordHospitalClearance(
     throw new Error("Engagement is not awaiting Hospital clearance");
   }
   // The conditions are what Reception and Training School act on, so a
-  // conditional clearance without them tells nobody anything.
+  // conditional clearance without them tells nobody anything. Likewise an
+  // Unfit without a reason leaves Reception unable to act on it.
   if (
-    input.clearanceStatus === "FitWithConditions" &&
+    (input.clearanceStatus === "FitWithConditions" ||
+      input.clearanceStatus === "Unfit") &&
     !input.doctorComments.trim()
   ) {
-    throw new Error("Doctor's comments are required for Fit with Conditions");
+    throw new Error(
+      `Doctor's comments are required for ${HOSPITAL_CLEARANCE_LABELS[input.clearanceStatus]}`,
+    );
   }
 
   const outcome: "Cleared" | "Unfit" =
