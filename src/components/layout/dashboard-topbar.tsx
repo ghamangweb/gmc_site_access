@@ -265,12 +265,17 @@ export function DashboardTopbar({
               </span>
               <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
             </DropdownMenuTrigger>
+            {/* At least as wide as the trigger, wider for a long email (which
+                a short name's trigger can't fit), and wrapping past max-w-xs
+                rather than being clipped. */}
             <DropdownMenuContent
               align="end"
-              className="w-(--radix-dropdown-menu-trigger-width)"
+              className="w-max min-w-(--radix-dropdown-menu-trigger-width) max-w-xs"
             >
               <DropdownMenuLabel className="font-normal">
-                <p className="text-xs text-muted-foreground">{userEmail}</p>
+                <p className="break-all text-xs text-muted-foreground">
+                  {userEmail}
+                </p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" asChild>
