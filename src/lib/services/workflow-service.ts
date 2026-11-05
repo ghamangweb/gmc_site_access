@@ -1231,12 +1231,60 @@ export async function countStakeholderApprovalsBy(
   return row?.value ?? 0;
 }
 
+export type ExemptionAudience =
+  | "Receptionist"
+  | "TrainingStaff"
+  | "SecurityStaff"
+  | "HSE"
+  | "DepartmentHead";
+
 export type StakeholderApprovalResult = {
   engagement: Engagement;
   recipients: StaffUser[];
   nextRole: WorkflowRole | null;
   exemptionMessage?: WorkflowExemptionMessage;
+  // A Medical By-pass is told to everyone but Hospital, each with their
+  // audience so the email links somewhere they can open. Empty otherwise.
+  exemptionRecipients: { user: StaffUser; audience: ExemptionAudience }[];
 };
+
+// Who hears about a Medical By-pass: every stage but Hospital — Reception,
+// Training School, Security, HSE — and the record's HOD (2026-11-05). One
+// entry per person, the first audience they appear under winning.
+async function exemptionAudience(
+  engagementId: string,
+  client: DbClient,
+): Promise<{ user: StaffUser; audience: ExemptionAudience }[]> {
+  const roles = [
+    "Receptionist",
+    "TrainingStaff",
+    "SecurityStaff",
+    "HSE",
+  ] as const;
+  const byRole = await Promise.all(
+    roles.map((role) => getStaffByWorkflowRoles([role], client)),
+  );
+  const groups: [ExemptionAudience, StaffUser[]][] = [
+    ...roles.map(
+      (role, index) =>
+        [role, byRole[index] ?? []] as [ExemptionAudience, StaffUser[]],
+    ),
+    ["DepartmentHead", await getRecordDepartmentHeads(engagementId, client)],
+  ];
+
+  const seen = new Set<string>();
+  const recipients: { user: StaffUser; audience: ExemptionAudience }[] = [];
+
+  for (const [audience, users] of groups) {
+    for (const user of users) {
+      if (seen.has(user.id)) continue;
+      seen.add(user.id);
+      recipients.push({ user, audience });
+    }
+  }
+
+  return recipients;
+}
 
 export async function applyStakeholderApproval(
   engagementId: string,
@@ -1399,8 +1447,11 @@ async function applyApprovalDecision(
       exemption?.stages,
     );
 
+    const exemptionRecipients = exemption
+      ? await exemptionAudience(engagementId, tx)
+      : [];
     const recipients = exemption
-      ? await getStaffByWorkflowRoles(["Receptionist"], tx)
+      ? exemptionRecipients.map((recipient) => recipient.user)
       : nextRole
         ? await getStaffByWorkflowRoles([nextRole], tx)
         : [];
@@ -1556,6 +1607,7 @@ async function applyApprovalDecision(
       recipients,
       nextRole,
       exemptionMessage,
+      exemptionRecipients,
     };
   });
 }

@@ -158,47 +158,44 @@ test("historical or no-longer-pending review dates never claim an outstanding re
   assert.equal(rows[1]["Review Status"], "");
 });
 
-test("Hospital exemption is explicit without fabricated medical clearance", () => {
-  const row = values(
+test("a Medical By-pass cycle is left out of Hospital's export entirely", () => {
+  assert.deepEqual(
     hospitalReportRows(
       [{ ...cycle, workflowState: "AtSecurity" }],
       [],
       [exemption],
-    )[0],
+    ),
+    [],
   );
-
-  assert.equal(row["Hospital Status"], "Exempted");
-  assert.equal(row["Clearance Outcome"], "");
-  assert.equal(row["Recorded By"], "");
-  assert.equal(row["Exempted Stages"], "Hospital");
-  assert.equal(row["Exemption Approved By"], "Authoriser (CSO)");
 });
 
-test("historical clearance and exemption data stay in their own cycle and engagement", () => {
+test("Hospital's export carries no exemption columns", () => {
+  for (const header of HOSPITAL_REPORT_HEADERS) {
+    assert.ok(!/Exempt/i.test(header), header);
+  }
+});
+
+test("a by-pass only removes its own cycle and engagement", () => {
+  // The by-passed cycle is gone; a later cycle, and an exemption on another
+  // engagement, change nothing for the rows that remain.
   const rows = hospitalReportRows(
     [cycle, { ...cycle, id: "cycle-new" }],
-    [clearance],
+    [clearance, { ...clearance, workflowCycleId: "cycle-new" }],
     [
       exemption,
       {
         ...exemption,
         engagementId: "another-engagement",
-        reason: "Unrelated reason",
+        workflowCycleId: "cycle-new",
       },
     ],
   ).map(values);
 
+  assert.equal(rows.length, 1);
   assert.equal(rows[0]["Doctor Comments"], clearance.doctorComments);
-  assert.equal(
-    rows[0]["Exemption Reason / Comment"],
-    "Hospital: Medical evidence accepted",
-  );
-  assert.equal(rows[1]["Clearance Outcome"], "");
-  assert.equal(rows[1]["Exempted Stages"], "");
-  assert.equal(rows[1]["Hospital Status"], "Awaiting Clearance");
 });
 
-test("Training-only exemption preserves actual Hospital outcome and unknown recording staff", () => {
+test("a Training-only exemption (history) keeps the actual Hospital outcome", () => {
   const row = values(
     hospitalReportRows(
       [{ ...cycle, workflowState: "AtTraining" }],
@@ -218,7 +215,6 @@ test("Training-only exemption preserves actual Hospital outcome and unknown reco
   assert.equal(row["Hospital Status"], "Recorded");
   assert.equal(row["Clearance Outcome"], "Fit");
   assert.equal(row["Recorded By"], "");
-  assert.equal(row["Exempted Stages"], "Training School");
 });
 
 test("empty data and spreadsheet safety preserve medical comments accurately", () => {

@@ -18,7 +18,7 @@ import {
 } from "@/lib/domain/types";
 import {
   canGrantWorkflowExemption,
-  requiredWorkflowStages,
+  exemptableStages,
 } from "@/lib/domain/workflow-exemptions";
 import { getDocumentsForEngagement } from "@/lib/services/document-service";
 import {
@@ -123,7 +123,7 @@ export async function EngagementDetail({
     !!approveAs &&
     approvalRequested &&
     canGrantWorkflowExemption(session) &&
-    requiredWorkflowStages(accessPurpose).length > 0;
+    exemptableStages(accessPurpose).length > 0;
 
   const defaultValues: Partial<ReceptionFormValues> = {
     passportNo: person.passportNo,

@@ -102,6 +102,18 @@ export function requiredWorkflowStages(
   }
 }
 
+// What a stakeholder can by-pass: Hospital only (2026-11-05), so only the
+// paths that go through Hospital — work access — offer a Medical By-pass.
+// `requiredWorkflowStages` stays the routing truth; Training exemptions
+// already recorded remain valid history.
+export function exemptableStages(
+  purpose: AccessPurpose,
+): WorkflowExemptionStage[] {
+  return requiredWorkflowStages(purpose).filter(
+    (stage) => stage === "Hospital",
+  );
+}
+
 export function validateWorkflowExemption(
   input: WorkflowExemptionInput,
   purpose: AccessPurpose,
@@ -120,10 +132,10 @@ export function validateWorkflowExemption(
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid exemption");
   }
 
-  const required = requiredWorkflowStages(purpose);
+  const exemptable = exemptableStages(purpose);
 
-  if (parsed.data.stages.some((stage) => !required.includes(stage))) {
-    throw new Error("Only stages required for this engagement can be exempted");
+  if (parsed.data.stages.some((stage) => !exemptable.includes(stage))) {
+    throw new Error("Only the Hospital stage can be by-passed");
   }
 
   let capturedSignature: unknown;

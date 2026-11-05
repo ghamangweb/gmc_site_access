@@ -4,11 +4,7 @@ import {
   isoToday,
   WORKFLOW_STATE_LABELS,
 } from "@/lib/domain/types";
-import {
-  WORKFLOW_EXEMPTION_REPORT_HEADERS,
-  type WorkflowExemptionReportRecord,
-  workflowExemptionReportValues,
-} from "@/lib/domain/workflow-exemption-report";
+import type { WorkflowExemptionReportRecord } from "@/lib/domain/workflow-exemption-report";
 
 export const HOSPITAL_REPORT_HEADERS = [
   "Name",
@@ -26,7 +22,6 @@ export const HOSPITAL_REPORT_HEADERS = [
   "Next Review Date",
   "Latest Clearance",
   "Review Status",
-  ...WORKFLOW_EXEMPTION_REPORT_HEADERS,
 ] as const;
 
 export type HospitalReportCycle = {
@@ -70,9 +65,12 @@ export function hospitalReportRows(
         exemption.engagementId === cycle.engagementId,
     );
 
-    const hospitalExempted = cycleExemptions.some(
-      (exemption) => exemption.stage === "Hospital",
-    );
+    // A Medical By-pass skipped Hospital, so the cycle is not Hospital's
+    // record at all and stays out of its export (2026-11-05). Exemption
+    // details live in the other stages' exports.
+    if (cycleExemptions.some((exemption) => exemption.stage === "Hospital")) {
+      return [];
+    }
 
     const recorded = clearances.filter(
       (clearance) => clearance.workflowCycleId === cycle.id,
@@ -81,7 +79,7 @@ export function hospitalReportRows(
     const awaitingClearance =
       cycle.archivedAt === null && cycle.workflowState === "AtHospital";
 
-    // Preserve every recorded decision/review; an empty cycle gets one awaiting/exemption row.
+    // Preserve every recorded decision/review; an empty cycle gets one awaiting row.
     const entries: (HospitalReportClearance | undefined)[] = recorded.length
       ? recorded
       : [undefined];
@@ -90,15 +88,13 @@ export function hospitalReportRows(
       const awaitingReview =
         cycle.archivedAt === null && clearance?.awaitingReview === true;
 
-      const status = hospitalExempted
-        ? "Exempted"
-        : awaitingReview
-          ? "Awaiting Review"
-          : awaitingClearance && (!clearance || clearance.isLatest)
-            ? clearance?.clearanceStatus === "Unfit"
-              ? "Awaiting Re-clearance"
-              : "Awaiting Clearance"
-            : "Recorded";
+      const status = awaitingReview
+        ? "Awaiting Review"
+        : awaitingClearance && (!clearance || clearance.isLatest)
+          ? clearance?.clearanceStatus === "Unfit"
+            ? "Awaiting Re-clearance"
+            : "Awaiting Clearance"
+          : "Recorded";
 
       const reviewDate = clearance?.nextReviewDate;
 
@@ -129,7 +125,6 @@ export function hospitalReportRows(
         reviewDate ?? "",
         clearance ? (clearance.isLatest ? "Yes" : "No") : "",
         reviewStatus,
-        ...workflowExemptionReportValues(cycleExemptions),
       ];
     });
   });

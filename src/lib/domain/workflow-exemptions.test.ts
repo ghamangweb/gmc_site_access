@@ -139,7 +139,8 @@ test("server validation rejects empty, duplicate and unknown stages and blank re
     assert.equal(workflowExemptionSchema.safeParse(input).success, false);
 });
 
-test("inapplicable exemptions are rejected and a valid reason is trimmed", () => {
+test("only Hospital can be by-passed, and a valid reason is trimmed", () => {
+  // A mine tour never goes through Hospital.
   assert.throws(
     () =>
       validateWorkflowExemption(
@@ -148,7 +149,18 @@ test("inapplicable exemptions are rejected and a valid reason is trimmed", () =>
         actor,
         signature,
       ),
-    /required/,
+    /Hospital stage/,
+  );
+  // Training can no longer be exempted, even on a work record (2026-11-05).
+  assert.throws(
+    () =>
+      validateWorkflowExemption(
+        { stages: ["Training"], reason: "Reason" },
+        "Work",
+        actor,
+        signature,
+      ),
+    /Hospital stage/,
   );
   assert.throws(
     () =>
@@ -158,7 +170,7 @@ test("inapplicable exemptions are rejected and a valid reason is trimmed", () =>
         actor,
         signature,
       ),
-    /required/,
+    /Hospital stage/,
   );
   assert.deepEqual(
     validateWorkflowExemption(
