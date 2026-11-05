@@ -34,6 +34,19 @@ Never rely on general training knowledge alone for library APIs — they change 
 Config lives at `src/lib/auth/entra.ts` (not the framework's suggested root `auth.ts`,
 to match this project's `lib/auth/` convention) exporting `{ handlers, auth, signIn, signOut }`.
 
+**Errors go to `/sign-in`, not Auth.js's pages** (`pages.error` and `pages.signIn`, 2026-11-05).
+Both are needed: `SignInError` kinds (`OAuthCallbackError` — e.g. a declined Microsoft consent —
+`OAuthSignInError`, `MissingCSRF`…) route through `pages.signIn`, everything else through
+`pages.error`. Auth.js's own sign-in redirects pass the return path as `callbackUrl` (often an
+absolute URL); the sign-in page reads it through `safeCallbackPath`, which keeps only a
+`/dashboard` path, same as `?next=`. Auth.js only names a
+few errors to the browser (`AccessDenied`, `OAuthCallbackError`…); everything else — including
+`InvalidCheck` from a double OAuth callback (Microsoft's consent button clicked twice: the first
+callback signs in and spends the one-time state/PKCE check, the second fails it) — arrives as
+`?error=Configuration`. The sign-in page redirects an already-signed-in user before reading
+`error`, so the double-click case lands on the dashboard; otherwise it shows a generic "try again"
+alert. Never echo the `error` value. Real config problems still log server-side (`[auth][error]`).
+
 ## Next.js 16 `proxy` (formerly `middleware`)
 
 Next 16 deprecated `middleware.ts`/`export function middleware()` in favor of
