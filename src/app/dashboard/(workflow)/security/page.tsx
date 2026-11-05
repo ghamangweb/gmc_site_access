@@ -37,8 +37,6 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
-  countEngagementsForLayer,
-  countPendingRevocations,
   expireLapsedAccess,
   listEngagementsForLayer,
   listPendingRevocations,
@@ -98,33 +96,27 @@ export default async function SecurityQueuePage({
   }
 
   // Visit-only records never reach Security — they finish at Reception.
-  const [awaitingCount, revocationCount, awaiting, granted, revocations] =
-    await Promise.all([
-      countEngagementsForLayer("AtSecurity", ["Work", "WorkMine", "VisitMine"]),
-      countPendingRevocations(),
-      activeView === "awaiting"
-        ? listEngagementsForLayer(
-            "AtSecurity",
-            ["Work", "WorkMine", "VisitMine"],
-            request,
-          )
-        : undefined,
-      // The end of the line: Security has issued a card, so the visitor is
-      // through every stage — one row per card issued.
-      activeView === "granted" ? listRecentProvisionings(request) : undefined,
-      // Access Reception has asked to switch off. Security carries it out; there
-      // is no approval step in between.
-      activeView === "revocations"
-        ? listPendingRevocations(request)
-        : undefined,
-    ]);
+  const [awaiting, granted, revocations] = await Promise.all([
+    activeView === "awaiting"
+      ? listEngagementsForLayer(
+          "AtSecurity",
+          ["Work", "WorkMine", "VisitMine"],
+          request,
+        )
+      : undefined,
+    // The end of the line: Security has issued a card, so the visitor is
+    // through every stage — one row per card issued.
+    activeView === "granted" ? listRecentProvisionings(request) : undefined,
+    // Access Reception has asked to switch off. Security carries it out; there
+    // is no approval step in between.
+    activeView === "revocations" ? listPendingRevocations(request) : undefined,
+  ]);
 
   const views = [
     {
       label: "Awaiting Review",
       value: "awaiting",
       href: "/dashboard/security",
-      count: awaitingCount,
     },
     {
       label: "Site Access Granted",
@@ -135,7 +127,6 @@ export default async function SecurityQueuePage({
       label: "Revocation Requests",
       value: "revocations",
       href: "/dashboard/security?view=revocations",
-      count: revocationCount,
     },
   ];
 

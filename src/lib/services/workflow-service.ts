@@ -2061,6 +2061,43 @@ export async function getLatestClearanceStatuses(
   return statuses;
 }
 
+// The current card's expiry for a page of engagements at once, so a status
+// column can show Expired from the date rather than the stored state. Only
+// the active cycle's card counts; engagements without one are absent.
+export async function getCurrentCardExpiries(
+  engagementIds: string[],
+): Promise<Map<string, string>> {
+  const expiries = new Map<string, string>();
+
+  if (engagementIds.length === 0) return expiries;
+
+  const rows = await db
+    .select({
+      engagementId: workflowCycles.engagementId,
+      accessCardExpiry: accessProvisionings.accessCardExpiry,
+    })
+    .from(accessProvisionings)
+    .innerJoin(
+      workflowCycles,
+      eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+    )
+    .where(
+      and(
+        inArray(workflowCycles.engagementId, engagementIds),
+        isNull(workflowCycles.archivedAt),
+      ),
+    )
+    .orderBy(desc(accessProvisionings.activatedAt));
+
+  for (const row of rows) {
+    if (!expiries.has(row.engagementId)) {
+      expiries.set(row.engagementId, row.accessCardExpiry);
+    }
+  }
+
+  return expiries;
+}
+
 export async function recordHospitalClearance(
   engagementId: string,
   input: HospitalClearanceInput,
