@@ -28,12 +28,11 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
-  countOutstandingRegistrationRequests,
   countRegistrationRequestsByType,
   listRegistrationRequests,
 } from "@/lib/services/registration-service";
 import {
-  countRejectedEngagements,
+  getCurrentCardExpiries,
   getLatestClearanceStatuses,
   listEngagementsWithPerson,
   listRejectedEngagements,
@@ -107,13 +106,7 @@ export default async function ReceptionQueuePage({
 
   const request = toPageRequest(q, page);
 
-  // Counts drive the view tabs and must reflect everything, not the page on
-  // screen, so they are their own queries.
-  const [typeCounts, outstandingCount, rejectedCount] = await Promise.all([
-    countRegistrationRequestsByType(),
-    countOutstandingRegistrationRequests(),
-    countRejectedEngagements(),
-  ]);
+  const typeCounts = await countRegistrationRequestsByType();
 
   const submissions =
     activeView === "submissions"
@@ -130,9 +123,13 @@ export default async function ReceptionQueuePage({
 
   // For the Engagements tab's attention dots: an Unfit is Reception's to
   // follow up, whether it came from a clearance or a review.
-  const clearanceStatuses = await getLatestClearanceStatuses(
-    engagements?.rows.map(({ engagement }) => engagement.id) ?? [],
-  );
+  const engagementIds =
+    engagements?.rows.map(({ engagement }) => engagement.id) ?? [];
+  const [clearanceStatuses, cardExpiries] = await Promise.all([
+    getLatestClearanceStatuses(engagementIds),
+    // Completed records show their card's state instead of "Completed".
+    getCurrentCardExpiries(engagementIds),
+  ]);
 
   // Rejected by a stakeholder and waiting on Reception: request approval
   // again, or cancel. Leaves this view as soon as either happens.
@@ -148,7 +145,6 @@ export default async function ReceptionQueuePage({
       label: "Submitted Registrations",
       value: "submissions",
       href: "/dashboard/reception",
-      count: outstandingCount,
     },
     {
       label: "Engagements",
@@ -159,7 +155,6 @@ export default async function ReceptionQueuePage({
       label: "Rejected",
       value: "rejected",
       href: "/dashboard/reception?view=rejected",
-      count: rejectedCount,
     },
   ];
 
@@ -310,6 +305,7 @@ export default async function ReceptionQueuePage({
                       accessPurpose={engagement.accessPurpose}
                       workflowState={workflowState}
                       accessState={engagement.accessState}
+                      cardExpiry={cardExpiries.get(engagement.id)}
                       approvalRejected={
                         engagement.workflowState === "AtReception" &&
                         engagement.approvalRejectedAt !== null

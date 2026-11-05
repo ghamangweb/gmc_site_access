@@ -1706,7 +1706,7 @@ Files: `components/layout/queue-view-tabs.tsx` (new), `dashboard/(workflow)/hosp
 | Tab strip | `flex items-center gap-1 rounded-lg border border-border p-1` |
 | Active tab | `Button size="sm" variant="default"` |
 | Inactive tab | `Button size="sm" variant="ghost"` |
-| Tab count | `<span className="text-xs opacity-70">`, hidden at zero |
+| Tab count | None — tabs show their label only (removed 2026-11-05) |
 | Worked-on date column | `text-muted-foreground`, `formatQueueDate` → "03 Nov 2026" |
 | Row action (worked-on) | `Button variant="ghost" size="sm"` → the record page |
 | Outcome badge (Hospital) | Fit → success, Fit with Conditions → warning, Unfit → danger |
@@ -1735,9 +1735,9 @@ decisions in the history.
 **One search/page pair per page, not two.** With tabs only one table is on screen, so `q` and
 `page` are shared and the inactive query is never run (`activeView === … ? await … : undefined`,
 Reception's existing shape). This replaced an earlier two-stacked-sections version of the
-Hospital page that needed `cq`/`cpage` alongside `q`/`page`. The **count on the awaiting tab is
-its own query** (`countEngagementsForLayer`, `countEngagementsAwaitingApproval`) because the
-pill must show outstanding work while the worked-on tab is the one rendered.
+Hospital page that needed `cq`/`cpage` alongside `q`/`page`. **Tabs carry no count** — the
+per-tab count queries were removed (2026-11-05); Approvals still runs
+`countEngagementsAwaitingApproval` because it gates the delegate redirect.
 
 **Every layer form now redirects to its own queue after a successful submit** —
 `HospitalForm`, `TrainingForm`, `ItForm` push to `/dashboard/{layer}`, matching
@@ -2348,3 +2348,14 @@ whose every row is the same condition (Reception's Rejected tab, Security's Revo
 | Approvals (Awaiting) | — | waiting more than 3 days |
 | Approvals (Approved, Extend Stay available) | stay ended (red) · ends within 7 days (yellow, `warning`) | — |
 | Site Access Records | revocation requested, Unfit (not exempted), access expired | — |
+
+### RecordStatusBadge (2026-11-05)
+
+File: src/components/workflow/record-status-badge.tsx (rule: src/lib/domain/record-status.ts)
+Last updated: 2026-11-05
+
+A record's status badge: its stage while in progress (info; Completed success, Cancelled danger,
+Draft neutral), its card's state once Completed with a card (Active success, Revocation Requested
+warning, Expired / Revoked danger). Used by the Approvals "Approved" tab and Reception's
+"Engagements" tab; replaces Reception's local `WORKFLOW_STATE_BADGE`. Pass the current card's
+expiry so a lapsed card reads Expired before `expireLapsedAccess` has run.

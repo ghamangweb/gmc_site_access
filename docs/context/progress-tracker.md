@@ -1697,6 +1697,25 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Queue tabs without counts (2026-11-05)
+
+- [x] `QueueViewTabs` shows the label only — no count on any dashboard tab. The count queries
+      that only fed the tabs were dropped (Reception, Hospital, Training, Security); Approvals
+      keeps `countEngagementsAwaitingApproval` for the delegate redirect
+
+---
+
+## Completed records show their access state (2026-11-05)
+
+- [x] Approvals "Approved" tab Stage column and Reception "Engagements" Status column: a
+      Completed record with a card shows its access state — Active, Expired, Revocation
+      Requested, Revoked — instead of "Completed" (`recordStatus`, `RecordStatusBadge`).
+      Expired comes from the card's expiry date (`getCurrentCardExpiries`, one query per page),
+      not only the stored state. A completed Familiarization Visit (no card) still reads
+      Completed. Reception's "Approval Rejected" badge is unchanged
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
