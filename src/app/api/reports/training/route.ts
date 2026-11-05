@@ -1,5 +1,8 @@
 import { requireWriteAccess } from "@/lib/auth/guards";
-import { exportTrainingCsv } from "@/lib/services/workflow-service";
+import { buildReportSheets, TRAINING_SHEETS } from "@/lib/domain/report-sheets";
+import { TRAINING_REPORT_HEADERS } from "@/lib/domain/training-report";
+import { buildReportWorkbook, XLSX_CONTENT_TYPE } from "@/lib/report-workbook";
+import { exportTrainingRows } from "@/lib/services/workflow-service";
 
 export async function GET(_request: Request): Promise<Response> {
   try {
@@ -12,13 +15,19 @@ export async function GET(_request: Request): Promise<Response> {
   }
 
   try {
-    const csv = await exportTrainingCsv();
+    const workbook = await buildReportWorkbook(
+      buildReportSheets(
+        TRAINING_REPORT_HEADERS,
+        await exportTrainingRows(),
+        TRAINING_SHEETS,
+      ),
+    );
     const date = new Date().toISOString().slice(0, 10);
 
-    return new Response(csv, {
+    return new Response(new Uint8Array(workbook), {
       headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="training-report-${date}.csv"`,
+        "Content-Type": XLSX_CONTENT_TYPE,
+        "Content-Disposition": `attachment; filename="training-data-${date}.xlsx"`,
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
       },

@@ -1,11 +1,15 @@
 import { beforeEach, expect, test } from "bun:test";
-import { exportHospitalCsv, requireWriteAccess } from "../report-test-mocks";
+import {
+  exportHospitalRows,
+  requireWriteAccess,
+  workbookSheetNames,
+} from "../report-test-mocks";
 
 const { GET } = await import("./route");
 
 beforeEach(() => {
   requireWriteAccess.mockClear();
-  exportHospitalCsv.mockClear();
+  exportHospitalRows.mockClear();
 });
 
 test("unauthorized users cannot query Hospital report data", async () => {
@@ -15,7 +19,7 @@ test("unauthorized users cannot query Hospital report data", async () => {
   );
   expect(response.status).toBe(403);
   expect(requireWriteAccess).toHaveBeenCalledWith("HospitalStaff");
-  expect(exportHospitalCsv).not.toHaveBeenCalled();
+  expect(exportHospitalRows).not.toHaveBeenCalled();
   expect(response.headers.get("cache-control")).toBe("no-store");
 });
 
@@ -26,20 +30,28 @@ test("combined CSV ignores selected tab, search, and displayed page", async () =
     ),
   );
   expect(response.status).toBe(200);
-  expect(exportHospitalCsv).toHaveBeenCalledWith();
-  expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+  expect(exportHospitalRows).toHaveBeenCalledWith();
+  expect(response.headers.get("content-type")).toBe(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   expect(response.headers.get("content-disposition")).toMatch(
-    /^attachment; filename="hospital-report-\d{4}-\d{2}-\d{2}\.csv"$/,
+    /^attachment; filename="hospital-data-\d{4}-\d{2}-\d{2}\.xlsx"$/,
   );
   const bytes = new Uint8Array(await response.arrayBuffer());
-  expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
-  expect(new TextDecoder().decode(bytes)).toBe('"Name"\r\n');
+  // An .xlsx is a zip: it starts with "PK". All Records first, then the tabs.
+  expect(Array.from(bytes.slice(0, 2))).toEqual([0x50, 0x4b]);
+  expect(await workbookSheetNames(bytes)).toEqual([
+    "All Records",
+    "Awaiting Clearance",
+    "Awaiting Review",
+    "Recorded Clearances",
+  ]);
 });
 
 test("failed exports return a non-cacheable error without exposing internal details", async () => {
-  exportHospitalCsv.mockRejectedValueOnce(new Error("Database unavailable"));
+  exportHospitalRows.mockRejectedValueOnce(new Error("Database unavailable"));
   const response = await GET(
     new Request("https://example.test/api/reports/hospital"),
   );

@@ -252,6 +252,23 @@ Skills: `.claude/skills/inngest-setup`, `inngest-durable-functions`, `inngest-st
   which skips install scripts, so inngest-cli never downloads its binary ("Inngest CLI binary not found").
 - Cron with timezone: `{ cron: "TZ=Africa/Accra 0 7 * * *" }`; add `concurrency: 1` to daily sweeps.
 
+## exceljs (`exceljs` v4) — added 2026-11-05
+
+Dashboard exports are `.xlsx` workbooks, not CSV — a CSV can't hold tabs.
+
+- **Server only.** Import it only from `src/lib/report-workbook.ts` (and tests). Never from a
+  client component: it would ship to the browser. Export buttons check the response type with
+  `includes("spreadsheetml.sheet")` rather than importing `XLSX_CONTENT_TYPE`.
+- `buildReportWorkbook(sheets)` writes one worksheet per `ReportSheet`: bold, frozen header row,
+  column widths from content (max 60), sheet names cut to Excel's 31 characters.
+- Write cell values as plain strings. exceljs stores them as text, so a value starting with `=`
+  is never evaluated — no CSV-style `'` prefix is needed.
+- Sheet contents come from `src/lib/domain/report-sheets.ts`: "All Records" is the existing
+  report rows (`export*Rows` in `workflow-service.ts`); each tab sheet filters those rows and
+  picks its agreed columns. The `export*Csv` functions remain as thin wrappers over the same rows.
+- `workbook.xlsx.load()` is typed against an older `Buffer`; tests cast (see
+  `report-workbook.test.ts`).
+
 ## Oxlint + anti-slop plugin
 
 Added 2026-10-09 via the `install-anti-slop` Claude Code skill — vendored

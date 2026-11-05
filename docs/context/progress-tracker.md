@@ -1716,6 +1716,17 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Excel exports with a sheet per tab (2026-11-05)
+
+- [x] The five dashboard exports (Reception, Hospital, Training, Security, Approvals) download
+      `.xlsx` instead of `.csv` (`exceljs`, see `library-docs.md`)
+- [x] Sheet 1 "All Records": the full existing report. Then one sheet per dashboard tab with that
+      tab's rows and its agreed columns (`report-sheets.ts`). Exemption columns on All Records only;
+      passport/ID kept; doctor's comments only in Hospital's
+- [x] Same access as before (write access; full data set, ignoring the current search/page)
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

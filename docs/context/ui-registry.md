@@ -2266,7 +2266,7 @@ Last updated: 2026-11-04
 | Border | `border-border` on the wrapper |
 | Border radius | `rounded-xl` |
 | Text — primary | table default |
-| Text — secondary | "Not recorded" `text-muted-foreground text-xs`; not-applicable "—" `text-muted-foreground` |
+| Text — secondary | none — "Pending" is a neutral badge (`bg-status-neutral-bg text-status-neutral-fg`), same as Access's Pending; a stage the visit never goes through is left empty |
 | Spacing | search row `mb-4 flex flex-wrap items-center justify-end gap-4` |
 | Hover state | table default — rows are not links |
 | Shadow | none — this system never uses `shadow-*` |
@@ -2274,8 +2274,9 @@ Last updated: 2026-11-04
 
 **Pattern notes:**
 Read-only by design: no row links, no actions column, no record pages. Medical and Induction show
-outcomes only — never doctor's or trainer's comments. "—" means the nature of visit never goes
-through that layer; "Not recorded" means it does but hasn't yet. No passport / Ghana Card column —
+outcomes only — never doctor's or trainer's comments. An empty cell means the nature of visit
+never goes through that layer (no "—", updated 2026-11-05); "Pending" means it does but nothing is
+recorded yet. Access is empty for a Familiarization Visit, which never gets a card. No passport / Ghana Card column —
 no dashboard table shows one (2026-11-04).
 
 ### ApprovalRowActions / ExtendStayDialog / StayExtensionsCard (2026-11-04)
