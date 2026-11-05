@@ -65,16 +65,17 @@ const ACCESS_STATE_BADGE: Record<AccessState, string> = {
 const EXEMPTED_BADGE = "bg-status-warning-bg text-status-warning-fg";
 
 // Which layers a nature of visit goes through: work paths see Hospital and
-// Training, a mine tour only Training, a familiarization visit neither.
+// Training, a mine tour only Training, a familiarization visit neither. The
+// paths through Training are also the ones that end with Security issuing a
+// card. A stage a visit never goes through is left empty, not marked.
 const HOSPITAL_PATHS: AccessPurpose[] = ["Work", "WorkMine"];
 const TRAINING_PATHS: AccessPurpose[] = ["Work", "WorkMine", "VisitMine"];
+const CARD_PATHS = TRAINING_PATHS;
 
-function NotApplicable() {
-  return <span className="text-muted-foreground">—</span>;
-}
-
-function NotRecorded() {
-  return <span className="text-muted-foreground text-xs">Not recorded</span>;
+// A stage the visit does go through, with nothing recorded yet. The same
+// neutral badge as the Access column's Pending, so every column reads alike.
+function Pending() {
+  return <Badge className={ACCESS_STATE_BADGE.Pending}>Pending</Badge>;
 }
 
 function MedicalCell({
@@ -94,7 +95,7 @@ function MedicalCell({
       </Badge>
     );
   }
-  return HOSPITAL_PATHS.includes(purpose) ? <NotRecorded /> : <NotApplicable />;
+  return HOSPITAL_PATHS.includes(purpose) ? <Pending /> : null;
 }
 
 function InductionCell({
@@ -114,7 +115,7 @@ function InductionCell({
       </Badge>
     );
   }
-  return TRAINING_PATHS.includes(purpose) ? <NotRecorded /> : <NotApplicable />;
+  return TRAINING_PATHS.includes(purpose) ? <Pending /> : null;
 }
 
 // HSE and plain Guests: one read-only table of every record. No row opens a
@@ -212,9 +213,13 @@ export default async function RecordsOverviewPage({
                       <InductionCell row={row} purpose={purpose} />
                     </TableCell>
                     <TableCell>
-                      <Badge className={ACCESS_STATE_BADGE[accessState]}>
-                        {ACCESS_STATE_LABELS[accessState]}
-                      </Badge>
+                      {/* A familiarization visit never gets a card, so its
+                          access stays empty rather than reading Pending. */}
+                      {CARD_PATHS.includes(purpose) && (
+                        <Badge className={ACCESS_STATE_BADGE[accessState]}>
+                          {ACCESS_STATE_LABELS[accessState]}
+                        </Badge>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
