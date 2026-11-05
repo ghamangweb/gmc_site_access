@@ -331,7 +331,10 @@ export async function applyStakeholderApprovalAction(
 
 export async function applyStakeholderExemptionAction(
   engagementId: string,
-  input: WorkflowExemptionApprovalInput,
+  // Just the comment: the Medical By-pass dialog has no signature box
+  // (2026-11-05). The stakeholder is signed in, so their name is recorded
+  // as the approval's typed signature below.
+  input: Pick<WorkflowExemptionApprovalInput, "exemption">,
 ): Promise<ActionResult> {
   let decision: StakeholderApprovalResult;
 
@@ -346,7 +349,13 @@ export async function applyStakeholderExemptionAction(
       };
     }
 
-    const parsed = workflowExemptionApprovalSchema.safeParse(input);
+    const parsed = workflowExemptionApprovalSchema.safeParse({
+      exemption: input.exemption,
+      signature: JSON.stringify({
+        mode: "type",
+        value: session.displayName || session.email || "Stakeholder",
+      }),
+    });
 
     if (!parsed.success) {
       return {
@@ -376,22 +385,31 @@ export async function applyStakeholderExemptionAction(
   // The decision has committed. Delivery or refresh failures must not invite a duplicate approval.
   const warnings: string[] = [];
 
-  if (decision.recipients.length === 0) {
+  if (
+    !decision.exemptionRecipients.some(
+      (recipient) => recipient.audience === "Receptionist",
+    )
+  ) {
     warnings.push(
-      "Approved with exemption, but no active Receptionist is provisioned, so Reception was not notified.",
+      "Medical By-pass approved, but no active Receptionist is provisioned, so Reception was not notified.",
     );
-  } else if (!decision.exemptionMessage) {
+  }
+
+  if (!decision.exemptionMessage) {
     warnings.push(
-      "Approved with exemption, but the Reception email could not be prepared.",
+      "Medical By-pass approved, but the notification emails could not be prepared.",
     );
   } else {
     let emailFailed = false;
 
-    for (const recipient of decision.recipients) {
+    for (const { user, audience } of decision.exemptionRecipients) {
       try {
         const sent = await sendEmail({
-          to: recipient.email,
-          ...stakeholderExemptionApprovedTemplate(decision.exemptionMessage),
+          to: user.email,
+          ...stakeholderExemptionApprovedTemplate(
+            decision.exemptionMessage,
+            audience,
+          ),
         });
 
         if (!sent) emailFailed = true;
@@ -403,7 +421,7 @@ export async function applyStakeholderExemptionAction(
 
     if (emailFailed)
       warnings.push(
-        "Approved with exemption, but some Reception notification emails may not have sent.",
+        "Medical By-pass approved, but some notification emails may not have sent.",
       );
   }
 

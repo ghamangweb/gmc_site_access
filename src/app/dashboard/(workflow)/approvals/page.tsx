@@ -44,7 +44,7 @@ import {
 } from "@/lib/domain/types";
 import {
   canGrantWorkflowExemption,
-  requiredWorkflowStages,
+  exemptableStages,
 } from "@/lib/domain/workflow-exemptions";
 import {
   countEngagementsAwaitingApproval,
@@ -273,7 +273,7 @@ export default async function ApprovalsQueuePage({
                             mayBypass &&
                             engagement.approvalRequestedAt !== null &&
                             engagement.approvalRejectedAt === null &&
-                            requiredWorkflowStages(purpose).length > 0
+                            exemptableStages(purpose).length > 0
                           }
                         />
                       </TableCell>

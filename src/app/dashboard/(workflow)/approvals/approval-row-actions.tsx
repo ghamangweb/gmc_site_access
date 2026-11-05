@@ -64,7 +64,7 @@ export function ApprovalRowActions(props: ApprovalRowActionsProps) {
               disabled={!props.canBypass}
               onSelect={() => setBypassOpen(true)}
             >
-              Bypass
+              Medical By-pass
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem

@@ -12,9 +12,11 @@ const session = {
   systemRole: "Admin",
   workflowRoles: ["GMM"],
   pinConfirmed: true,
+  displayName: "Jane Doe",
+  email: "jane@example.test",
 };
+// The Medical By-pass dialog sends only the comment: no signature box.
 const input = {
-  signature: JSON.stringify({ mode: "type", value: "Jane Doe" }),
   exemption: { stages: ["Hospital"], reason: "  Medical already verified  " },
 };
 const message = {
@@ -28,15 +30,23 @@ const message = {
   approvedAt: new Date("2026-11-04T10:00:00Z"),
   nextState: "AtTraining",
 };
-const recipients = [
-  { id: "reception-1", email: "reception-1@example.test" },
-  { id: "reception-2", email: "reception-2@example.test" },
+const user = (id) => ({ id, email: `${id}@example.test` });
+// Everyone but Hospital (2026-11-05), each with the audience that picks
+// their link.
+const exemptionRecipients = [
+  { user: user("reception-1"), audience: "Receptionist" },
+  { user: user("reception-2"), audience: "Receptionist" },
+  { user: user("training-1"), audience: "TrainingStaff" },
+  { user: user("security-1"), audience: "SecurityStaff" },
+  { user: user("hse-1"), audience: "HSE" },
+  { user: user("hod-1"), audience: "DepartmentHead" },
 ];
 const decision = {
   engagement: { id: message.engagementId, workflowState: "AtTraining" },
-  recipients,
+  recipients: exemptionRecipients.map((recipient) => recipient.user),
   nextRole: "TrainingStaff",
   exemptionMessage: message,
+  exemptionRecipients,
 };
 let previousOrigin;
 
@@ -57,37 +67,44 @@ afterEach(() => {
   else process.env.AUTH_URL = previousOrigin;
 });
 
-test("exemption sends the saved details only to returned Reception recipients and refreshes workflow pages", async () => {
+test("a Medical By-pass emails every stage but Hospital, each with a link they can open", async () => {
   expect(
     await applyStakeholderExemptionAction(message.engagementId, input),
   ).toEqual({ success: true });
+
+  // The comment is trimmed; the signature is the signed-in stakeholder's name.
   expect(applyStakeholderExemption).toHaveBeenCalledWith(
     message.engagementId,
     session,
     {
-      ...input,
-      exemption: { ...input.exemption, reason: "Medical already verified" },
+      exemption: { stages: ["Hospital"], reason: "Medical already verified" },
+      signature: JSON.stringify({ mode: "type", value: "Jane Doe" }),
     },
     session.staffUserId,
   );
-  expect(sendEmail.mock.calls.map(([email]) => email.to)).toEqual(
-    recipients.map((recipient) => recipient.email),
+
+  const sent = new Map(
+    sendEmail.mock.calls.map(([email]) => [email.to, email.html]),
   );
-  for (const [email] of sendEmail.mock.calls) {
-    expect(email.subject).toContain(
-      "Workflow Exemption Approved - Kojo Mensah",
-    );
-    expect(email.html).toContain("Medical already verified");
-    expect(email.html).toContain("G1234567");
-    expect(email.html).toContain("Training School");
-    expect(email.html).toContain("/dashboard/reception/engagement-1");
-    expect(email.html).not.toContain("/dashboard/training/");
+  expect([...sent.keys()]).toEqual(
+    exemptionRecipients.map((recipient) => recipient.user.email),
+  );
+  expect(sent.get("reception-1@example.test")).toContain(
+    "/dashboard/reception/engagement-1",
+  );
+  expect(sent.get("training-1@example.test")).toContain("/dashboard/training");
+  expect(sent.get("security-1@example.test")).toContain("/dashboard/security");
+  expect(sent.get("hse-1@example.test")).toContain("/dashboard/overview");
+  expect(sent.get("hod-1@example.test")).toContain("/dashboard/department");
+  for (const html of sent.values()) {
+    expect(html).toContain("Medical already verified");
+    expect(html).not.toContain("/dashboard/hospital");
   }
   expect(revalidatePath).toHaveBeenCalledWith("/dashboard", "layout");
   expect(revalidatePath).toHaveBeenCalledWith("/dashboard/training");
 });
 
-test("Guest, MM, delegates and unconfirmed PIN cannot invoke exemption approval", async () => {
+test("Guest, MM, delegates and unconfirmed PIN cannot invoke a Medical By-pass", async () => {
   for (const denied of [
     { ...session, systemRole: "Guest" },
     { ...session, workflowRoles: ["MM"] },
@@ -108,9 +125,8 @@ test("invalid payloads never reach the approval transaction or sender", async ()
   for (const invalid of [
     null,
     {},
-    { ...input, signature: "" },
-    { ...input, exemption: { stages: [], reason: "Reason" } },
-    { ...input, exemption: { stages: ["Hospital"], reason: " " } },
+    { exemption: { stages: [], reason: "Reason" } },
+    { exemption: { stages: ["Hospital"], reason: " " } },
   ]) {
     expect(
       (await applyStakeholderExemptionAction(message.engagementId, invalid))
@@ -132,33 +148,35 @@ test("a rejected or duplicate transaction does not send email", async () => {
   expect(sendEmail).not.toHaveBeenCalled();
 });
 
-test("a failed email warns without undoing approval or skipping other Reception recipients", async () => {
+test("a failed email warns without undoing the approval or skipping anyone else", async () => {
   sendEmail.mockResolvedValueOnce(false);
   const result = await applyStakeholderExemptionAction(
     message.engagementId,
     input,
   );
   expect(result.success).toBe(true);
-  expect(result.warning).toContain("Reception notification emails");
+  expect(result.warning).toContain("notification emails may not have sent");
   expect(applyStakeholderExemption).toHaveBeenCalledTimes(1);
-  expect(sendEmail).toHaveBeenCalledTimes(2);
+  expect(sendEmail).toHaveBeenCalledTimes(exemptionRecipients.length);
 });
 
-test("an unexpected sender rejection still tries the other Reception address", async () => {
+test("an unexpected sender rejection still tries everyone else", async () => {
   sendEmail.mockRejectedValueOnce(new Error("Sender failed"));
   const result = await applyStakeholderExemptionAction(
     message.engagementId,
     input,
   );
   expect(result.success).toBe(true);
-  expect(result.warning).toContain("Reception notification emails");
-  expect(sendEmail).toHaveBeenCalledTimes(2);
+  expect(result.warning).toContain("notification emails may not have sent");
+  expect(sendEmail).toHaveBeenCalledTimes(exemptionRecipients.length);
 });
 
-test("missing active Reception users produces a saved-approval warning without sending to another department", async () => {
+test("no active Receptionist warns, and the other stages are still emailed", async () => {
   applyStakeholderExemption.mockResolvedValueOnce({
     ...decision,
-    recipients: [],
+    exemptionRecipients: exemptionRecipients.filter(
+      (recipient) => recipient.audience !== "Receptionist",
+    ),
   });
   const result = await applyStakeholderExemptionAction(
     message.engagementId,
@@ -166,7 +184,7 @@ test("missing active Reception users produces a saved-approval warning without s
   );
   expect(result.success).toBe(true);
   expect(result.warning).toContain("no active Receptionist");
-  expect(sendEmail).not.toHaveBeenCalled();
+  expect(sendEmail).toHaveBeenCalledTimes(4);
 });
 
 test("refresh failure after commit reports success with a refresh warning", async () => {
@@ -179,7 +197,7 @@ test("refresh failure after commit reports success with a refresh warning", asyn
   );
   expect(result.success).toBe(true);
   expect(result.warning).toContain("approval is saved");
-  expect(sendEmail).toHaveBeenCalledTimes(2);
+  expect(sendEmail).toHaveBeenCalledTimes(exemptionRecipients.length);
   expect(applyStakeholderExemption).toHaveBeenCalledTimes(1);
 });
 
@@ -190,6 +208,6 @@ test("template configuration failure after commit is a warning, not a failed app
     input,
   );
   expect(result.success).toBe(true);
-  expect(result.warning).toContain("Reception notification emails");
+  expect(result.warning).toContain("notification emails may not have sent");
   expect(sendEmail).not.toHaveBeenCalled();
 });

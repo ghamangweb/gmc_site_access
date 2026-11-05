@@ -3,11 +3,9 @@
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -15,26 +13,17 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { AccessPurpose, ActionResult } from "@/lib/domain/types";
 import {
-  SignatureField,
-  type SignatureValue,
-} from "@/components/workflow/signature-field";
-import {
-  type AccessPurpose,
-  type ActionResult,
-  WORKFLOW_EXEMPTION_STAGE_LABELS,
-  type WorkflowExemptionStage,
-} from "@/lib/domain/types";
-import {
-  approvalDestination,
-  requiredWorkflowStages,
+  exemptableStages,
   type WorkflowExemptionApprovalInput,
-  workflowExemptionNextStageLabel,
 } from "@/lib/domain/workflow-exemptions";
 
 type StakeholderExemptionDialogProps = {
   accessPurpose: AccessPurpose;
-  onApprove: (input: WorkflowExemptionApprovalInput) => Promise<ActionResult>;
+  onApprove: (
+    input: Pick<WorkflowExemptionApprovalInput, "exemption">,
+  ) => Promise<ActionResult>;
   onApproved: () => void;
   /**
    * Controlled mode, for opening it from elsewhere (the approvals queue's row
@@ -44,6 +33,10 @@ type StakeholderExemptionDialogProps = {
   onOpenChange?: (open: boolean) => void;
 };
 
+// The Medical By-pass (2026-11-05): approve the record and skip Hospital.
+// Hospital is the only stage that can be by-passed, so there is nothing to
+// choose — just a compulsory comment. No signature box: the stakeholder is
+// signed in, and the server records their name as the approval's signature.
 export function StakeholderExemptionDialog({
   accessPurpose,
   onApprove,
@@ -57,18 +50,12 @@ export function StakeholderExemptionDialog({
   const open = controlled ? controlledOpen : uncontrolledOpen;
   const setOpen = (value: boolean) =>
     controlled ? onOpenChange?.(value) : setUncontrolledOpen(value);
-  const [stages, setStages] = useState<WorkflowExemptionStage[]>([]);
-  const [reason, setReason] = useState("");
-  const [signature, setSignature] = useState<SignatureValue | null>(null);
+  const [comments, setComments] = useState("");
   const [isPending, startTransition] = useTransition();
   const [approved, setApproved] = useState(false);
-  const applicable = requiredWorkflowStages(accessPurpose);
-  const destination = approvalDestination(accessPurpose, stages);
+  const stages = exemptableStages(accessPurpose);
 
-  const nextStage = workflowExemptionNextStageLabel(destination.nextState);
-
-  const canConfirm =
-    stages.length > 0 && !!reason.trim() && !!signature?.value.trim();
+  const canConfirm = !!comments.trim();
 
   function handleOpenChange(value: boolean): void {
     if (isPending || approved) return;
@@ -76,30 +63,19 @@ export function StakeholderExemptionDialog({
     setOpen(value);
 
     if (!value) {
-      setStages([]);
-      setReason("");
-      setSignature(null);
+      setComments("");
     }
   }
 
   function handleApprove(): void {
-    if (isPending || approved) return;
-
-    if (!canConfirm) {
-      toast.error(
-        "Select at least one stage, enter a reason and capture a signature",
-      );
-
-      return;
-    }
+    if (isPending || approved || !canConfirm) return;
 
     startTransition(async () => {
       let result: ActionResult;
 
       try {
         result = await onApprove({
-          signature: JSON.stringify(signature),
-          exemption: { stages, reason: reason.trim() },
+          exemption: { stages, reason: comments.trim() },
         });
       } catch {
         toast.error(
@@ -119,12 +95,12 @@ export function StakeholderExemptionDialog({
       setOpen(false);
 
       if (result.warning) toast.warning(result.warning);
-      else toast.success("Engagement approved with exemption");
+      else toast.success("Medical By-pass approved");
       onApproved();
     });
   }
 
-  if (applicable.length === 0) return null;
+  if (stages.length === 0) return null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -135,72 +111,24 @@ export function StakeholderExemptionDialog({
             variant="outline"
             disabled={isPending || approved}
           >
-            Approve with Exemption
+            Medical By-pass
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>Approve with Exemption</DialogTitle>
-          <DialogDescription>
-            Select the stages to exempt and explain why. Your reason and
-            signature will be recorded with the approval.
-          </DialogDescription>
+          <DialogTitle>Medical By-pass</DialogTitle>
         </DialogHeader>
-        <fieldset className="flex flex-col gap-3" disabled={isPending}>
-          <legend className="mb-3 text-sm font-medium text-foreground">
-            Exempt stages *
-          </legend>
-          {applicable.map((stage) => (
-            <div key={stage} className="flex items-center gap-2">
-              <Checkbox
-                disabled={isPending}
-                id={`${fieldId}-${stage}`}
-                checked={stages.includes(stage)}
-                onCheckedChange={(checked) =>
-                  setStages((selected) =>
-                    checked === true
-                      ? [...selected.filter((value) => value !== stage), stage]
-                      : selected.filter((value) => value !== stage),
-                  )
-                }
-              />
-              <Label htmlFor={`${fieldId}-${stage}`}>
-                {WORKFLOW_EXEMPTION_STAGE_LABELS[stage]}
-              </Label>
-            </div>
-          ))}
-        </fieldset>
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`${fieldId}-reason`}>Reason / Comment *</Label>
+          <Label htmlFor={`${fieldId}-comments`}>Comments *</Label>
           <Textarea
-            id={`${fieldId}-reason`}
+            id={`${fieldId}-comments`}
             required
             disabled={isPending}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            value={comments}
+            onChange={(event) => setComments(event.target.value)}
           />
         </div>
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-sm font-medium text-foreground">
-            Signature *
-          </legend>
-          <SignatureField
-            value={signature}
-            onChange={setSignature}
-            disabled={isPending}
-          />
-        </fieldset>
-        {stages.length > 0 && (
-          <output className="text-sm text-foreground">
-            After approval, this engagement will move to{" "}
-            <strong>{nextStage}</strong>.
-          </output>
-        )}
-        <p className="text-sm text-muted-foreground">
-          Reception will receive the exemption details and your comment by
-          dashboard notification and email.
-        </p>
         <DialogFooter>
           <Button
             type="button"
@@ -216,7 +144,7 @@ export function StakeholderExemptionDialog({
             loading={isPending}
             onClick={handleApprove}
           >
-            Confirm Exemption
+            Confirm Medical By-pass
           </Button>
         </DialogFooter>
       </DialogContent>

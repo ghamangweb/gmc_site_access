@@ -211,12 +211,38 @@ try {
       );
     }
 
+    // Training can no longer be exempted (2026-11-05), but records that were
+    // still exist. This writes one the way the old flow left it — a normal
+    // approval plus a Training exemption row — so its routing stays tested.
+    async function legacyTrainingExemption(id: string): Promise<void> {
+      await applyStakeholderApproval(
+        id,
+        stakeholder,
+        { signature },
+        stakeholder.staffUserId,
+        client,
+      );
+      const [cycle] = await client
+        .select()
+        .from(workflowCycles)
+        .where(eq(workflowCycles.engagementId, id));
+      const [approval] = await client
+        .select()
+        .from(stakeholderApprovals)
+        .where(eq(stakeholderApprovals.engagementId, id));
+      await client.insert(workflowExemptions).values({
+        engagementId: id,
+        workflowCycleId: cycle.id,
+        stakeholderApprovalId: approval.id,
+        stage: "Training",
+        reason: "Verified exception",
+      });
+    }
+
     for (const purpose of ["Work", "WorkMine"] as const) {
       for (const stages of [
         [],
         ["Hospital"],
-        ["Training"],
-        ["Hospital", "Training"],
       ] satisfies WorkflowExemptionStage[][]) {
         await verify(
           `${purpose}: ${stages.join(" + ") || "normal approval"}`,
@@ -234,11 +260,7 @@ try {
             const row = await getEngagementById(id, client);
             assert.equal(
               row?.workflowState,
-              stages.includes("Hospital")
-                ? stages.includes("Training")
-                  ? "AtSecurity"
-                  : "AtTraining"
-                : "AtHospital",
+              stages.includes("Hospital") ? "AtTraining" : "AtHospital",
             );
             const saved = await getActiveWorkflowExemptions(id, client);
             assert.equal(saved.length, stages.length);
@@ -255,9 +277,14 @@ try {
                 .select()
                 .from(notifications)
                 .where(eq(notifications.engagementId, id));
+              // Every stage but Hospital (2026-11-05).
               assert.deepEqual(
-                notices.map((notice) => notice.recipientStaffUserId),
-                [receptionist.staffUserId],
+                notices.map((notice) => notice.recipientStaffUserId).sort(),
+                [
+                  receptionist.staffUserId,
+                  trainer.staffUserId,
+                  security.staffUserId,
+                ].sort(),
               );
               assert.equal(
                 notices.every((notice) =>
@@ -276,13 +303,38 @@ try {
     }
 
     await verify(
-      "mine-tour Training exemption routes directly to Security; visit-only approval remains completed",
+      "Training cannot be exempted any more, alone or with Hospital",
+      async () => {
+        for (const stages of [
+          ["Training"],
+          ["Hospital", "Training"],
+        ] satisfies WorkflowExemptionStage[][]) {
+          const id = await engagement();
+          await assert.rejects(() => exempt(id, stages), /Hospital stage/);
+          assert.equal(
+            (await getEngagementById(id, client))?.workflowState,
+            "AtReception",
+          );
+          assert.deepEqual(await getActiveWorkflowExemptions(id, client), []);
+        }
+      },
+    );
+
+    await verify(
+      "a mine tour cannot be by-passed; visit-only approval remains completed",
       async () => {
         const tour = await engagement("VisitMine");
-        await exempt(tour, ["Training"]);
+        await assert.rejects(
+          () => exempt(tour, ["Hospital"]),
+          /Hospital stage/,
+        );
+        await assert.rejects(
+          () => exempt(tour, ["Training"]),
+          /Hospital stage/,
+        );
         assert.equal(
           (await getEngagementById(tour, client))?.workflowState,
-          "AtSecurity",
+          "AtReception",
         );
         const visit = await engagement("Visit");
         await applyStakeholderApproval(
@@ -403,7 +455,7 @@ try {
         const approved = await engagement();
         await exempt(approved, ["Hospital"]);
         await assert.rejects(() =>
-          exempt(approved, ["Training"], secondStakeholder),
+          exempt(approved, ["Hospital"], secondStakeholder),
         );
         await assert.rejects(() =>
           rejectStakeholderApproval(
@@ -443,10 +495,10 @@ try {
     );
 
     await verify(
-      "Hospital sends a cleared Training-exempt record to Security with the correct recipients",
+      "Hospital sends a cleared legacy Training-exempt record to Security with the correct recipients",
       async () => {
         const id = await engagement();
-        await exempt(id, ["Training"]);
+        await legacyTrainingExemption(id);
         const result = await recordHospitalClearance(
           id,
           {
@@ -497,7 +549,7 @@ try {
       "Unfit still blocks at Hospital and notifies Reception only",
       async () => {
         const id = await engagement();
-        await exempt(id, ["Training"]);
+        await legacyTrainingExemption(id);
         const result = await recordHospitalClearance(
           id,
           { clearanceStatus: "Unfit", doctorComments: "Reassessment needed" },
@@ -648,9 +700,9 @@ try {
         const previousExempted = (beforeCsv.match(/"Exempted"/g) ?? []).length;
         const previousAwaiting = (beforeCsv.match(/"Awaiting"/g) ?? []).length;
         const trainingExempt = await engagement();
-        await exempt(trainingExempt, ["Training"]);
+        await legacyTrainingExemption(trainingExempt);
         const direct = await engagement();
-        await exempt(direct, ["Hospital", "Training"]);
+        await exempt(direct, ["Hospital"]);
         const awaiting = await engagement("WorkMine");
         await applyStakeholderApproval(
           awaiting,
@@ -667,7 +719,7 @@ try {
         );
 
         const detail = await getWorkflowExemptionDetails(direct, client);
-        assert.equal(detail.length, 2);
+        assert.equal(detail.length, 1);
         assert.equal(
           detail.every(
             (entry) =>
@@ -682,13 +734,15 @@ try {
         assert.match(trainingCsv, /"Exemption Reason \/ Comment"/);
         assert.match(trainingCsv, /Training School: Verified exception/);
         assert.match(trainingCsv, /Test CSO \(CSO\)/);
+        // The legacy record's Training exemption reads Exempted; the
+        // by-passed one is now awaiting induction, as is the WorkMine one.
         assert.equal(
           (trainingCsv.match(/"Exempted"/g) ?? []).length,
-          previousExempted + 2,
+          previousExempted + 1,
         );
         assert.equal(
           (trainingCsv.match(/"Awaiting"/g) ?? []).length,
-          previousAwaiting + 1,
+          previousAwaiting + 2,
         );
 
         await recordHospitalClearance(
@@ -699,13 +753,12 @@ try {
         );
         const securityCsv = await exportSecurityCsv(client);
         assert.match(securityCsv, /"Exemption Approved By"/);
-        assert.match(securityCsv, /Hospital; Training School/);
         assert.match(securityCsv, /Training School: Verified exception/);
       },
     );
 
     await verify(
-      "exemption messaging targets active Reception only and rolls back if notification persistence fails",
+      "a Medical By-pass notifies every active stage but Hospital, and rolls back if notification persistence fails",
       async () => {
         const secondReception = await actor("Receptionist");
         const inactiveReception = await actor("Receptionist");
@@ -721,22 +774,33 @@ try {
           {
             signature,
             exemption: {
-              stages: ["Hospital", "Training"],
+              stages: ["Hospital"],
               reason: "Verified exception",
             },
           },
           stakeholder.staffUserId,
           client,
         );
+        // Reception, Training and Security; never Hospital, never the
+        // deactivated Receptionist. The fixture Department Head heads no
+        // department of this record, so is not its HOD.
         const expected = [
           receptionist.staffUserId,
           secondReception.staffUserId,
+          trainer.staffUserId,
+          security.staffUserId,
         ].sort();
         assert.deepEqual(
           result.recipients.map((recipient) => recipient.id).sort(),
           expected,
         );
-        assert.equal(result.exemptionMessage?.nextState, "AtSecurity");
+        assert.equal(
+          result.recipients.some(
+            (recipient) => recipient.id === hospital.staffUserId,
+          ),
+          false,
+        );
+        assert.equal(result.exemptionMessage?.nextState, "AtTraining");
         assert.equal(result.exemptionMessage?.reason, "Verified exception");
         assert.equal(result.exemptionMessage?.personName, "Test Visitor");
         const notices = await client
@@ -767,7 +831,7 @@ try {
               .from(notifications)
               .where(eq(notifications.engagementId, id))
           ).length,
-          2,
+          4,
         );
 
         const failed = await engagement();
@@ -807,7 +871,7 @@ try {
         const fixture = serializedFixtureTransactions(client);
         const results = await Promise.allSettled([
           exempt(id, ["Hospital"], stakeholder, fixture),
-          exempt(id, ["Training"], secondStakeholder, fixture),
+          exempt(id, ["Hospital"], secondStakeholder, fixture),
         ]);
         assert.equal(
           results.filter((result) => result.status === "fulfilled").length,

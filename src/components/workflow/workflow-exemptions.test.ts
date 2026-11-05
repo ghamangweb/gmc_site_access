@@ -95,25 +95,31 @@ test("Security displays authorised exemptions instead of missing or completed ou
   assert.ok(!html.includes(">Completed<"));
 });
 
-test("visit-only engagements do not offer a stage exemption dialog", () => {
+test("Medical By-pass is only offered where Hospital is on the route", () => {
   const callbacks = {
     onApprove: async (): Promise<ActionResult> => ({ success: true }),
     onApproved: (): void => undefined,
   };
-  assert.equal(
-    renderToStaticMarkup(
+  // A familiarization visit and a mine tour never go through Hospital.
+  for (const accessPurpose of ["Visit", "VisitMine"] as const) {
+    assert.equal(
+      renderToStaticMarkup(
+        createElement(StakeholderExemptionDialog, {
+          accessPurpose,
+          ...callbacks,
+        }),
+      ),
+      "",
+      accessPurpose,
+    );
+  }
+  for (const accessPurpose of ["Work", "WorkMine"] as const) {
+    const html = renderToStaticMarkup(
       createElement(StakeholderExemptionDialog, {
-        accessPurpose: "Visit",
+        accessPurpose,
         ...callbacks,
       }),
-    ),
-    "",
-  );
-  const html = renderToStaticMarkup(
-    createElement(StakeholderExemptionDialog, {
-      accessPurpose: "Work",
-      ...callbacks,
-    }),
-  );
-  assert.ok(html.includes("Approve with Exemption"));
+    );
+    assert.ok(html.includes("Medical By-pass"), accessPurpose);
+  }
 });

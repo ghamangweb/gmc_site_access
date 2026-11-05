@@ -47,8 +47,11 @@ function button(href: string, label: string): string {
 
 const HELLO = "<p>Hello,</p>";
 
+// Sent to every stage but Hospital (2026-11-05); `audience` picks a link
+// that reader can open.
 export function stakeholderExemptionApprovedTemplate(
   opts: WorkflowExemptionMessage,
+  audience: MedicalAudience = "Receptionist",
 ): MessageTemplate {
   const stages = opts.stages
     .map((stage) => WORKFLOW_EXEMPTION_STAGE_LABELS[stage])
@@ -58,7 +61,7 @@ export function stakeholderExemptionApprovedTemplate(
 
   return {
     subject: subject(`Workflow Exemption Approved - ${opts.personName}`),
-    html: `${HELLO}<p>An approval with exemption has been granted for the following visitor:</p><p><strong>Visitor:</strong> ${escapeHtml(opts.personName)}<br><strong>Passport/ID:</strong> ${escapeHtml(opts.passportNo)}<br><strong>Exempted stages:</strong> ${escapeHtml(stages)}<br><strong>Approved by:</strong> ${escapeHtml(opts.approverName)} (${escapeHtml(opts.approverRole)})<br><strong>Approved at (UTC):</strong> ${opts.approvedAt.toISOString()}</p><p><strong>Stakeholder's comment:</strong><br>${comment}</p><p>The engagement has moved to <strong>${escapeHtml(workflowExemptionNextStageLabel(opts.nextState))}</strong> for processing.</p>${button(engagementLink(encodeURIComponent(opts.engagementId)), "View Engagement")}`,
+    html: `${HELLO}<p>An approval with exemption has been granted for the following visitor:</p><p><strong>Visitor:</strong> ${escapeHtml(opts.personName)}<br><strong>Passport/ID:</strong> ${escapeHtml(opts.passportNo)}<br><strong>Exempted stages:</strong> ${escapeHtml(stages)}<br><strong>Approved by:</strong> ${escapeHtml(opts.approverName)} (${escapeHtml(opts.approverRole)})<br><strong>Approved at (UTC):</strong> ${opts.approvedAt.toISOString()}</p><p><strong>Stakeholder's comment:</strong><br>${comment}</p><p>The engagement has moved to <strong>${escapeHtml(workflowExemptionNextStageLabel(opts.nextState))}</strong> for processing.</p>${button(medicalAudienceLink(audience, encodeURIComponent(opts.engagementId)), "View Engagement")}`,
   };
 }
 

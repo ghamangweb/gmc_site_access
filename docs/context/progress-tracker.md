@@ -1786,6 +1786,21 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Medical By-pass (2026-11-05)
+
+- [x] Only Hospital can be exempted (`exemptableStages`): offered only where Hospital is on the
+      route (Require mine site access / …to work). Training exemptions already recorded stay valid
+      history and keep their routing (Hospital → Security)
+- [x] "Bypass" / "Approve with Exemption" became **Medical By-pass** everywhere. The dialog is the
+      title, a compulsory Comments box, Cancel and "Confirm Medical By-pass" — no stage checkboxes,
+      no signature, no extra text. The signed-in stakeholder's name is recorded as the signature
+- [x] Notified (dashboard + email): Reception, Training School, Security, HSE and the record's HOD
+      — every stage but Hospital — each with a link they can open
+- [x] Hospital's export leaves by-passed cycles out entirely and has no exemption columns; the
+      other exports keep theirs
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
