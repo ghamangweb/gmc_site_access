@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { ApprovalRowActions } from "@/app/dashboard/(workflow)/approvals/approval-row-actions";
 
+import { ApprovalsExportButton } from "@/components/layout/approvals-export-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
@@ -133,6 +134,9 @@ export default async function ApprovalsQueuePage({
     <div>
       <PageHeader
         title={`Welcome back, ${firstName}!`}
+        actions={
+          session.systemRole !== "Guest" ? <ApprovalsExportButton /> : undefined
+        }
         subtitle={
           stakeholderRole
             ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM, EM or MM is enough."

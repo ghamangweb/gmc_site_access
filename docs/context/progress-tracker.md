@@ -1,5 +1,80 @@
 # Progress Tracker
 
+## Stakeholder Approvals CSV export — awaiting user verification (2026-11-05)
+
+- [x] User approved continuation from Hospital. Implement only Stakeholder Approvals;
+      Department and Records Overview remain excluded.
+- [x] Export Approvals Report follows the existing outline/loading/download/toast pattern.
+      Guests cannot see the button or export; active account and confirmed PIN required.
+- [x] `/api/reports/approvals` combines awaiting and approved records independently of
+      tab/search/page. All five stakeholder roles see all dashboard-visible sign-offs.
+      Delegates export only current pending assignments plus approvals they signed.
+      Viewer scope comes from the session; request parameters cannot widen access.
+- [x] Includes identity/company/dates, approval status and current stage, request/approval
+      attribution, saved delegation details and exemptions linked to the exact approval.
+      Signatures and Hospital medical comments are excluded.
+- [x] 106 source tests, TypeScript, targeted Biome and new-file anti-slop checks passed.
+- [x] Production build passed, including all five report routes. Isolated PostgreSQL
+      checks passed: 1,004 stakeholder rows and 1,002 scoped delegate rows across batches,
+      pending/signed visibility, saved delegation attribution, exemption history and
+      repeatability. All fixtures rolled back; no visitor records changed.
+- [x] Manual and CodeRabbit review complete. The sole CodeRabbit finding assumed
+      multiple approvals per engagement; schema and a read-only live database metadata
+      check confirm the existing unique constraint prevents that case. No change needed.
+- [ ] User verifies Stakeholder Approvals CSV in browser. All three requested exports
+      are implemented; no Department or Records Overview implementation is scheduled.
+- Details and browser checklist: `approvals-csv-export.md`.
+
+## Hospital CSV export — continuation approved (2026-11-05)
+
+- [x] User approved continuation from Reception to Hospital. Stop before Stakeholder
+      Approvals until separately approved; Department and Records Overview excluded.
+- [x] Export Hospital Report uses the existing outline/loading/error pattern and is
+      hidden from Guests. `/api/reports/hospital` requires active, PIN-confirmed
+      HospitalStaff write access. Combined dated no-store CSV ignores tab/search/page.
+- [x] Every recorded clearance/review plus awaiting work-path cycles and Hospital
+      exemptions. Recorded decisions stay separate; empty cycles receive one awaiting
+      or exempted row. Unfit re-clearance does not produce a duplicate awaiting row.
+- [x] Includes identity/company/dates, Hospital status, current workflow, medical
+      outcome/comments, recording staff/time, review date/timing and cycle-scoped
+      exemptions. Shared review eligibility excludes cancelled/revoked access.
+- [x] 86 source tests, TypeScript and targeted Biome passed. Isolated PostgreSQL
+      verification passed for 501 cycles/502 rows, batching, clearance history,
+      review eligibility, recording staff and exemptions. All fixtures rolled back.
+- [x] Production build passed, including `/api/reports/hospital` and all dashboards.
+- [x] Manual review completed for all new Hospital files; CodeRabbit completed the
+      tracked-diff review with no findings. Existing buffered-export memory limits
+      are documented in `hospital-csv-export.md`.
+- [x] User approved continuation to Stakeholder Approvals on 2026-11-05.
+- [ ] Hospital browser verification results have not been explicitly reported.
+- Details and browser checklist: `hospital-csv-export.md`.
+
+## Reception CSV export — continuation approved (2026-11-05)
+
+- [x] User approved Reception first, then Hospital and Stakeholder Approvals with
+      approval between dashboards. Department and Records Overview excluded.
+- [x] Added Export Reception Report beside New Registration, using the existing
+      outline/loading/error pattern; hidden from Guests.
+- [x] `/api/reports/reception` requires active, PIN-confirmed Receptionist write access.
+      Dated no-store combined CSV ignores tab, Local/Foreign filter, search and pagination.
+- [x] Approved unconverted submissions plus all engagements; converted submissions
+      appear once via their engagement. Pending/rejected department submissions excluded.
+- [x] Identity/company/department/dates, submission/workflow/access status, latest
+      stakeholder rejection and current-cycle exemption authorisation. Effective expiry
+      comes from the latest card. No database writes or migrations.
+- [x] 74 source tests, TypeScript and targeted Biome passed. New standalone files
+      pass anti-slop. CodeRabbit flagged the existing buffered-export memory pattern;
+      details and browser checklist are in `reception-csv-export.md`.
+- [x] Production build passed, including the Reception report route. Isolated
+      PostgreSQL check passed: empty report, 501 submissions + 501 engagements across
+      both batch boundaries, visibility, conversion deduplication, Local/Foreign,
+      latest rejection/card, active-cycle exemptions and repeatability. All temporary
+      fixtures rolled back; no visitor records changed.
+- [x] User approved continuation to Hospital on 2026-11-05.
+- [ ] Reception browser verification results have not been explicitly reported.
+- [ ] Hospital CSV, then separate approval before Stakeholder Approvals CSV.
+
+
 ## Stakeholder exemptions - final verification checkpoint (2026-11-04)
 
 - [x] User approved final verification. `bun run build` passed: Next.js compilation,

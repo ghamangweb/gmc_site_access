@@ -5,6 +5,11 @@ export const requireWriteAccess = mock(async () => ({}));
 export const requirePinConfirmed = mock();
 export const exportTrainingCsv = mock(async () => '\uFEFF"Name"\r\n');
 export const exportSecurityCsv = mock(async () => '\uFEFF"Name"\r\n');
+export const exportReceptionCsv = mock(async () => '\uFEFF"Name"\r\n');
+export const exportHospitalCsv = mock(async () => '\uFEFF"Name"\r\n');
+export const exportApprovalsCsv = mock(async () => '\uFEFF"Name"\r\n');
+export const countEngagementsAwaitingApproval = mock(async () => 0);
+export const countStakeholderApprovalsBy = mock(async () => 0);
 export const applyStakeholderExemption = mock();
 export const sendEmail = mock(async () => true);
 export const revalidatePath = mock(() => undefined);
@@ -16,6 +21,11 @@ mock.module("@/lib/auth/guards", () => ({
 mock.module("@/lib/services/workflow-service", () => ({
   exportTrainingCsv,
   exportSecurityCsv,
+  exportReceptionCsv,
+  exportHospitalCsv,
+  exportApprovalsCsv,
+  countEngagementsAwaitingApproval,
+  countStakeholderApprovalsBy,
   applyStakeholderExemption,
   ...Object.fromEntries(
     [

@@ -41,17 +41,29 @@ import {
   workflowTransitions,
 } from "@/lib/db/schema";
 import {
+  APPROVALS_REPORT_HEADERS,
+  approvalsReportRows,
+} from "@/lib/domain/approvals-report";
+import {
   type CardExpiryUpdateInput,
   hasPendingStayExtension,
   isCardExpiryUpdatable,
   validateCardExpiryUpdate,
 } from "@/lib/domain/card-expiry";
 import {
+  HOSPITAL_REPORT_HEADERS,
+  hospitalReportRows,
+} from "@/lib/domain/hospital-report";
+import {
   DEFAULT_PAGE_SIZE,
   type Page,
   type PageRequest,
   pageOffset,
 } from "@/lib/domain/pagination";
+import {
+  RECEPTION_REPORT_HEADERS,
+  receptionReportRows,
+} from "@/lib/domain/reception-report";
 import {
   SECURITY_REPORT_HEADERS,
   securityReportRows,
@@ -2838,6 +2850,456 @@ export async function listRecentInductions(
   ]);
 
   return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+export async function exportApprovalsCsv(
+  delegatedApproverId?: string,
+  client: DbClient = db,
+): Promise<string> {
+  const batchSize = 500;
+
+  return client.transaction(
+    async (tx) => {
+      const chunks = ["\uFEFF", csvRow(APPROVALS_REPORT_HEADERS)];
+
+      for (let offset = 0; ; offset += batchSize) {
+        const rows = await tx
+          .select({
+            engagement: engagements,
+            name: persons.fullName,
+            passport: persons.passportNo,
+            approval: {
+              id: stakeholderApprovals.id,
+              approverName: stakeholderApprovals.approverName,
+              approverRole: stakeholderApprovals.approverRole,
+              approvedAt: stakeholderApprovals.approvedAt,
+              isDelegated: stakeholderApprovals.isDelegated,
+              delegatedBy: stakeholderApprovals.delegatedBy,
+              delegatedAt: stakeholderApprovals.delegatedAt,
+              delegationReason: stakeholderApprovals.delegationReason,
+            },
+          })
+          .from(engagements)
+          .innerJoin(persons, eq(engagements.personId, persons.id))
+          .leftJoin(
+            stakeholderApprovals,
+            eq(stakeholderApprovals.engagementId, engagements.id),
+          )
+          .where(
+            or(
+              and(
+                eq(engagements.workflowState, "AtReception"),
+                isNotNull(engagements.approvalRequestedAt),
+                isNull(stakeholderApprovals.id),
+                delegatedApproverId
+                  ? eq(engagements.delegatedApproverId, delegatedApproverId)
+                  : undefined,
+              ),
+              and(
+                isNotNull(stakeholderApprovals.id),
+                delegatedApproverId
+                  ? eq(
+                      stakeholderApprovals.approverStaffUserId,
+                      delegatedApproverId,
+                    )
+                  : undefined,
+              ),
+            ),
+          )
+          .orderBy(engagements.createdAt, engagements.id)
+          .limit(batchSize)
+          .offset(offset);
+
+        if (rows.length === 0) break;
+
+        const ids = rows.map(({ engagement }) => engagement.id);
+
+        const exemptions = await listWorkflowExemptionDetails(
+          inArray(workflowExemptions.engagementId, ids),
+          tx,
+        );
+
+        const actorIds = [
+          ...new Set(
+            rows.flatMap(({ engagement, approval }) => {
+              if (approval)
+                return approval.isDelegated && approval.delegatedBy
+                  ? [approval.delegatedBy]
+                  : [];
+
+              return [
+                engagement.delegatedApproverId,
+                engagement.delegationGrantedBy,
+              ].filter((id): id is string => id !== null);
+            }),
+          ),
+        ];
+
+        const actors = actorIds.length
+          ? await tx
+              .select({ id: staffUsers.id, name: staffUsers.displayName })
+              .from(staffUsers)
+              .where(inArray(staffUsers.id, actorIds))
+          : [];
+
+        const names = new Map(actors.map((actor) => [actor.id, actor.name]));
+
+        const records = rows.map(({ engagement, name, passport, approval }) => {
+          const isDelegated = approval
+            ? approval.isDelegated
+            : engagement.delegatedApproverId !== null;
+
+          const delegatedById = approval
+            ? approval.delegatedBy
+            : engagement.delegationGrantedBy;
+
+          return {
+            engagementId: engagement.id,
+            name,
+            passport,
+            // SAFETY: engagements store the validated Reception data contract.
+            company:
+              (engagement.receptionData as Partial<ReceptionData>)
+                .companyName ?? "",
+            purpose: engagement.accessPurpose,
+            arrival: engagement.arrivalDate,
+            departure: engagement.departureDate,
+            workflowState: engagement.workflowState,
+            requestedAt: engagement.approvalRequestedAt,
+            approvalId: approval?.id ?? null,
+            approvedBy: approval?.approverName ?? "",
+            approverRole: approval?.approverRole ?? "",
+            approvedAt: approval?.approvedAt ?? null,
+            isDelegated,
+            delegatedTo: approval
+              ? approval.isDelegated
+                ? approval.approverName
+                : ""
+              : (names.get(engagement.delegatedApproverId ?? "") ?? ""),
+            delegatedBy: names.get(delegatedById ?? "") ?? "",
+            delegatedAt: approval
+              ? approval.delegatedAt
+              : engagement.delegationGrantedAt,
+            delegationReason: approval
+              ? (approval.delegationReason ?? "")
+              : (engagement.delegationReason ?? ""),
+          };
+        });
+
+        for (const row of approvalsReportRows(records, exemptions))
+          chunks.push(csvRow(row));
+
+        if (rows.length < batchSize) break;
+      }
+
+      return chunks.join("");
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+export async function exportHospitalCsv(
+  client: DbClient = db,
+): Promise<string> {
+  const batchSize = 500;
+
+  return client.transaction(
+    async (tx) => {
+      const chunks = ["\uFEFF", csvRow(HOSPITAL_REPORT_HEADERS)];
+
+      for (let offset = 0; ; offset += batchSize) {
+        const cycles = await tx
+          .select({
+            id: workflowCycles.id,
+            engagementId: engagements.id,
+            name: persons.fullName,
+            passport: persons.passportNo,
+            receptionData: engagements.receptionData,
+            purpose: engagements.accessPurpose,
+            arrival: engagements.arrivalDate,
+            departure: engagements.departureDate,
+            workflowState: engagements.workflowState,
+            archivedAt: workflowCycles.archivedAt,
+          })
+          .from(workflowCycles)
+          .innerJoin(
+            engagements,
+            eq(workflowCycles.engagementId, engagements.id),
+          )
+          .innerJoin(persons, eq(engagements.personId, persons.id))
+          .where(
+            or(
+              and(
+                isNull(workflowCycles.archivedAt),
+                eq(engagements.workflowState, "AtHospital"),
+                inArray(engagements.accessPurpose, ["Work", "WorkMine"]),
+              ),
+              exists(
+                tx
+                  .select({ id: hospitalClearances.id })
+                  .from(hospitalClearances)
+                  .where(
+                    eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+                  ),
+              ),
+              exists(
+                tx
+                  .select({ id: workflowExemptions.id })
+                  .from(workflowExemptions)
+                  .where(
+                    and(
+                      eq(workflowExemptions.workflowCycleId, workflowCycles.id),
+                      eq(workflowExemptions.stage, "Hospital"),
+                    ),
+                  ),
+              ),
+            ),
+          )
+          .orderBy(
+            engagements.createdAt,
+            engagements.id,
+            workflowCycles.cycleNumber,
+            workflowCycles.id,
+          )
+          .limit(batchSize)
+          .offset(offset);
+
+        if (cycles.length === 0) break;
+
+        const cycleIds = cycles.map((cycle) => cycle.id);
+
+        const clearances = await tx
+          .select({
+            workflowCycleId: hospitalClearances.workflowCycleId,
+            clearanceStatus: hospitalClearances.clearanceStatus,
+            doctorComments: hospitalClearances.doctorComments,
+            clearanceDate: hospitalClearances.clearanceDate,
+            recordedByName: staffUsers.displayName,
+            nextReviewDate: hospitalClearances.nextReviewDate,
+            // Match Hospital's recorded tab: latest clearance across this engagement's cycles.
+            isLatest: sql<boolean>`not exists (
+            select 1 from ${hospitalClearances} as later
+            inner join ${workflowCycles} as later_cycle on later.workflow_cycle_id = later_cycle.id
+            where later_cycle.engagement_id = ${engagements.id}
+              and later.clearance_date > ${hospitalClearances.clearanceDate}
+          )`,
+            awaitingReview: sql<boolean>`coalesce(${awaitingHospitalReviewConditions()}, false)`,
+          })
+          .from(hospitalClearances)
+          .innerJoin(
+            workflowCycles,
+            eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+          )
+          .innerJoin(
+            engagements,
+            eq(workflowCycles.engagementId, engagements.id),
+          )
+          .leftJoin(
+            staffUsers,
+            eq(hospitalClearances.recordedBy, staffUsers.id),
+          )
+          .where(inArray(hospitalClearances.workflowCycleId, cycleIds))
+          .orderBy(
+            desc(hospitalClearances.clearanceDate),
+            desc(hospitalClearances.id),
+          );
+
+        const exemptions = await listWorkflowExemptionDetails(
+          inArray(workflowExemptions.workflowCycleId, cycleIds),
+          tx,
+        );
+
+        for (const row of hospitalReportRows(
+          cycles.map((cycle) => ({
+            ...cycle,
+            // SAFETY: engagements store the validated Reception data contract.
+            company:
+              (cycle.receptionData as Partial<ReceptionData>).companyName ?? "",
+          })),
+          clearances,
+          exemptions,
+        )) {
+          chunks.push(csvRow(row));
+        }
+
+        if (cycles.length < batchSize) break;
+      }
+
+      return chunks.join("");
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+export async function exportReceptionCsv(
+  client: DbClient = db,
+): Promise<string> {
+  const batchSize = 500;
+
+  return client.transaction(
+    async (tx) => {
+      const chunks = ["\uFEFF", csvRow(RECEPTION_REPORT_HEADERS)];
+
+      // Converted submissions are represented by their engagement below.
+      for (let offset = 0; ; offset += batchSize) {
+        const requests = await tx
+          .select()
+          .from(registrationRequests)
+          .where(
+            and(
+              eq(registrationRequests.status, "Approved"),
+              isNull(registrationRequests.engagementId),
+            ),
+          )
+          .orderBy(registrationRequests.id)
+          .limit(batchSize)
+          .offset(offset);
+
+        for (const request of requests) {
+          // SAFETY: both registration forms save this typed subset; older optional fields default below.
+          const form = request.formData as Partial<ReceptionFormInput> & {
+            registrationData?: Partial<ReceptionData>;
+          };
+
+          const data = form.receptionData ?? form.registrationData;
+
+          for (const row of receptionReportRows([
+            {
+              engagementId: null,
+              name: form.person?.fullName ?? "",
+              passport: form.person?.passportNo ?? "",
+              registrationType: request.registrationType,
+              company: data?.companyName ?? "",
+              department: request.department,
+              purpose: form.accessPurpose ?? "",
+              arrival: form.arrivalDate ?? "",
+              departure: form.departureDate ?? "",
+              submissionStatus: "Approved — Awaiting Conversion",
+              submittedAt: request.createdAt,
+              workflowState: "",
+              accessState: "",
+              cardExpiry: null,
+              rejectedBy: "",
+              rejectionReason: "",
+              rejectedAt: null,
+            },
+          ]))
+            chunks.push(csvRow(row));
+        }
+
+        if (requests.length < batchSize) break;
+      }
+
+      for (let offset = 0; ; offset += batchSize) {
+        const rows = await tx
+          .select({
+            engagement: engagements,
+            name: persons.fullName,
+            passport: persons.passportNo,
+          })
+          .from(engagements)
+          .innerJoin(persons, eq(engagements.personId, persons.id))
+          .orderBy(engagements.id)
+          .limit(batchSize)
+          .offset(offset);
+
+        if (rows.length === 0) break;
+        const ids = rows.map(({ engagement }) => engagement.id);
+
+        const requests = await tx
+          .select({
+            engagementId: registrationRequests.engagementId,
+            registrationType: registrationRequests.registrationType,
+            department: registrationRequests.department,
+            createdAt: registrationRequests.createdAt,
+          })
+          .from(registrationRequests)
+          .where(
+            and(
+              eq(registrationRequests.status, "Converted"),
+              inArray(registrationRequests.engagementId, ids),
+            ),
+          )
+          .orderBy(registrationRequests.createdAt, registrationRequests.id);
+
+        const rejections = await tx
+          .select()
+          .from(stakeholderRejections)
+          .where(inArray(stakeholderRejections.engagementId, ids))
+          .orderBy(
+            desc(stakeholderRejections.rejectedAt),
+            desc(stakeholderRejections.id),
+          );
+
+        const cards = await tx
+          .select({
+            engagementId: workflowCycles.engagementId,
+            expiry: accessProvisionings.accessCardExpiry,
+          })
+          .from(accessProvisionings)
+          .innerJoin(
+            workflowCycles,
+            eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+          )
+          .where(inArray(workflowCycles.engagementId, ids))
+          .orderBy(
+            desc(accessProvisionings.activatedAt),
+            desc(accessProvisionings.id),
+          );
+
+        const exemptions = await listWorkflowExemptionDetails(
+          inArray(workflowExemptions.engagementId, ids),
+          tx,
+        );
+
+        const records = rows.map(({ engagement, name, passport }) => {
+          const request = requests.find(
+            (item) => item.engagementId === engagement.id,
+          );
+
+          const rejection = rejections.find(
+            (item) => item.engagementId === engagement.id,
+          );
+
+          // SAFETY: engagements store the validated Reception form data contract.
+          const data = engagement.receptionData as Partial<ReceptionData>;
+
+          return {
+            engagementId: engagement.id,
+            name,
+            passport,
+            // Legacy/manual engagements have no recorded Local/Foreign type: leave it blank.
+            registrationType: request?.registrationType ?? "",
+            company: data.companyName ?? "",
+            department: request?.department ?? data.gmcLiaisonDept ?? "",
+            purpose: engagement.accessPurpose,
+            arrival: engagement.arrivalDate,
+            departure: engagement.departureDate,
+            submissionStatus: request ? "Converted" : "Direct Registration",
+            submittedAt: request?.createdAt ?? null,
+            workflowState: engagement.workflowState,
+            accessState: engagement.accessState,
+            cardExpiry:
+              cards.find((item) => item.engagementId === engagement.id)
+                ?.expiry ?? null,
+            rejectedBy: rejection
+              ? `${rejection.approverName} (${rejection.approverRole})`
+              : "",
+            rejectionReason: rejection?.reason ?? "",
+            rejectedAt: rejection?.rejectedAt ?? null,
+          };
+        });
+
+        for (const row of receptionReportRows(records, exemptions))
+          chunks.push(csvRow(row));
+
+        if (rows.length < batchSize) break;
+      }
+
+      return chunks.join("");
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 export async function exportSecurityCsv(
