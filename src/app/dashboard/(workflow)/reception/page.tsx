@@ -32,6 +32,7 @@ import {
   listRegistrationRequests,
 } from "@/lib/services/registration-service";
 import {
+  getCurrentCardExpiries,
   getLatestClearanceStatuses,
   listEngagementsWithPerson,
   listRejectedEngagements,
@@ -122,9 +123,13 @@ export default async function ReceptionQueuePage({
 
   // For the Engagements tab's attention dots: an Unfit is Reception's to
   // follow up, whether it came from a clearance or a review.
-  const clearanceStatuses = await getLatestClearanceStatuses(
-    engagements?.rows.map(({ engagement }) => engagement.id) ?? [],
-  );
+  const engagementIds =
+    engagements?.rows.map(({ engagement }) => engagement.id) ?? [];
+  const [clearanceStatuses, cardExpiries] = await Promise.all([
+    getLatestClearanceStatuses(engagementIds),
+    // Completed records show their card's state instead of "Completed".
+    getCurrentCardExpiries(engagementIds),
+  ]);
 
   // Rejected by a stakeholder and waiting on Reception: request approval
   // again, or cancel. Leaves this view as soon as either happens.
@@ -300,6 +305,7 @@ export default async function ReceptionQueuePage({
                       accessPurpose={engagement.accessPurpose}
                       workflowState={workflowState}
                       accessState={engagement.accessState}
+                      cardExpiry={cardExpiries.get(engagement.id)}
                       approvalRejected={
                         engagement.workflowState === "AtReception" &&
                         engagement.approvalRejectedAt !== null
