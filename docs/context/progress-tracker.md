@@ -1697,6 +1697,14 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Queue tabs without counts (2026-11-05)
+
+- [x] `QueueViewTabs` shows the label only — no count on any dashboard tab. The count queries
+      that only fed the tabs were dropped (Reception, Hospital, Training, Security); Approvals
+      keeps `countEngagementsAwaitingApproval` for the delegate redirect
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

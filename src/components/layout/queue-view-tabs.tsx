@@ -6,9 +6,6 @@ export type QueueView = {
   label: string;
   value: string;
   href: string;
-  /** Outstanding work on that tab. Hidden at zero — a pill reading "0" is
-   * noise, not information. */
-  count?: number;
 };
 
 type QueueViewTabsProps = {
@@ -30,12 +27,7 @@ export function QueueViewTabs({ views, activeView }: QueueViewTabsProps) {
           size="sm"
           variant={activeView === view.value ? "default" : "ghost"}
         >
-          <Link href={view.href}>
-            {view.label}
-            {view.count !== undefined && view.count > 0 && (
-              <span className="text-xs opacity-70">{view.count}</span>
-            )}
-          </Link>
+          <Link href={view.href}>{view.label}</Link>
         </Button>
       ))}
     </div>

@@ -1706,7 +1706,7 @@ Files: `components/layout/queue-view-tabs.tsx` (new), `dashboard/(workflow)/hosp
 | Tab strip | `flex items-center gap-1 rounded-lg border border-border p-1` |
 | Active tab | `Button size="sm" variant="default"` |
 | Inactive tab | `Button size="sm" variant="ghost"` |
-| Tab count | `<span className="text-xs opacity-70">`, hidden at zero |
+| Tab count | None — tabs show their label only (removed 2026-11-05) |
 | Worked-on date column | `text-muted-foreground`, `formatQueueDate` → "03 Nov 2026" |
 | Row action (worked-on) | `Button variant="ghost" size="sm"` → the record page |
 | Outcome badge (Hospital) | Fit → success, Fit with Conditions → warning, Unfit → danger |
@@ -1735,9 +1735,9 @@ decisions in the history.
 **One search/page pair per page, not two.** With tabs only one table is on screen, so `q` and
 `page` are shared and the inactive query is never run (`activeView === … ? await … : undefined`,
 Reception's existing shape). This replaced an earlier two-stacked-sections version of the
-Hospital page that needed `cq`/`cpage` alongside `q`/`page`. The **count on the awaiting tab is
-its own query** (`countEngagementsForLayer`, `countEngagementsAwaitingApproval`) because the
-pill must show outstanding work while the worked-on tab is the one rendered.
+Hospital page that needed `cq`/`cpage` alongside `q`/`page`. **Tabs carry no count** — the
+per-tab count queries were removed (2026-11-05); Approvals still runs
+`countEngagementsAwaitingApproval` because it gates the delegate redirect.
 
 **Every layer form now redirects to its own queue after a successful submit** —
 `HospitalForm`, `TrainingForm`, `ItForm` push to `/dashboard/{layer}`, matching

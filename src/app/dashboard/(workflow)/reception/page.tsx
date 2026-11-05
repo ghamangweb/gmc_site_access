@@ -28,12 +28,10 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
-  countOutstandingRegistrationRequests,
   countRegistrationRequestsByType,
   listRegistrationRequests,
 } from "@/lib/services/registration-service";
 import {
-  countRejectedEngagements,
   getLatestClearanceStatuses,
   listEngagementsWithPerson,
   listRejectedEngagements,
@@ -107,13 +105,7 @@ export default async function ReceptionQueuePage({
 
   const request = toPageRequest(q, page);
 
-  // Counts drive the view tabs and must reflect everything, not the page on
-  // screen, so they are their own queries.
-  const [typeCounts, outstandingCount, rejectedCount] = await Promise.all([
-    countRegistrationRequestsByType(),
-    countOutstandingRegistrationRequests(),
-    countRejectedEngagements(),
-  ]);
+  const typeCounts = await countRegistrationRequestsByType();
 
   const submissions =
     activeView === "submissions"
@@ -148,7 +140,6 @@ export default async function ReceptionQueuePage({
       label: "Submitted Registrations",
       value: "submissions",
       href: "/dashboard/reception",
-      count: outstandingCount,
     },
     {
       label: "Engagements",
@@ -159,7 +150,6 @@ export default async function ReceptionQueuePage({
       label: "Rejected",
       value: "rejected",
       href: "/dashboard/reception?view=rejected",
-      count: rejectedCount,
     },
   ];
 

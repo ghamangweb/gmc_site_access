@@ -42,8 +42,6 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
-  countAwaitingHospitalReviews,
-  countEngagementsForLayer,
   getLatestClearanceStatuses,
   listAwaitingHospitalReviews,
   listEngagementsForLayer,
@@ -80,22 +78,15 @@ export default async function HospitalQueuePage({
 
   const request = toPageRequest(q, page);
 
-  // The awaiting pills must show outstanding work on every tab, so the counts
-  // are their own queries.
-  const [awaitingCount, reviewCount, awaiting, awaitingReview, recorded] =
-    await Promise.all([
-      countEngagementsForLayer("AtHospital", ["Work", "WorkMine"]),
-      countAwaitingHospitalReviews(),
-      activeView === "awaiting"
-        ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
-        : undefined,
-      activeView === "review"
-        ? listAwaitingHospitalReviews(request)
-        : undefined,
-      activeView === "recorded"
-        ? listRecentHospitalClearances(request)
-        : undefined,
-    ]);
+  const [awaiting, awaitingReview, recorded] = await Promise.all([
+    activeView === "awaiting"
+      ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
+      : undefined,
+    activeView === "review" ? listAwaitingHospitalReviews(request) : undefined,
+    activeView === "recorded"
+      ? listRecentHospitalClearances(request)
+      : undefined,
+  ]);
 
   // Awaiting rows that were already marked Unfit are back for re-clearance —
   // flagged red, so they don't read like fresh arrivals.
@@ -109,13 +100,11 @@ export default async function HospitalQueuePage({
       label: "Awaiting Clearance",
       value: "awaiting",
       href: "/dashboard/hospital",
-      count: awaitingCount,
     },
     {
       label: "Awaiting Review",
       value: "review",
       href: "/dashboard/hospital?view=review",
-      count: reviewCount,
     },
     {
       label: "Recorded Clearances",
