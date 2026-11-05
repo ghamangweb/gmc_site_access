@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreVerticalIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -17,9 +18,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
+import { success } from "@/lib/domain/attention";
 import { ACCESS_PURPOSE_LABELS } from "@/lib/domain/types";
 import type {
   RegistrationRequestStatus,
@@ -107,8 +116,18 @@ export function SubmissionRow({
 
   return (
     <>
-      <TableRow>
-        <TableCell>{request.fullName}</TableCell>
+      <TableRow className="hover:bg-muted/50">
+        <TableCell>
+          <NameWithAttention
+            attention={
+              awaiting && canManage
+                ? success("Awaiting your approval")
+                : undefined
+            }
+          >
+            {request.fullName}
+          </NameWithAttention>
+        </TableCell>
         <TableCell>{request.registrationType}</TableCell>
         <TableCell>{ACCESS_PURPOSE_LABELS[request.accessPurpose]}</TableCell>
         <TableCell>{formatQueueDate(request.submittedAt)}</TableCell>
@@ -124,20 +143,30 @@ export function SubmissionRow({
         </TableCell>
         {canManage && (
           <TableCell className="text-right">
-            {awaiting && (
-              <div className="flex justify-end gap-2">
-                <Button size="sm" onClick={() => setApproveOpen(true)}>
-                  Approve
+            {/* Same row menu as every other queue; a decided submission has
+                nothing left to approve or reject. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8">
+                  <MoreVerticalIcon />
+                  <span className="sr-only">Open menu</span>
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setRejectOpen(true)}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={!awaiting}
+                  onSelect={() => setApproveOpen(true)}
+                >
+                  Approve
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!awaiting}
+                  onSelect={() => setRejectOpen(true)}
                 >
                   Reject
-                </Button>
-              </div>
-            )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </TableCell>
         )}
       </TableRow>

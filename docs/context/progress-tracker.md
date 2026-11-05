@@ -1764,6 +1764,28 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Plain-language dashboard notifications (2026-11-05)
+
+- [x] Every bell notification reworded to one short, formal style (agreed copy in
+      `src/lib/domain/notification-messages.ts`): names the person, says what happened and what to
+      do. No passport numbers, ISO timestamps, role codes, comments or "routed to"; dates read
+      "12 Nov 2026". `personNameFor` supplies the name where a notice used to say "this record"
+- [x] One exception: a delegated approval request keeps its reason — it isn't stored or emailed
+      anywhere else, and the System Admin needs it to decide
+- [x] Existing notifications keep their old text; only new ones use the new wording
+
+---
+
+## Department dashboard consistency (2026-11-05)
+
+- [x] Tabs (`QueueViewTabs`, `?view=`): Submitted Registrations (default) · Invitations, instead of
+      two stacked tables; only the active tab is queried
+- [x] Both tables use the vertical-ellipsis row menu: Approve / Reject (disabled once decided),
+      Revoke (disabled once revoked); awaiting submissions carry the green attention dot
+- [x] Tables sit in the standard bordered queue card; the invite form stays above the tabs
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
