@@ -221,6 +221,27 @@ export const workflowExemptions = pgTable(
   ],
 );
 
+// One row per stay extension, kept as history: a stakeholder can extend the
+// same record more than once. The engagement's `departure_date` is moved in
+// the same transaction; this is the record of from what, to what, why and by
+// whom. The access card is Security's to update, so it is not touched here.
+export const stayExtensions = pgTable("stay_extensions", {
+  id: uuid().defaultRandom().primaryKey(),
+  engagementId: uuid()
+    .notNull()
+    .references(() => engagements.id),
+  previousDepartureDate: date().notNull(),
+  newDepartureDate: date().notNull(),
+  reason: encryptedText().notNull(),
+  signature: encryptedText().notNull(),
+  extendedBy: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  extendedByName: text().notNull(),
+  extendedByRole: text().notNull(),
+  extendedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
+
 // One row per rejection, kept as history: a record can be rejected, fixed by
 // Reception, requested again and rejected again. Unlike an approval there is
 // no unique constraint on the engagement for that reason.
@@ -270,6 +291,26 @@ export const accessProvisionings = pgTable("access_provisionings", {
   // not stored anywhere until Slice 8 adds them.
   accessCardExpiry: date().notNull(),
   activatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+});
+
+// One row per change Security makes to an issued card's expiry, kept as
+// history — usually after a stakeholder extends the stay. The card row's
+// `access_card_expiry` is moved in the same transaction.
+export const accessCardExpiryUpdates = pgTable("access_card_expiry_updates", {
+  id: uuid().defaultRandom().primaryKey(),
+  engagementId: uuid()
+    .notNull()
+    .references(() => engagements.id),
+  accessProvisioningId: uuid()
+    .notNull()
+    .references(() => accessProvisionings.id),
+  previousExpiry: date().notNull(),
+  newExpiry: date().notNull(),
+  comments: encryptedText().notNull(),
+  updatedBy: uuid()
+    .notNull()
+    .references(() => staffUsers.id),
+  updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
 });
 
 export const workflowTransitions = pgTable("workflow_transitions", {

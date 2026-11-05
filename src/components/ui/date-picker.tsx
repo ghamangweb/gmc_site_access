@@ -20,6 +20,8 @@ type DatePickerProps = {
   captionLayout?: "label" | "dropdown";
   /** YYYY-MM-DD. Days before it can't be picked. */
   minDate?: string;
+  /** YYYY-MM-DD. Days after it can't be picked. */
+  maxDate?: string;
 };
 
 export function DatePicker({
@@ -29,10 +31,16 @@ export function DatePicker({
   placeholder = "Pick a date",
   captionLayout = "label",
   minDate,
+  maxDate,
 }: DatePickerProps) {
   const parsed = value ? parseISO(value) : undefined;
   const selected = parsed && isValid(parsed) ? parsed : undefined;
   const min = minDate ? parseISO(minDate) : undefined;
+  const max = maxDate ? parseISO(maxDate) : undefined;
+  const bounds = [
+    ...(min && isValid(min) ? [{ before: min }] : []),
+    ...(max && isValid(max) ? [{ after: max }] : []),
+  ];
 
   return (
     <Popover>
@@ -56,7 +64,7 @@ export function DatePicker({
           captionLayout={captionLayout}
           selected={selected}
           defaultMonth={selected ?? min}
-          disabled={min && isValid(min) ? { before: min } : undefined}
+          disabled={bounds.length > 0 ? bounds : undefined}
           onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
         />
       </PopoverContent>

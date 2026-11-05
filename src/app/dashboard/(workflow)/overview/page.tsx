@@ -14,7 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { danger, pickAttention } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
@@ -180,7 +182,20 @@ export default async function RecordsOverviewPage({
 
                 return (
                   <TableRow key={engagement.id}>
-                    <TableCell>{person.fullName}</TableCell>
+                    <TableCell>
+                      <NameWithAttention
+                        attention={pickAttention(
+                          accessState === "TerminationRequested" &&
+                            danger("Revocation requested"),
+                          row.clearanceStatus === "Unfit" &&
+                            !row.exemptedStages.includes("Hospital") &&
+                            danger("Marked Unfit"),
+                          accessState === "Expired" && danger("Access expired"),
+                        )}
+                      >
+                        {person.fullName}
+                      </NameWithAttention>
+                    </TableCell>
                     <TableCell>
                       {ACCESS_PURPOSE_LABELS[purpose] ??
                         engagement.accessPurpose}

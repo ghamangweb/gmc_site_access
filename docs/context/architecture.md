@@ -512,6 +512,44 @@ after commit. Delivery/refresh failures return saved-approval warnings. Normal
 approval recipients are not used for an exemption event. Approval checkpoints and
 test scope are recorded in `stakeholder-exemptions-plan.md`.
 
+### `stay_extensions` (2026-11-04)
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| engagement_id | uuid | FK → engagements; many rows per engagement (each extension is history) |
+| previous_departure_date | date | `engagements.departure_date` before the extension |
+| new_departure_date | date | Later than the previous date, and today or later |
+| reason | encrypted text | Required |
+| signature | encrypted text | Captured `SignatureValue` JSON, as for approvals |
+| extended_by / extended_by_name / extended_by_role | uuid / text / text | The stakeholder (CSO, HCM, GMM, EM or MM — never a delegate) |
+| extended_at | timestamptz | |
+
+`extendStay` (`workflow-service.ts`, rules in `src/lib/domain/stay-extensions.ts`) locks the
+engagement, re-checks the actor's role against `staff_users`, inserts the row and moves
+`engagements.departure_date` in one transaction. Only approved records (AtHospital → Completed)
+that are not Cancelled or Revoked qualify; Expired access does. The access card is **not**
+changed — Security is notified to update it. Notified (dashboard + email): Security, Reception,
+HSE and the record's HOD. Not a workflow_state move, so no `workflow_transitions` row.
+
+### `access_card_expiry_updates` (2026-11-04)
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| engagement_id | uuid | FK → engagements |
+| access_provisioning_id | uuid | FK → access_provisionings — the card re-dated (must be in the active cycle) |
+| previous_expiry / new_expiry | date | New is today or later and ≤ `engagements.departure_date` |
+| comments | encrypted text | Required |
+| updated_by | uuid | FK → staff_users (Security) |
+| updated_at | timestamptz | |
+
+`updateCardExpiry` (rules in `src/lib/domain/card-expiry.ts`) locks the engagement, requires
+Completed with access Active or Expired, moves `access_provisionings.access_card_expiry`, and
+sets a stored `Expired` back to `Active`. Reception and HSE are notified. No transition row.
+Allowed only while a stakeholder stay extension is pending — the latest `stay_extensions.extended_at`
+is after both the card's `activated_at` and its latest update (`hasPendingStayExtension`).
+
 ### `hospital_clearances`
 
 | Column | Type | Notes |

@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { danger, pickAttention } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   ACCESS_PURPOSE_LABELS,
@@ -32,6 +33,7 @@ import {
 } from "@/lib/services/registration-service";
 import {
   countRejectedEngagements,
+  getLatestClearanceStatuses,
   listEngagementsWithPerson,
   listRejectedEngagements,
 } from "@/lib/services/workflow-service";
@@ -124,6 +126,12 @@ export default async function ReceptionQueuePage({
     activeView === "engagements"
       ? await listEngagementsWithPerson(request)
       : undefined;
+
+  // For the Engagements tab's attention dots: an Unfit is Reception's to
+  // follow up, whether it came from a clearance or a review.
+  const clearanceStatuses = await getLatestClearanceStatuses(
+    engagements?.rows.map(({ engagement }) => engagement.id) ?? [],
+  );
 
   // Rejected by a stakeholder and waiting on Reception: request approval
   // again, or cancel. Leaves this view as soon as either happens.
@@ -302,6 +310,15 @@ export default async function ReceptionQueuePage({
                         engagement.workflowState === "AtReception" &&
                         engagement.approvalRejectedAt !== null
                       }
+                      attention={pickAttention(
+                        engagement.accessState === "TerminationRequested" &&
+                          danger("Revocation requested"),
+                        clearanceStatuses.get(engagement.id) === "Unfit" &&
+                          danger("Marked Unfit"),
+                        engagement.workflowState === "AtReception" &&
+                          engagement.approvalRejectedAt !== null &&
+                          danger("Approval rejected"),
+                      )}
                       canManage={canManage}
                     />
                   );

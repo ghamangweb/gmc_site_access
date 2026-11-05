@@ -21,6 +21,7 @@ import { searchQueryTokens } from "@/lib/crypto";
 import { csvRow } from "@/lib/csv";
 import { type DbClient, db } from "@/lib/db/client";
 import {
+  accessCardExpiryUpdates,
   accessProvisionings,
   documents,
   engagements,
@@ -33,11 +34,18 @@ import {
   staffUsers,
   stakeholderApprovals,
   stakeholderRejections,
+  stayExtensions,
   terminationRequests,
   workflowCycles,
   workflowExemptions,
   workflowTransitions,
 } from "@/lib/db/schema";
+import {
+  type CardExpiryUpdateInput,
+  hasPendingStayExtension,
+  isCardExpiryUpdatable,
+  validateCardExpiryUpdate,
+} from "@/lib/domain/card-expiry";
 import {
   DEFAULT_PAGE_SIZE,
   type Page,
@@ -48,6 +56,12 @@ import {
   SECURITY_REPORT_HEADERS,
   securityReportRows,
 } from "@/lib/domain/security-report";
+import {
+  isStayExtendable,
+  type StayExtensionInput,
+  stayExtensionRole,
+  validateStayExtension,
+} from "@/lib/domain/stay-extensions";
 import {
   TRAINING_REPORT_HEADERS,
   trainingReportRows,
@@ -1993,6 +2007,48 @@ function validateHospitalClearanceInput(
   return nextReviewDate;
 }
 
+// The latest clearance outcome in each engagement's active cycle, for a page
+// of queue rows at once — one query, not one per row. Engagements with no
+// clearance yet are simply absent from the map.
+export async function getLatestClearanceStatuses(
+  engagementIds: string[],
+): Promise<Map<string, HospitalClearanceStatus>> {
+  const statuses = new Map<string, HospitalClearanceStatus>();
+
+  if (engagementIds.length === 0) return statuses;
+
+  const rows = await db
+    .select({
+      engagementId: workflowCycles.engagementId,
+      clearanceStatus: hospitalClearances.clearanceStatus,
+    })
+    .from(hospitalClearances)
+    .innerJoin(
+      workflowCycles,
+      eq(hospitalClearances.workflowCycleId, workflowCycles.id),
+    )
+    .where(
+      and(
+        inArray(workflowCycles.engagementId, engagementIds),
+        isNull(workflowCycles.archivedAt),
+      ),
+    )
+    .orderBy(desc(hospitalClearances.clearanceDate));
+
+  for (const row of rows) {
+    if (!statuses.has(row.engagementId)) {
+      // SAFETY: clearance_status is written only from the
+      // HospitalClearanceStatus union by `recordHospitalClearance`.
+      statuses.set(
+        row.engagementId,
+        row.clearanceStatus as HospitalClearanceStatus,
+      );
+    }
+  }
+
+  return statuses;
+}
+
 export async function recordHospitalClearance(
   engagementId: string,
   input: HospitalClearanceInput,
@@ -2494,6 +2550,151 @@ export async function claimHospitalReviewReminder(
       personName: row.personName,
       engagementId: row.engagementId,
       nextReviewDate: claimed.nextReviewDate,
+    };
+  });
+}
+
+export type StayExtension = typeof stayExtensions.$inferSelect;
+
+// Every extension on a record, newest first — shown on the record pages.
+export async function getStayExtensions(
+  engagementId: string,
+): Promise<StayExtension[]> {
+  return db
+    .select()
+    .from(stayExtensions)
+    .where(eq(stayExtensions.engagementId, engagementId))
+    .orderBy(desc(stayExtensions.extendedAt));
+}
+
+export type StayExtensionRecipients = {
+  securityRecipients: StaffUser[];
+  receptionRecipients: StaffUser[];
+  departmentHeads: StaffUser[];
+  hseRecipients: StaffUser[];
+};
+
+// A stakeholder moves an approved record's departure date later. Only the
+// date moves: the access card stays as Security issued it, and Security is
+// told so it can update the card. Not a workflow_state move, so no
+// transition row — `stay_extensions` is the history.
+export async function extendStay(
+  engagementId: string,
+  session: SessionUser,
+  input: StayExtensionInput,
+): Promise<{ extension: StayExtension } & StayExtensionRecipients> {
+  const role = stayExtensionRole(session);
+
+  if (!role) {
+    throw new Error(
+      "Only CSO, HCM, GMM, EM or MM stakeholders with write access can extend a stay",
+    );
+  }
+
+  return db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement) {
+      throw new Error("Engagement not found");
+    }
+
+    // SAFETY: workflow_state and access_state are written only from their
+    // unions by this service.
+    if (
+      !isStayExtendable({
+        workflowState: engagement.workflowState as WorkflowState,
+        accessState: engagement.accessState as AccessState,
+      })
+    ) {
+      throw new Error(
+        "Only an approved record that is not cancelled or revoked can have its stay extended",
+      );
+    }
+
+    // Re-read under the lock, so two stakeholders extending at once can't
+    // both move the date from the same starting point.
+    const valid = validateStayExtension(input, engagement.departureDate);
+
+    // The actor's role is re-checked against the database, not just the
+    // session: a role removed since sign-in no longer grants this.
+    const [actor] = await tx
+      .select()
+      .from(staffUsers)
+      .where(eq(staffUsers.id, session.staffUserId));
+
+    if (!actor || actor.deactivatedAt || !actor.workflowRoles.includes(role)) {
+      throw new Error("Stakeholder authority is no longer available");
+    }
+
+    const [extension] = await tx
+      .insert(stayExtensions)
+      .values({
+        engagementId,
+        previousDepartureDate: engagement.departureDate,
+        newDepartureDate: valid.newDepartureDate,
+        reason: valid.reason,
+        signature: valid.signature,
+        extendedBy: actor.id,
+        extendedByName: actor.displayName,
+        extendedByRole: role,
+      })
+      .returning();
+
+    await tx
+      .update(engagements)
+      .set({ departureDate: valid.newDepartureDate })
+      .where(eq(engagements.id, engagementId));
+
+    const securityRecipients = await getStaffByWorkflowRoles(
+      ["SecurityStaff"],
+      tx,
+    );
+    const receptionRecipients = withoutAlreadyNotified(
+      await getStaffByWorkflowRoles(["Receptionist"], tx),
+      securityRecipients,
+    );
+    const departmentHeads = withoutAlreadyNotified(
+      await getRecordDepartmentHeads(engagementId, tx),
+      securityRecipients,
+      receptionRecipients,
+    );
+    const hseRecipients = withoutAlreadyNotified(
+      await getStaffByWorkflowRoles(["HSE"], tx),
+      securityRecipients,
+      receptionRecipients,
+      departmentHeads,
+    );
+
+    const extendedTo = `Stay extended to ${valid.newDepartureDate} by ${actor.displayName} (${role}).`;
+    const notices = [
+      ...securityRecipients.map((recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message: `${extendedTo} Update the access card if needed.`,
+      })),
+      ...[...receptionRecipients, ...departmentHeads, ...hseRecipients].map(
+        (recipient) => ({
+          recipientStaffUserId: recipient.id,
+          engagementId,
+          message: extendedTo,
+        }),
+      ),
+    ];
+
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
+    }
+
+    return {
+      extension,
+      securityRecipients,
+      receptionRecipients,
+      departmentHeads,
+      hseRecipients,
     };
   });
 }
@@ -3168,7 +3369,29 @@ export type ProvisioningRow = {
   provisioning: AccessProvisioning;
   engagement: Engagement;
   person: typeof persons.$inferSelect;
+  // Set when the card belongs to an earlier cycle — history, not the card
+  // the record holds now, so it can't be re-dated.
+  cycleArchivedAt: Date | null;
+  // What `hasPendingStayExtension` needs: Security may only re-date a card
+  // after a stakeholder extends the stay.
+  latestExtensionAt: Date | null;
+  latestCardUpdateAt: Date | null;
 };
+
+const toDateOrNull = (value: string | Date | null): Date | null =>
+  value === null ? null : new Date(value);
+
+function latestStayExtensionAt() {
+  return sql<Date | null>`(select max(${stayExtensions.extendedAt}) from ${stayExtensions} where ${stayExtensions.engagementId} = ${engagements.id})`.mapWith(
+    toDateOrNull,
+  );
+}
+
+function latestCardUpdateAt() {
+  return sql<Date | null>`(select max(${accessCardExpiryUpdates.updatedAt}) from ${accessCardExpiryUpdates} where ${accessCardExpiryUpdates.accessProvisioningId} = ${accessProvisionings.id})`.mapWith(
+    toDateOrNull,
+  );
+}
 
 export async function listRecentProvisionings(
   request: PageRequest = {},
@@ -3183,6 +3406,9 @@ export async function listRecentProvisionings(
         provisioning: accessProvisionings,
         engagement: engagements,
         person: persons,
+        cycleArchivedAt: workflowCycles.archivedAt,
+        latestExtensionAt: latestStayExtensionAt(),
+        latestCardUpdateAt: latestCardUpdateAt(),
       })
       .from(accessProvisionings)
       .innerJoin(
@@ -3208,6 +3434,158 @@ export async function listRecentProvisionings(
   ]);
 
   return { rows, total: totals?.value ?? 0, page, pageSize };
+}
+
+export type CardExpiryUpdate = typeof accessCardExpiryUpdates.$inferSelect;
+
+// Every re-dating of this record's cards, newest first.
+export async function getCardExpiryUpdates(
+  engagementId: string,
+): Promise<CardExpiryUpdate[]> {
+  return db
+    .select()
+    .from(accessCardExpiryUpdates)
+    .where(eq(accessCardExpiryUpdates.engagementId, engagementId))
+    .orderBy(desc(accessCardExpiryUpdates.updatedAt));
+}
+
+// Security re-dates the card a record holds now, usually after a stakeholder
+// extended the stay. A lapsed card that is re-dated is live again, so a stored
+// Expired goes back to Active (the new date is today or later). Not a
+// workflow_state move, so no transition row — `access_card_expiry_updates` is
+// the history.
+export async function updateCardExpiry(
+  engagementId: string,
+  accessProvisioningId: string,
+  input: CardExpiryUpdateInput,
+  performedBy: string,
+): Promise<{
+  update: CardExpiryUpdate;
+  receptionRecipients: StaffUser[];
+  hseRecipients: StaffUser[];
+}> {
+  return db.transaction(async (tx) => {
+    const [engagement] = await tx
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, engagementId))
+      .for("update");
+
+    if (!engagement) {
+      throw new Error("Engagement not found");
+    }
+
+    // SAFETY: workflow_state and access_state are written only from their
+    // unions by this service.
+    if (
+      !isCardExpiryUpdatable({
+        workflowState: engagement.workflowState as WorkflowState,
+        accessState: engagement.accessState as AccessState,
+      })
+    ) {
+      throw new Error(
+        "Only an active or expired card on a completed record can be re-dated",
+      );
+    }
+
+    const [current] = await tx
+      .select({ provisioning: accessProvisionings })
+      .from(accessProvisionings)
+      .innerJoin(
+        workflowCycles,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .where(
+        and(
+          eq(accessProvisionings.id, accessProvisioningId),
+          eq(workflowCycles.engagementId, engagementId),
+          isNull(workflowCycles.archivedAt),
+        ),
+      );
+
+    if (!current) {
+      throw new Error("This card is not the one the record currently holds");
+    }
+
+    const [timing] = await tx
+      .select({
+        latestExtensionAt: latestStayExtensionAt(),
+        latestCardUpdateAt: latestCardUpdateAt(),
+      })
+      .from(accessProvisionings)
+      .innerJoin(
+        workflowCycles,
+        eq(accessProvisionings.workflowCycleId, workflowCycles.id),
+      )
+      .innerJoin(engagements, eq(workflowCycles.engagementId, engagements.id))
+      .where(eq(accessProvisionings.id, accessProvisioningId));
+
+    if (
+      !hasPendingStayExtension({
+        cardActivatedAt: current.provisioning.activatedAt,
+        latestExtensionAt: timing?.latestExtensionAt ?? null,
+        latestCardUpdateAt: timing?.latestCardUpdateAt ?? null,
+      })
+    ) {
+      throw new Error(
+        "Security can only update the card after a stakeholder extends the stay",
+      );
+    }
+
+    const valid = validateCardExpiryUpdate(input, {
+      accessCardExpiry: current.provisioning.accessCardExpiry,
+      departureDate: engagement.departureDate,
+    });
+
+    await tx
+      .update(accessProvisionings)
+      .set({ accessCardExpiry: valid.newExpiry })
+      .where(eq(accessProvisionings.id, accessProvisioningId));
+
+    if (engagement.accessState === "Expired") {
+      await tx
+        .update(engagements)
+        .set({ accessState: "Active" })
+        .where(eq(engagements.id, engagementId));
+    }
+
+    const [update] = await tx
+      .insert(accessCardExpiryUpdates)
+      .values({
+        engagementId,
+        accessProvisioningId,
+        previousExpiry: current.provisioning.accessCardExpiry,
+        newExpiry: valid.newExpiry,
+        comments: valid.comments,
+        updatedBy: performedBy,
+      })
+      .returning();
+
+    // The same audiences told when access was activated.
+    const receptionRecipients = await getStaffByWorkflowRoles(
+      ["Receptionist"],
+      tx,
+    );
+    const hseRecipients = withoutAlreadyNotified(
+      await getStaffByWorkflowRoles(["HSE"], tx),
+      receptionRecipients,
+    );
+
+    const message = `Security updated the access card expiry to ${valid.newExpiry}.`;
+    const notices = [...receptionRecipients, ...hseRecipients].map(
+      (recipient) => ({
+        recipientStaffUserId: recipient.id,
+        engagementId,
+        message,
+      }),
+    );
+
+    if (notices.length > 0) {
+      await tx.insert(notifications).values(notices);
+    }
+
+    return { update, receptionRecipients, hseRecipients };
+  });
 }
 
 // The last step, taken by Security: access becomes live. Both the workflow and

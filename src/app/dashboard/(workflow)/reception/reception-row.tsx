@@ -26,6 +26,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
+import type { Attention } from "@/lib/domain/attention";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
@@ -51,6 +53,8 @@ type ReceptionRowProps = {
   accessState: string;
   /** A stakeholder rejected it and Reception has not asked again. */
   approvalRejected: boolean;
+  /** The row's attention dot, worked out by the page. */
+  attention: Attention | undefined;
   canManage: boolean;
 };
 
@@ -61,6 +65,7 @@ export function ReceptionRow({
   workflowState,
   accessState,
   approvalRejected,
+  attention,
   canManage,
 }: ReceptionRowProps) {
   const router = useRouter();
@@ -97,9 +102,11 @@ export function ReceptionRow({
         onClick={() => router.push(`/dashboard/reception/${engagementId}`)}
       >
         <TableCell>
-          <Link href={`/dashboard/reception/${engagementId}`}>
-            {personName}
-          </Link>
+          <NameWithAttention attention={attention}>
+            <Link href={`/dashboard/reception/${engagementId}`}>
+              {personName}
+            </Link>
+          </NameWithAttention>
         </TableCell>
         <TableCell>
           {ACCESS_PURPOSE_LABELS[accessPurpose as AccessPurpose]}

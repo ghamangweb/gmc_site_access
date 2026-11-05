@@ -1,12 +1,12 @@
 import { CheckCircle2Icon, ClipboardCheckIcon } from "lucide-react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+
+import { ApprovalRowActions } from "@/app/dashboard/(workflow)/approvals/approval-row-actions";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   Table,
@@ -16,15 +16,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
+import {
+  isStayExtendable,
+  stayExtensionRole,
+} from "@/lib/domain/stay-extensions";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
+  type AccessState,
   STAKEHOLDER_ROLES,
   WORKFLOW_STATE_LABELS,
   type WorkflowState,
 } from "@/lib/domain/types";
+import {
+  canGrantWorkflowExemption,
+  requiredWorkflowStages,
+} from "@/lib/domain/workflow-exemptions";
 import {
   countEngagementsAwaitingApproval,
   countStakeholderApprovalsBy,
@@ -32,6 +43,13 @@ import {
   listRecentStakeholderApprovals,
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
+
+// Past this, a record waiting for sign-off is flagged on the queue.
+const LONG_WAIT_DAYS = 3;
+
+function wholeDaysSince(value: Date): number {
+  return Math.floor((Date.now() - value.getTime()) / (1000 * 60 * 60 * 24));
+}
 
 function daysWaiting(requestedAt: Date): string {
   const days = Math.floor(
@@ -90,6 +108,11 @@ export default async function ApprovalsQueuePage({
     session.workflowRoles.includes(role),
   );
 
+  // Per viewer; each row then adds its own conditions. Delegates get
+  // neither: their grant is one engagement's approval and nothing else.
+  const mayBypass = canGrantWorkflowExemption(session);
+  const mayExtend = stayExtensionRole(session) !== undefined;
+
   const firstName = session.displayName?.split(" ")[0] ?? "there";
 
   const views = [
@@ -146,7 +169,7 @@ export default async function ApprovalsQueuePage({
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Arrival</TableHead>
                   <TableHead>Requested</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -154,14 +177,27 @@ export default async function ApprovalsQueuePage({
                   // SAFETY: access_purpose is a text column written only from
                   // the AccessPurpose union; the ?? shows a stray legacy value
                   // raw rather than rendering undefined.
+                  const purpose = engagement.accessPurpose as AccessPurpose;
                   const purposeLabel =
-                    ACCESS_PURPOSE_LABELS[
-                      engagement.accessPurpose as AccessPurpose
-                    ] ?? engagement.accessPurpose;
+                    ACCESS_PURPOSE_LABELS[purpose] ?? engagement.accessPurpose;
 
                   return (
                     <TableRow key={engagement.id} className="hover:bg-muted/50">
-                      <TableCell>{person.fullName}</TableCell>
+                      <TableCell>
+                        <NameWithAttention
+                          attention={
+                            engagement.approvalRequestedAt &&
+                            wholeDaysSince(engagement.approvalRequestedAt) >
+                              LONG_WAIT_DAYS
+                              ? success(
+                                  `Waiting ${wholeDaysSince(engagement.approvalRequestedAt)} days for sign-off`,
+                                )
+                              : undefined
+                          }
+                        >
+                          {person.fullName}
+                        </NameWithAttention>
+                      </TableCell>
                       <TableCell>{purposeLabel}</TableCell>
                       <TableCell>{engagement.arrivalDate}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -170,11 +206,22 @@ export default async function ApprovalsQueuePage({
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button asChild size="sm">
-                          <Link href={`/dashboard/approvals/${engagement.id}`}>
-                            Review &amp; Approve
-                          </Link>
-                        </Button>
+                        <ApprovalRowActions
+                          view="awaiting"
+                          engagementId={engagement.id}
+                          personName={person.fullName}
+                          accessPurpose={purpose}
+                          departureDate={engagement.departureDate}
+                          // Same rule as the record page's "Approve with
+                          // Exemption": a requested, unrejected record with a
+                          // stage that can be exempted.
+                          canBypass={
+                            mayBypass &&
+                            engagement.approvalRequestedAt !== null &&
+                            engagement.approvalRejectedAt === null &&
+                            requiredWorkflowStages(purpose).length > 0
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -208,7 +255,8 @@ export default async function ApprovalsQueuePage({
                   <TableHead>Approved By</TableHead>
                   <TableHead>Approved On</TableHead>
                   <TableHead>Stage</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead>Departure</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -234,12 +282,28 @@ export default async function ApprovalsQueuePage({
                         ]
                       }
                     </TableCell>
+                    <TableCell>{engagement.departureDate}</TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/dashboard/approvals/${engagement.id}`}>
-                          View
-                        </Link>
-                      </Button>
+                      <ApprovalRowActions
+                        view="approved"
+                        engagementId={engagement.id}
+                        personName={person.fullName}
+                        // SAFETY: access_purpose, workflow_state and
+                        // access_state are text columns written only from
+                        // their unions.
+                        accessPurpose={
+                          engagement.accessPurpose as AccessPurpose
+                        }
+                        departureDate={engagement.departureDate}
+                        canExtend={
+                          mayExtend &&
+                          isStayExtendable({
+                            workflowState:
+                              engagement.workflowState as WorkflowState,
+                            accessState: engagement.accessState as AccessState,
+                          })
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

@@ -36,15 +36,27 @@ type StakeholderExemptionDialogProps = {
   accessPurpose: AccessPurpose;
   onApprove: (input: WorkflowExemptionApprovalInput) => Promise<ActionResult>;
   onApproved: () => void;
+  /**
+   * Controlled mode, for opening it from elsewhere (the approvals queue's row
+   * menu). Given these, the dialog renders no trigger button of its own.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function StakeholderExemptionDialog({
   accessPurpose,
   onApprove,
   onApproved,
+  open: controlledOpen,
+  onOpenChange,
 }: StakeholderExemptionDialogProps) {
   const fieldId = useId();
-  const [open, setOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (value: boolean) =>
+    controlled ? onOpenChange?.(value) : setUncontrolledOpen(value);
   const [stages, setStages] = useState<WorkflowExemptionStage[]>([]);
   const [reason, setReason] = useState("");
   const [signature, setSignature] = useState<SignatureValue | null>(null);
@@ -116,15 +128,17 @@ export function StakeholderExemptionDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={isPending || approved}
-        >
-          Approve with Exemption
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending || approved}
+          >
+            Approve with Exemption
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Approve with Exemption</DialogTitle>

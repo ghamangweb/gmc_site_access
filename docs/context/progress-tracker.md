@@ -1583,6 +1583,45 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Approvals queue row menu — Bypass and Extend Stay (2026-11-04)
+
+- [x] Approvals queue rows use a vertical-ellipsis menu (`ApprovalRowActions`): Awaiting →
+      Review, Bypass (opens `StakeholderExemptionDialog`, now with an optional controlled mode);
+      Approved → View, Extend Stay. Unusable items stay visible, disabled. Approved tab gains a
+      Departure column
+- [x] Extend Stay (`ExtendStayDialog`): new departure date (calendar), reason, signature.
+      Stakeholders only (CSO/HCM/GMM/EM/MM), approved records not Cancelled/Revoked; moves only
+      `departure_date` — Security updates the card
+- [x] `stay_extensions` history table (migration `0031_stay_extensions`), shown on Reception,
+      Approvals and Security record pages (`StayExtensionsCard`)
+- [x] Notified: Security (asked to update the card), Reception, HSE, HOD
+- [x] Security can now re-date an issued card — see "Security: Update Card Expiry" below
+
+## Security: Update Card Expiry (2026-11-04)
+
+- [x] "Site Access Granted" rows get a vertical-ellipsis menu (`GrantedRowActions`): View,
+      Update Card Expiry. Enabled only on the record's current card (active cycle), Completed,
+      access Active or Expired, non-Guest Security
+- [x] `UpdateCardExpiryDialog`: new expiry (today → departure date; `DatePicker` gains
+      `maxDate`), required comments. A stay that already ended says to extend it first
+- [x] `updateCardExpiry` moves `access_card_expiry`, sets a stored Expired back to Active, keeps
+      history in `access_card_expiry_updates` (migration `0032`), shown on Security's record page
+- [x] Reception and HSE notified (dashboard + email "Access Card Updated")
+- [x] Security never re-dates a card on its own: Update Card Expiry is enabled (and accepted by
+      the server) only when a stakeholder has extended the stay after the card was issued and
+      Security hasn't updated it since (`hasPendingStayExtension`). One extension, one update
+
+---
+
+## Attention dots on queue rows (2026-11-04)
+
+- [x] Pulsing dot before the name (`AttentionDot`, `animate-ping`, static under reduce-motion):
+      red = wrong/urgent, green = new and waiting on this viewer; tooltip + screen-reader label;
+      one per row, red wins (`pickAttention`). Signals per dashboard in `ui-registry.md`
+- [x] `getLatestClearanceStatuses` — one batched query for a page's latest clearance outcomes
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*
