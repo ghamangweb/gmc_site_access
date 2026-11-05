@@ -18,7 +18,7 @@ export function ReceptionExportButton(): ReactElement {
 
       if (
         !response.ok ||
-        !response.headers.get("content-type")?.startsWith("text/csv")
+        !response.headers.get("content-type")?.includes("spreadsheetml.sheet")
       ) {
         toast.error("Couldn't export reception records. Please try again.");
 
@@ -29,7 +29,7 @@ export function ReceptionExportButton(): ReactElement {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `reception-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `reception-data-${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -50,7 +50,7 @@ export function ReceptionExportButton(): ReactElement {
       onClick={handleExport}
     >
       {!exporting && <Download aria-hidden="true" />}
-      {exporting ? "Exporting..." : "Export Reception Report"}
+      {exporting ? "Exporting..." : "Export Reception Data"}
     </Button>
   );
 }

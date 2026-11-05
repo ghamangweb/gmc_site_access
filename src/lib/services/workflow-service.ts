@@ -2852,15 +2852,15 @@ export async function listRecentInductions(
   return { rows, total: totals?.value ?? 0, page, pageSize };
 }
 
-export async function exportApprovalsCsv(
+export async function exportApprovalsRows(
   delegatedApproverId?: string,
   client: DbClient = db,
-): Promise<string> {
+): Promise<string[][]> {
   const batchSize = 500;
 
   return client.transaction(
     async (tx) => {
-      const chunks = ["\uFEFF", csvRow(APPROVALS_REPORT_HEADERS)];
+      const reportRows: string[][] = [];
 
       for (let offset = 0; ; offset += batchSize) {
         const rows = await tx
@@ -2987,25 +2987,37 @@ export async function exportApprovalsCsv(
         });
 
         for (const row of approvalsReportRows(records, exemptions))
-          chunks.push(csvRow(row));
+          reportRows.push(row);
 
         if (rows.length < batchSize) break;
       }
 
-      return chunks.join("");
+      return reportRows;
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
 
-export async function exportHospitalCsv(
+// The same report as one CSV: byte-order mark, header row, then the rows.
+export async function exportApprovalsCsv(
+  delegatedApproverId?: string,
   client: DbClient = db,
 ): Promise<string> {
+  const rows = await exportApprovalsRows(delegatedApproverId, client);
+
+  return ["\uFEFF", csvRow(APPROVALS_REPORT_HEADERS), ...rows.map(csvRow)].join(
+    "",
+  );
+}
+
+export async function exportHospitalRows(
+  client: DbClient = db,
+): Promise<string[][]> {
   const batchSize = 500;
 
   return client.transaction(
     async (tx) => {
-      const chunks = ["\uFEFF", csvRow(HOSPITAL_REPORT_HEADERS)];
+      const reportRows: string[][] = [];
 
       for (let offset = 0; ; offset += batchSize) {
         const cycles = await tx
@@ -3119,26 +3131,37 @@ export async function exportHospitalCsv(
           clearances,
           exemptions,
         )) {
-          chunks.push(csvRow(row));
+          reportRows.push(row);
         }
 
         if (cycles.length < batchSize) break;
       }
 
-      return chunks.join("");
+      return reportRows;
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
 
-export async function exportReceptionCsv(
+// The same report as one CSV: byte-order mark, header row, then the rows.
+export async function exportHospitalCsv(
   client: DbClient = db,
 ): Promise<string> {
+  const rows = await exportHospitalRows(client);
+
+  return ["\uFEFF", csvRow(HOSPITAL_REPORT_HEADERS), ...rows.map(csvRow)].join(
+    "",
+  );
+}
+
+export async function exportReceptionRows(
+  client: DbClient = db,
+): Promise<string[][]> {
   const batchSize = 500;
 
   return client.transaction(
     async (tx) => {
-      const chunks = ["\uFEFF", csvRow(RECEPTION_REPORT_HEADERS)];
+      const reportRows: string[][] = [];
 
       // Converted submissions are represented by their engagement below.
       for (let offset = 0; ; offset += batchSize) {
@@ -3184,7 +3207,7 @@ export async function exportReceptionCsv(
               rejectedAt: null,
             },
           ]))
-            chunks.push(csvRow(row));
+            reportRows.push(row);
         }
 
         if (requests.length < batchSize) break;
@@ -3291,25 +3314,36 @@ export async function exportReceptionCsv(
         });
 
         for (const row of receptionReportRows(records, exemptions))
-          chunks.push(csvRow(row));
+          reportRows.push(row);
 
         if (rows.length < batchSize) break;
       }
 
-      return chunks.join("");
+      return reportRows;
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
 
-export async function exportSecurityCsv(
+// The same report as one CSV: byte-order mark, header row, then the rows.
+export async function exportReceptionCsv(
   client: DbClient = db,
 ): Promise<string> {
+  const rows = await exportReceptionRows(client);
+
+  return ["\uFEFF", csvRow(RECEPTION_REPORT_HEADERS), ...rows.map(csvRow)].join(
+    "",
+  );
+}
+
+export async function exportSecurityRows(
+  client: DbClient = db,
+): Promise<string[][]> {
   const batchSize = 500;
 
   return client.transaction(
     async (tx) => {
-      const chunks = ["\uFEFF", csvRow(SECURITY_REPORT_HEADERS)];
+      const reportRows: string[][] = [];
 
       for (let offset = 0; ; offset += batchSize) {
         const rows = await tx
@@ -3466,26 +3500,37 @@ export async function exportSecurityCsv(
           })),
           exemptions,
         )) {
-          chunks.push(csvRow(row));
+          reportRows.push(row);
         }
 
         if (rows.length < batchSize) break;
       }
 
-      return chunks.join("");
+      return reportRows;
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
 
-export async function exportTrainingCsv(
+// The same report as one CSV: byte-order mark, header row, then the rows.
+export async function exportSecurityCsv(
   client: DbClient = db,
 ): Promise<string> {
+  const rows = await exportSecurityRows(client);
+
+  return ["\uFEFF", csvRow(SECURITY_REPORT_HEADERS), ...rows.map(csvRow)].join(
+    "",
+  );
+}
+
+export async function exportTrainingRows(
+  client: DbClient = db,
+): Promise<string[][]> {
   const batchSize = 500;
 
   return client.transaction(
     async (tx) => {
-      const chunks = ["\uFEFF", csvRow(TRAINING_REPORT_HEADERS)];
+      const reportRows: string[][] = [];
 
       for (let offset = 0; ; offset += batchSize) {
         const cycles = await tx
@@ -3615,15 +3660,26 @@ export async function exportTrainingCsv(
           clearanceForms,
           exemptions,
         )) {
-          chunks.push(csvRow(row));
+          reportRows.push(row);
         }
 
         if (cycles.length < batchSize) break;
       }
 
-      return chunks.join("");
+      return reportRows;
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+// The same report as one CSV: byte-order mark, header row, then the rows.
+export async function exportTrainingCsv(
+  client: DbClient = db,
+): Promise<string> {
+  const rows = await exportTrainingRows(client);
+
+  return ["\uFEFF", csvRow(TRAINING_REPORT_HEADERS), ...rows.map(csvRow)].join(
+    "",
   );
 }
 
