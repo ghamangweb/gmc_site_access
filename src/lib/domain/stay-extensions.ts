@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type Attention, danger, warning } from "@/lib/domain/attention";
 import {
   type AccessState,
   isoToday,
@@ -119,4 +120,36 @@ export function earliestExtensionDate(currentDepartureDate: string): string {
   const today = isoToday();
 
   return dayAfter > today ? dayAfter : today;
+}
+
+// How close a stay is to ending, for the approvals queue's Approved tab:
+// red once the departure date has passed, yellow within the last week. Only
+// shown where Extend Stay is available, so the dot always points at
+// something the stakeholder can act on.
+export const STAY_ENDING_WARNING_DAYS = 7;
+
+export function stayEndAttention(
+  departureDate: string,
+  today: string = isoToday(),
+): Attention | undefined {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const daysLeft = Math.round(
+    (Date.parse(`${departureDate}T00:00:00Z`) -
+      Date.parse(`${today}T00:00:00Z`)) /
+      msPerDay,
+  );
+
+  if (daysLeft < 0) {
+    return danger(`Stay ended on ${departureDate}`);
+  }
+
+  if (daysLeft <= STAY_ENDING_WARNING_DAYS) {
+    return warning(
+      daysLeft === 0
+        ? "Stay ends today"
+        : `Stay ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+    );
+  }
+
+  return undefined;
 }

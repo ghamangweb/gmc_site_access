@@ -2322,7 +2322,7 @@ Last updated: 2026-11-04
 
 | Property | Class |
 |---|---|
-| Background | dot + ring `bg-status-danger` (danger) / `bg-status-success` (success) |
+| Background | dot + ring `bg-status-danger` (danger) / `bg-status-warning` (warning) / `bg-status-success` (success) |
 | Border | none |
 | Border radius | `rounded-full` |
 | Text — primary | none — label is `title` tooltip + `sr-only` text |
@@ -2333,8 +2333,9 @@ Last updated: 2026-11-04
 | Status / accent usage | ring `animate-ping opacity-75`, hidden under `motion-reduce` |
 
 **Pattern notes:**
-Queue rows only, before the person's name. Danger = wrong or urgent; success = new and waiting on
-this viewer. One dot per row — `pickAttention` takes the first danger, else the first success.
+Queue rows only, before the person's name. Danger = wrong or urgent; warning = about to need
+action; success = new and waiting on this viewer. One dot per row — `pickAttention` takes the
+first danger, then the first warning, then the first success.
 `NameWithAttention` always reserves the dot's `size-2` slot so names line up. Don't flag a tab
 whose every row is the same condition (Reception's Rejected tab, Security's Revocations tab).
 
@@ -2345,4 +2346,5 @@ whose every row is the same condition (Reception's Rejected tab, Security's Revo
 | Training (Awaiting) | medical expired / expiring (≤ 30 days) | — |
 | Security (Granted, current card) | revocation requested, access expired | stay extended — update the card |
 | Approvals (Awaiting) | — | waiting more than 3 days |
+| Approvals (Approved, Extend Stay available) | stay ended (red) · ends within 7 days (yellow, `warning`) | — |
 | Site Access Records | revocation requested, Unfit (not exempted), access expired | — |
