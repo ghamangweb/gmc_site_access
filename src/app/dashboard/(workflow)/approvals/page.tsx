@@ -276,8 +276,11 @@ export default async function ApprovalsQueuePage({
                     <TableCell>
                       <NameWithAttention
                         attention={
-                          // Only where Extend Stay applies, so the dot always
-                          // points at something the stakeholder can do.
+                          // Only where this viewer's Extend Stay is enabled —
+                          // the same condition as the row action — so the dot
+                          // always points at something they can do. A
+                          // delegate sees no stay dot.
+                          mayExtend &&
                           isStayExtendable({
                             workflowState:
                               engagement.workflowState as WorkflowState,
