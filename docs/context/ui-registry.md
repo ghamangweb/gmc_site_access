@@ -52,6 +52,40 @@ history; Hospital/Training show active-cycle exemptions. Security's PriorLayersS
 reuses the notice inside Hospital/Induction rows, with exemption taking precedence
 over stale outcomes. Exemptions are never styled as completed medicals or inductions.
 
+## ApprovalsExportButton (2026-11-05)
+
+File: `src/components/layout/approvals-export-button.tsx`, in Approvals PageHeader actions.
+
+Matches Training/Security/Reception/Hospital: shared outline `Button`, inherited surface,
+border, radius, foreground, hover/focus and loading/disabled styles. No custom colors,
+shadow or spacing. Decorative Download icon disappears while loading; label changes
+from "Export Approvals Report" to "Exporting...". Failures use the existing Sonner toast.
+Visible to non-Guest viewers who can access the Approvals dashboard, including delegates.
+Combined export ignores tab/search/page while preserving stakeholder/delegate visibility.
+
+## HospitalExportButton (2026-11-05)
+
+File: `src/components/layout/hospital-export-button.tsx`, in Hospital PageHeader actions.
+
+Matches the Training/Security/Reception export buttons: shared outline `Button`
+with inherited surface, border, radius, text, hover/focus and loading/disabled styles;
+no custom colors, shadow or spacing. Decorative Download icon is hidden while loading.
+Label changes from "Export Hospital Report" to "Exporting..."; failures use Sonner's
+existing error toast. Visible only to non-Guest Hospital users. Downloads the combined
+awaiting, recorded/review and exemption report across all tabs/search/pages.
+
+## ReceptionExportButton (2026-11-05)
+
+File: `src/components/layout/reception-export-button.tsx`, in Reception PageHeader actions.
+
+Uses the same shared outline `Button` as Training/Security: inherited background,
+border, radius, foreground, hover, focus and disabled/loading styles; no custom colors
+or shadows. Lucide Download is decorative and hidden while loading. Label changes
+from "Export Reception Report" to "Exporting..."; failures use the existing Sonner toast.
+Grouped beside New Registration in `flex items-center gap-2`, preserving the header's
+title/actions layout. Visible only when Reception's existing `canManage` is true.
+Downloads the combined report regardless of tab, Local/Foreign filter, search or page.
+
 ## SecurityExportButton (2026-11-04)
 
 File: `src/components/layout/security-export-button.tsx`, in Security PageHeader actions.

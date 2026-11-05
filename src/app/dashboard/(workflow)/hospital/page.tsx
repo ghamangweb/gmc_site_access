@@ -8,6 +8,7 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { HospitalExportButton } from "@/components/layout/hospital-export-button";
 import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
@@ -128,6 +129,9 @@ export default async function HospitalQueuePage({
       <PageHeader
         title="Hospital"
         subtitle="Medical clearance queue for work-path visitors."
+        actions={
+          session.systemRole !== "Guest" ? <HospitalExportButton /> : undefined
+        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">

@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { ReceptionExportButton } from "@/components/layout/reception-export-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -169,9 +170,12 @@ export default async function ReceptionQueuePage({
         subtitle="Here, you'll find existing engagements and create new ones."
         actions={
           canManage ? (
-            <Button asChild>
-              <Link href="/dashboard/reception/new">New Registration</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <ReceptionExportButton />
+              <Button asChild>
+                <Link href="/dashboard/reception/new">New Registration</Link>
+              </Button>
+            </div>
           ) : undefined
         }
       />
