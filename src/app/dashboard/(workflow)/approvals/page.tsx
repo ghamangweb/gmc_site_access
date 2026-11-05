@@ -23,6 +23,7 @@ import { success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
   isStayExtendable,
+  stayEndAttention,
   stayExtensionRole,
 } from "@/lib/domain/stay-extensions";
 import {
@@ -121,7 +122,6 @@ export default async function ApprovalsQueuePage({
       label: "Awaiting Approval",
       value: "awaiting",
       href: "/dashboard/approvals",
-      count: pendingCount,
     },
     {
       label: "Approved",
@@ -266,7 +266,23 @@ export default async function ApprovalsQueuePage({
               <TableBody>
                 {approved.rows.map(({ approval, engagement, person }) => (
                   <TableRow key={approval.id} className="hover:bg-muted/50">
-                    <TableCell>{person.fullName}</TableCell>
+                    <TableCell>
+                      <NameWithAttention
+                        attention={
+                          // Only where Extend Stay applies, so the dot always
+                          // points at something the stakeholder can do.
+                          isStayExtendable({
+                            workflowState:
+                              engagement.workflowState as WorkflowState,
+                            accessState: engagement.accessState as AccessState,
+                          })
+                            ? stayEndAttention(engagement.departureDate)
+                            : undefined
+                        }
+                      >
+                        {person.fullName}
+                      </NameWithAttention>
+                    </TableCell>
                     <TableCell>
                       {approval.approverName}
                       <span className="ml-2 text-muted-foreground text-xs">
