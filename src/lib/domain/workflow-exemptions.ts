@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { notice } from "@/lib/domain/notification-messages";
 import {
   type AccessPurpose,
   type SystemRole,
-  WORKFLOW_EXEMPTION_STAGE_LABELS,
   WORKFLOW_EXEMPTION_STAGES,
   WORKFLOW_STATE_LABELS,
   type WorkflowExemptionInput,
@@ -42,14 +42,12 @@ export function workflowExemptionNextStageLabel(state: WorkflowState): string {
     : WORKFLOW_STATE_LABELS[state];
 }
 
+// The bell notice (wording agreed 2026-11-05). The approver, comment and next
+// stage are on the record and in the email, not here.
 export function workflowExemptionNotification(
   message: WorkflowExemptionMessage,
 ): string {
-  const stages = message.stages
-    .map((stage) => WORKFLOW_EXEMPTION_STAGE_LABELS[stage])
-    .join(", ");
-
-  return `Workflow exemption approved for ${message.personName} (${message.passportNo}). Exempted: ${stages}. Approved by ${message.approverName} (${message.approverRole}) at ${message.approvedAt.toISOString()}. Comment: ${message.reason}. Next stage: ${workflowExemptionNextStageLabel(message.nextState)}.`;
+  return notice.approvedWithExemption(message.personName, message.stages);
 }
 
 export const workflowExemptionSchema = z.object({

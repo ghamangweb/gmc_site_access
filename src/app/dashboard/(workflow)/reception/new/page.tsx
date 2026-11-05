@@ -83,12 +83,16 @@ export default async function NewReceptionPage({
             />
           }
           belowPreview={
-            <RegistrationCompletionForm
-              registrationRequestId={request.id}
-              isLocal={request.registrationType === "Local"}
-              documents={uploadedDocuments}
-              defaultApplicableDocuments={applicableDocuments}
-            />
+            // The queue menu's "Create Engagement" links here
+            // (#create-engagement), past the submission, straight to the form.
+            <div id="create-engagement" className="scroll-mt-6">
+              <RegistrationCompletionForm
+                registrationRequestId={request.id}
+                isLocal={request.registrationType === "Local"}
+                documents={uploadedDocuments}
+                defaultApplicableDocuments={applicableDocuments}
+              />
+            </div>
           }
           editForm={
             <ReceptionForm

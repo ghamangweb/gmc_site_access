@@ -113,9 +113,6 @@ export default async function TrainingQueuePage({
       <PageHeader
         title="Training School"
         subtitle="Induction queue for work-path and mine-site visitors."
-        actions={
-          session.systemRole !== "Guest" ? <TrainingExportButton /> : undefined
-        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -132,6 +129,8 @@ export default async function TrainingQueuePage({
             ]}
           />
           <QueueSearch searchParam="q" pageParam="page" />
+          {/* Last in the toolbar, after filter and search. */}
+          {session.systemRole !== "Guest" && <TrainingExportButton />}
         </div>
       </div>
 

@@ -47,8 +47,6 @@ import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
   isoToday,
-  WORKFLOW_STATE_LABELS,
-  type WorkflowState,
 } from "@/lib/domain/types";
 import {
   getLatestClearanceStatuses,
@@ -148,9 +146,6 @@ export default async function HospitalQueuePage({
       <PageHeader
         title="Hospital"
         subtitle="Medical clearance queue for work-path visitors."
-        actions={
-          session.systemRole !== "Guest" ? <HospitalExportButton /> : undefined
-        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -185,6 +180,8 @@ export default async function HospitalQueuePage({
             />
           )}
           <QueueSearch searchParam="q" pageParam="page" />
+          {/* Last in the toolbar, after filter and search. */}
+          {session.systemRole !== "Guest" && <HospitalExportButton />}
         </div>
       </div>
 
@@ -264,7 +261,6 @@ export default async function HospitalQueuePage({
                   <TableHead>Recorded</TableHead>
                   <TableHead>Cleared By</TableHead>
                   <TableHead>Next Review Date</TableHead>
-                  <TableHead>Stage</TableHead>
                   <TableHead>Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -300,15 +296,6 @@ export default async function HospitalQueuePage({
                         {clearance.nextReviewDate
                           ? formatQueueDate(parseISO(clearance.nextReviewDate))
                           : "-"}
-                      </TableCell>
-                      <TableCell>
-                        {
-                          // SAFETY: workflow_state is a text column the state
-                          // machine alone writes, always a WorkflowState.
-                          WORKFLOW_STATE_LABELS[
-                            engagement.workflowState as WorkflowState
-                          ]
-                        }
                       </TableCell>
                       <TableCell>
                         <Button asChild size="sm">
@@ -352,7 +339,6 @@ export default async function HospitalQueuePage({
                   <TableHead>Recorded</TableHead>
                   <TableHead>Cleared By</TableHead>
                   <TableHead>Next Review Date</TableHead>
-                  <TableHead>Stage</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -401,15 +387,6 @@ export default async function HospitalQueuePage({
                                 parseISO(clearance.nextReviewDate),
                               )
                             : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {
-                            // SAFETY: workflow_state is a text column the state
-                            // machine alone writes, always a WorkflowState.
-                            WORKFLOW_STATE_LABELS[
-                              engagement.workflowState as WorkflowState
-                            ]
-                          }
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>

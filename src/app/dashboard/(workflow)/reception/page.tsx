@@ -35,10 +35,7 @@ import {
   type AccessPurpose,
   type WorkflowState,
 } from "@/lib/domain/types";
-import {
-  countRegistrationRequestsByType,
-  listRegistrationRequests,
-} from "@/lib/services/registration-service";
+import { listRegistrationRequests } from "@/lib/services/registration-service";
 import {
   getCurrentCardExpiries,
   getLatestClearanceStatuses,
@@ -46,38 +43,6 @@ import {
   listRejectedEngagements,
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
-
-// Switching Local/Foreign keeps whatever is in the search box but drops the
-// page — page 4 of the old filter means nothing under the new one.
-function filterHref(
-  value: "Local" | "Foreign" | undefined,
-  search: string | undefined,
-  purpose: string | undefined,
-): string {
-  const params = new URLSearchParams();
-
-  if (value) {
-    params.set("type", value);
-  }
-
-  if (search) {
-    params.set("q", search);
-  }
-
-  if (purpose) {
-    params.set("purpose", purpose);
-  }
-
-  const query = params.toString();
-
-  return query ? `/dashboard/reception?${query}` : "/dashboard/reception";
-}
-
-const REGISTRATION_FILTERS = [
-  { label: "All", value: undefined },
-  { label: "Local", value: "Local" },
-  { label: "Foreign", value: "Foreign" },
-] as const;
 
 export default async function ReceptionQueuePage({
   searchParams,
@@ -122,8 +87,6 @@ export default async function ReceptionQueuePage({
   const request = toPageRequest(q, page);
   const accessPurpose = parseFilter(purpose, ACCESS_PURPOSES);
   const engagementStage = parseFilter(stage, WORKFLOW_STATES);
-
-  const typeCounts = await countRegistrationRequestsByType();
 
   const submissions =
     activeView === "submissions"
@@ -187,12 +150,9 @@ export default async function ReceptionQueuePage({
         subtitle="Here, you'll find existing engagements and create new ones."
         actions={
           canManage ? (
-            <div className="flex items-center gap-2">
-              <ReceptionExportButton />
-              <Button asChild>
-                <Link href="/dashboard/reception/new">New Registration</Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link href="/dashboard/reception/new">New Registration</Link>
+            </Button>
           ) : undefined
         }
       />
@@ -204,6 +164,18 @@ export default async function ReceptionQueuePage({
             <QueueFilters
               pageParam="page"
               fields={[
+                ...(activeView === "submissions"
+                  ? [
+                      {
+                        param: "type",
+                        label: "Registration Type",
+                        options: [
+                          { value: "Local", label: "Local" },
+                          { value: "Foreign", label: "Foreign" },
+                        ],
+                      },
+                    ]
+                  : []),
                 ...(activeView === "engagements"
                   ? [
                       {
@@ -222,78 +194,58 @@ export default async function ReceptionQueuePage({
             />
           )}
           <QueueSearch searchParam="q" pageParam="page" />
+          {/* Last in the toolbar, after filter and search. */}
+          {canManage && <ReceptionExportButton />}
         </div>
       </div>
 
       {activeView === "submissions" && submissions && (
-        <>
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-muted-foreground text-xs">Show</span>
-            <div className="flex items-center gap-1">
-              {REGISTRATION_FILTERS.map((filter) => (
-                <Button
-                  key={filter.label}
-                  asChild
-                  size="sm"
-                  variant={activeFilter === filter.value ? "default" : "ghost"}
-                >
-                  <Link href={filterHref(filter.value, q, purpose)}>
-                    {filter.label}
-                    <span className="text-xs opacity-70">
-                      {filter.value ? typeCounts[filter.value] : typeCounts.all}
-                    </span>
-                  </Link>
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            {submissions.rows.length === 0 ? (
-              <EmptyState
-                icon={InboxIcon}
-                title={
-                  activeFilter
-                    ? `No ${activeFilter} submissions`
-                    : "No submissions yet"
-                }
-                description={
-                  activeFilter
-                    ? "Switch the filter to All to see every submission."
-                    : "Registrations submitted from invitation links will show up here."
-                }
-              />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Nature of Visit</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {submissions.rows.map((request) => (
-                    <RegistrationRequestRow
-                      key={request.id}
-                      request={request}
-                      canManage={canManage}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-            <QueuePagination
-              page={submissions.page}
-              pageSize={submissions.pageSize}
-              total={submissions.total}
-              pageParam="page"
-              searchParams={{ q, type, purpose }}
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {submissions.rows.length === 0 ? (
+            <EmptyState
+              icon={InboxIcon}
+              title={
+                activeFilter
+                  ? `No ${activeFilter} submissions`
+                  : "No submissions yet"
+              }
+              description={
+                activeFilter
+                  ? "Switch the filter to All to see every submission."
+                  : "Registrations submitted from invitation links will show up here."
+              }
             />
-          </div>
-        </>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Nature of Visit</TableHead>
+                  <TableHead>Submitted</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {submissions.rows.map((request) => (
+                  <RegistrationRequestRow
+                    key={request.id}
+                    request={request}
+                    canManage={canManage}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <QueuePagination
+            page={submissions.page}
+            pageSize={submissions.pageSize}
+            total={submissions.total}
+            pageParam="page"
+            searchParams={{ q, type, purpose }}
+          />
+        </div>
       )}
 
       {activeView === "engagements" && engagements && (
@@ -320,9 +272,7 @@ export default async function ReceptionQueuePage({
                   <TableHead>Name</TableHead>
                   <TableHead>Nature of Visit</TableHead>
                   <TableHead>Status</TableHead>
-                  {canManage && (
-                    <TableHead className="text-right">Actions</TableHead>
-                  )}
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

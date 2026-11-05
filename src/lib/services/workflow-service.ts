@@ -56,6 +56,7 @@ import {
   HOSPITAL_REPORT_HEADERS,
   hospitalReportRows,
 } from "@/lib/domain/hospital-report";
+import { notice } from "@/lib/domain/notification-messages";
 import {
   DEFAULT_PAGE_SIZE,
   type Page,
@@ -204,6 +205,21 @@ export async function getEngagementById(
     .from(engagements)
     .where(eq(engagements.id, engagementId));
   return engagement;
+}
+
+// The visitor's name for a notification — notifications don't link to the
+// record, so the name is what tells the reader which one it is.
+async function personNameFor(
+  engagementId: string,
+  client: DbClient = db,
+): Promise<string> {
+  const [row] = await client
+    .select({ fullName: persons.fullName })
+    .from(engagements)
+    .innerJoin(persons, eq(engagements.personId, persons.id))
+    .where(eq(engagements.id, engagementId));
+
+  return row?.fullName ?? "A visitor";
 }
 
 export async function getActiveWorkflowCycle(
@@ -771,7 +787,7 @@ export async function submitForStakeholderApproval(
   await notifyStaff(
     recipients,
     engagementId,
-    "Stakeholder approval requested. CSO, HCM, GMM or EM sign-off needed.",
+    notice.approvalRequested(await personNameFor(engagementId)),
   );
 
   return { recipients };
@@ -1521,13 +1537,16 @@ async function applyApprovalDecision(
         : undefined;
 
     if (recipients.length > 0 && (exemptionMessage || nextRole)) {
+      const personName = await personNameFor(engagementId, tx);
+      const message = exemptionMessage
+        ? workflowExemptionNotification(exemptionMessage)
+        : notice.readyFor(personName, nextRole as WorkflowRole);
+
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: exemptionMessage
-            ? workflowExemptionNotification(exemptionMessage)
-            : `Engagement approved at Reception and routed to ${nextRole}.`,
+          message,
         })),
       );
     }
@@ -1695,12 +1714,14 @@ export async function rejectStakeholderApproval(
         ]
       : receptionists;
 
+    const rejectedName = await personNameFor(engagementId, tx);
+
     if (recipients.length > 0) {
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: `Stakeholder approval rejected by ${approverName} (${approverRole}). Reason: ${reason}`,
+          message: notice.applicationRejected(rejectedName),
         })),
       );
     }
@@ -1731,7 +1752,10 @@ export async function requestDelegatedApproval(
   await notifyStaff(
     recipients,
     engagementId,
-    `Delegated approval requested. CSO, HCM, GMM and EM are unavailable. Reason: ${reason}`,
+    notice.delegatedApprovalRequested(
+      await personNameFor(engagementId),
+      reason,
+    ),
   );
 
   return { recipients };
@@ -1771,7 +1795,7 @@ export async function grantDelegatedApproval(
     await notifyStaff(
       [recipient],
       engagementId,
-      "You've been granted a one-off delegated approval privilege for this engagement.",
+      notice.delegationGranted(await personNameFor(engagementId)),
     );
   }
 
@@ -1870,12 +1894,14 @@ export async function requestTermination(
       comments: `Access revocation requested: ${reason}`,
     });
 
+    const revocationName = await personNameFor(engagementId, tx);
+
     if (recipients.length > 0) {
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: `Access revocation requested. Reason: ${reason}`,
+          message: notice.revocationRequested(revocationName),
         })),
       );
     }
@@ -1952,12 +1978,14 @@ export async function revokeAccess(
       comments: "Access revoked",
     });
 
+    const revokedName = await personNameFor(engagementId, tx);
+
     if (recipients.length > 0) {
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: "Site access has been revoked.",
+          message: notice.accessRevoked(revokedName),
         })),
       );
     }
@@ -2322,9 +2350,6 @@ export async function recordHospitalClearance(
       ? await getStaffByWorkflowRoles([nextRole], tx)
       : [];
 
-    const destinationLabel =
-      destination.nextRole === "SecurityStaff" ? "Security" : "Training School";
-
     await tx.insert(hospitalClearances).values({
       workflowCycleId: cycle.id,
       clearanceStatus: input.clearanceStatus,
@@ -2354,16 +2379,22 @@ export async function recordHospitalClearance(
     }
 
     // Each audience is told what it has to act on, not one shared sentence.
+    const personName = await personNameFor(engagementId, tx);
     const receptionMessage =
       outcome === "Unfit"
-        ? "Hospital marked this record Unfit. It remains at Hospital."
-        : `Hospital cleared this record Fit with Conditions. It has moved to ${destinationLabel}.`;
+        ? notice.unfit(personName)
+        : notice.fitWithConditions(personName);
 
     const dashboardNotices = [
       ...nextRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: `Hospital clearance recorded and routed to ${destinationLabel}.`,
+        message: notice.medicallyCleared(
+          personName,
+          destination.nextRole === "SecurityStaff"
+            ? "SecurityStaff"
+            : "TrainingStaff",
+        ),
       })),
       ...[...receptionRecipients, ...departmentHeads].map((recipient) => ({
         recipientStaffUserId: recipient.id,
@@ -2373,7 +2404,7 @@ export async function recordHospitalClearance(
       ...hseRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: "Hospital recorded the medical clearance for this record.",
+        message: notice.clearanceRecorded(personName),
       })),
     ];
 
@@ -2495,10 +2526,8 @@ export async function recordHospitalReview(
           );
     const hseRecipients = await getStaffByWorkflowRoles(["HSE"], tx);
 
-    const followUpMessage =
-      status === "Unfit"
-        ? "A Hospital review recorded this record Unfit. Its workflow stage has not changed — please follow up."
-        : `A Hospital review recorded this record ${HOSPITAL_CLEARANCE_LABELS[status]}. Its workflow stage has not changed.`;
+    const personName = await personNameFor(engagementId, tx);
+    const followUpMessage = notice.reviewRecorded(personName, status);
 
     const notices = [
       ...[...stageRecipients, ...receptionRecipients, ...departmentHeads].map(
@@ -2511,7 +2540,7 @@ export async function recordHospitalReview(
       ...hseRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: "Hospital recorded a medical review for this record.",
+        message: notice.reviewRecordedForHse(personName),
       })),
     ];
 
@@ -2696,10 +2725,7 @@ export async function claimHospitalReviewReminder(
     }
 
     if (recipients.length > 0) {
-      const message =
-        kind === "DayBefore"
-          ? `Medical review for ${row.personName} is due tomorrow.`
-          : `Medical review for ${row.personName} is due today.`;
+      const message = notice.reviewDue(row.personName, kind === "Due");
 
       await tx.insert(notifications).values(
         recipients.map((recipient) => ({
@@ -2834,18 +2860,21 @@ export async function extendStay(
       departmentHeads,
     );
 
-    const extendedTo = `Stay extended to ${valid.newDepartureDate} by ${actor.displayName} (${role}).`;
+    const personName = await personNameFor(engagementId, tx);
     const notices = [
       ...securityRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: `${extendedTo} Update the access card if needed.`,
+        message: notice.stayExtendedForSecurity(
+          personName,
+          valid.newDepartureDate,
+        ),
       })),
       ...[...receptionRecipients, ...departmentHeads, ...hseRecipients].map(
         (recipient) => ({
           recipientStaffUserId: recipient.id,
           engagementId,
-          message: extendedTo,
+          message: notice.stayExtended(personName, valid.newDepartureDate),
         }),
       ),
     ];
@@ -3946,17 +3975,17 @@ export async function recordInductionCompletion(
       comments: "Induction completed",
     });
 
+    const personName = await personNameFor(engagementId, tx);
     const notices = [
       ...recipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message:
-          "Induction completed and the record was forwarded to Security.",
+        message: notice.inductionCompleted(personName),
       })),
       ...hseRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: "Training School completed the induction for this record.",
+        message: notice.inductionCompletedForHse(personName),
       })),
     ];
 
@@ -4256,7 +4285,10 @@ export async function updateCardExpiry(
       receptionRecipients,
     );
 
-    const message = `Security updated the access card expiry to ${valid.newExpiry}.`;
+    const message = notice.cardExpiryUpdated(
+      await personNameFor(engagementId, tx),
+      valid.newExpiry,
+    );
     const notices = [...receptionRecipients, ...hseRecipients].map(
       (recipient) => ({
         recipientStaffUserId: recipient.id,
@@ -4391,16 +4423,17 @@ export async function activateAccess(
       comments: `Access activated, card ${input.accessCardNumber}\n${comments}`,
     });
 
+    const personName = await personNameFor(engagementId, tx);
     const notices = [
       ...recipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: "Site access has been activated.",
+        message: notice.accessActivated(personName),
       })),
       ...hseRecipients.map((recipient) => ({
         recipientStaffUserId: recipient.id,
         engagementId,
-        message: "Security activated site access for this record.",
+        message: notice.accessActivated(personName),
       })),
     ];
 
