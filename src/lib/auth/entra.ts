@@ -42,6 +42,19 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   },
   pages: {
     signOut: "/sign-out",
+    // Our sign-in page, not Auth.js's built-in "Server error" screen. The
+    // common case is a double callback: someone clicks Microsoft's slow
+    // consent button twice, the first callback signs them in and uses up the
+    // one-time state/PKCE check, and the second fails it (InvalidCheck), which
+    // Auth.js reports as "Configuration". The sign-in page sends an
+    // already-signed-in user straight on, so they never see an error; anyone
+    // else gets a short "try again" message and the button.
+    error: "/sign-in",
+    // Sign-in errors (OAuthCallbackError — e.g. Microsoft returning a
+    // declined consent — and the other SignInError kinds) go to `signIn`,
+    // not `error`, so it has to point here too. Auth.js also sends its own
+    // sign-in redirects here, with the return path as `callbackUrl`.
+    signIn: "/sign-in",
   },
   callbacks: {
     async signIn() {

@@ -1,24 +1,41 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { signIn } from "@/lib/auth/entra";
-import { safeNextPath } from "@/lib/auth/next-path";
+import { safeCallbackPath, safeNextPath } from "@/lib/auth/next-path";
 import { getSession } from "@/lib/auth/session";
 
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{
+    next?: string;
+    callbackUrl?: string;
+    error?: string;
+  }>;
 }) {
+  const params = await searchParams;
   // The page that sent them here, if any. After Microsoft sign-in they go
   // straight to it; the proxy then asks for the PIN and keeps it along.
-  const next = safeNextPath((await searchParams).next);
+  // Our proxy sends `?next=`; Auth.js's own redirects send `?callbackUrl=`.
+  const next =
+    safeNextPath(params.next) ?? safeCallbackPath(params.callbackUrl);
 
+  // Checked before any error is shown: when Auth.js sends a failed second
+  // callback here, the first one has usually already signed them in.
   const session = await getSession();
   if (session) {
     redirect(next ?? "/");
   }
+
+  // Auth.js's error type, never echoed back — only used to pick a message.
+  const errorMessage = params.error
+    ? params.error === "AccessDenied"
+      ? "Sign-in was cancelled or access was denied. Please try again."
+      : "Sign-in didn't finish. Please try again."
+    : undefined;
 
   return (
     <>
@@ -30,6 +47,11 @@ export default async function SignInPage({
           Site Access Workflow Management System
         </h1>
       </div>
+      {errorMessage && (
+        <Alert variant="destructive" className="max-w-md">
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
       <form
         action={async () => {
           "use server";
