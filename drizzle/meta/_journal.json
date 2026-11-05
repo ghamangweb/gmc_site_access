@@ -232,6 +232,13 @@
       "when": 1793811302873,
       "tag": "0032_access_card_expiry_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793868234701,
+      "tag": "0033_clearance_status_index",
+      "breakpoints": true
     }
   ]
 }

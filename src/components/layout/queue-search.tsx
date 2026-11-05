@@ -15,7 +15,7 @@ const DEBOUNCE_MS = 300;
 export function QueueSearch({
   searchParam,
   pageParam,
-  placeholder = "Search by name or passport number",
+  placeholder = "Search",
 }: {
   searchParam: string;
   /** Reset to page 1 on a new search — page 4 of the old result set is
@@ -70,7 +70,7 @@ export function QueueSearch({
   ]);
 
   return (
-    <div className="relative w-full max-w-xs">
+    <div className="relative w-full max-w-56">
       <SearchIcon className="-translate-y-1/2 absolute top-1/2 left-3 h-4 w-4 text-muted-foreground" />
       <Input
         value={value}

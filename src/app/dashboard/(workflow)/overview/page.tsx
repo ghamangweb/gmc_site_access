@@ -2,6 +2,7 @@ import { UsersRound } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,15 @@ import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { danger, pickAttention } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
+import {
+  ACCESS_PURPOSES,
+  ACCESS_STATES,
+  accessPurposeOptions,
+  accessStateOptions,
+  parseFilter,
+  WORKFLOW_STATES,
+  workflowStateOptions,
+} from "@/lib/domain/queue-filters";
 import {
   ACCESS_PURPOSE_LABELS,
   ACCESS_STATE_LABELS,
@@ -123,7 +133,13 @@ function InductionCell({
 export default async function RecordsOverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    page?: string;
+    stage?: string;
+    access?: string;
+    purpose?: string;
+  }>;
 }) {
   const session = await requirePinConfirmed();
 
@@ -131,8 +147,13 @@ export default async function RecordsOverviewPage({
     redirect("/dashboard");
   }
 
-  const { q, page } = await searchParams;
-  const records = await listRecordsOverview(toPageRequest(q, page));
+  const { q, page, stage, access, purpose } = await searchParams;
+  const records = await listRecordsOverview({
+    ...toPageRequest(q, page),
+    workflowState: parseFilter(stage, WORKFLOW_STATES),
+    accessState: parseFilter(access, ACCESS_STATES),
+    accessPurpose: parseFilter(purpose, ACCESS_PURPOSES),
+  });
 
   return (
     <div>
@@ -141,12 +162,28 @@ export default async function RecordsOverviewPage({
         subtitle="Where every record stands, and what each stage has recorded."
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-end gap-4">
-        <QueueSearch
-          searchParam="q"
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+        <QueueFilters
           pageParam="page"
-          placeholder="Search records"
+          fields={[
+            {
+              param: "stage",
+              label: "Stage",
+              options: workflowStateOptions(),
+            },
+            {
+              param: "access",
+              label: "Access",
+              options: accessStateOptions(),
+            },
+            {
+              param: "purpose",
+              label: "Nature of Visit",
+              options: accessPurposeOptions(),
+            },
+          ]}
         />
+        <QueueSearch searchParam="q" pageParam="page" />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -227,7 +264,7 @@ export default async function RecordsOverviewPage({
           pageSize={records.pageSize}
           total={records.total}
           pageParam="page"
-          searchParams={{ q }}
+          searchParams={{ q, stage, access, purpose }}
         />
       </div>
     </div>

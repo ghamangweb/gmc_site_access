@@ -38,7 +38,7 @@ const STATUS_CONSEQUENCES: Record<HospitalClearanceStatus, string> = {
 const REVIEW_CONSEQUENCES: Record<HospitalClearanceStatus, string> = {
   Fit: "Recorded as a review. The record's stage is not changed.",
   FitWithConditions:
-    "Recorded as a review with a new review date. The record's stage is not changed.",
+    "Recorded as a review, with a new review date if one is set. The record's stage is not changed.",
   Unfit:
     "Recorded as a review. The record's stage is not changed, and Reception is notified.",
 };
@@ -73,12 +73,10 @@ export function HospitalForm({
   const isReview = reviewOfClearanceId !== undefined;
   const disabled = readOnly || isPending;
   const commentsRequired = status === "FitWithConditions" || status === "Unfit";
-  const reviewDateRequired = status === "FitWithConditions";
+  // Not every condition needs a medical follow-up, so the date is optional.
+  const showReviewDate = status === "FitWithConditions";
   const canSubmit =
-    !disabled &&
-    status !== "" &&
-    (!commentsRequired || comments.trim() !== "") &&
-    (!reviewDateRequired || nextReviewDate !== "");
+    !disabled && status !== "" && (!commentsRequired || comments.trim() !== "");
   // The server checks the same rule; this just keeps today and earlier out of
   // the picker.
 
@@ -90,7 +88,8 @@ export function HospitalForm({
     const input = {
       clearanceStatus: status,
       doctorComments: comments,
-      nextReviewDate: reviewDateRequired ? nextReviewDate : undefined,
+      nextReviewDate:
+        showReviewDate && nextReviewDate !== "" ? nextReviewDate : undefined,
     };
 
     startTransition(async () => {
@@ -171,9 +170,9 @@ export function HospitalForm({
           )}
         </div>
 
-        {reviewDateRequired && (
+        {showReviewDate && (
           <div className="flex flex-col gap-2">
-            <Label>Next Review Date *</Label>
+            <Label>Next Review Date (optional)</Label>
             <DatePicker
               value={nextReviewDate}
               onChange={setNextReviewDate}

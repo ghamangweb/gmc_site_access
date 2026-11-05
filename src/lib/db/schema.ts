@@ -339,6 +339,10 @@ export const hospitalClearances = pgTable("hospital_clearances", {
   // that used to restrict it to Fit / FitWithConditions / Unfit: the
   // HospitalClearanceStatus type is the only guard now.
   clearanceStatus: encryptedText().notNull(),
+  // blindIndex(clearanceStatus), so the Recorded tab can filter by outcome
+  // without decrypting. Nullable only for rows written before it existed;
+  // `db:backfill:clearance-index` fills those.
+  clearanceStatusIndex: text(),
   doctorComments: encryptedText().notNull(),
   clearanceDate: timestamp({ withTimezone: true }).defaultNow().notNull(),
   // Several doctors share the Hospital queue, so each decision carries who
