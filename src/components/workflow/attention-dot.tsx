@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 const TONE: Record<Attention["tone"], string> = {
   danger: "bg-status-danger",
+  warning: "bg-status-warning",
   success: "bg-status-success",
 };
 

@@ -1697,6 +1697,36 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Queue tabs without counts (2026-11-05)
+
+- [x] `QueueViewTabs` shows the label only — no count on any dashboard tab. The count queries
+      that only fed the tabs were dropped (Reception, Hospital, Training, Security); Approvals
+      keeps `countEngagementsAwaitingApproval` for the delegate redirect
+
+---
+
+## Completed records show their access state (2026-11-05)
+
+- [x] Approvals "Approved" tab Stage column and Reception "Engagements" Status column: a
+      Completed record with a card shows its access state — Active, Expired, Revocation
+      Requested, Revoked — instead of "Completed" (`recordStatus`, `RecordStatusBadge`).
+      Expired comes from the card's expiry date (`getCurrentCardExpiries`, one query per page),
+      not only the stored state. A completed Familiarization Visit (no card) still reads
+      Completed. Reception's "Approval Rejected" badge is unchanged
+
+---
+
+## Excel exports with a sheet per tab (2026-11-05)
+
+- [x] The five dashboard exports (Reception, Hospital, Training, Security, Approvals) download
+      `.xlsx` instead of `.csv` (`exceljs`, see `library-docs.md`)
+- [x] Sheet 1 "All Records": the full existing report. Then one sheet per dashboard tab with that
+      tab's rows and its agreed columns (`report-sheets.ts`). Exemption columns on All Records only;
+      passport/ID kept; doctor's comments only in Hospital's
+- [x] Same access as before (write access; full data set, ignoring the current search/page)
+
+---
+
 ## Hospital: optional Next Review Date (2026-11-05)
 
 - [x] Fit with Conditions no longer requires a Next Review Date (a condition may need no medical
@@ -1725,7 +1755,7 @@ Dashboard + email for each audience; each email links to a page that audience ca
       No Stage filter on Hospital. Filters live in one "Filter" button (popover); search
       narrowed (`max-w-56`), placeholder "Search" everywhere; toolbar right-aligned
 - [x] Reception submissions filter by purpose in JS (it lives in `form_data`)
-- [x] Tab count pills and CSV exports are unchanged (unfiltered)
+- [x] Exports are unchanged: still the full data set, ignoring filters
 - [x] `tsc --noEmit`, `biome check` clean on changed files; unit tests pass
 - [ ] **`bun run db:migrate` then `bun run db:backfill:clearance-index`, dev then production.**
       Until the backfill runs, older clearances don't match an Outcome filter

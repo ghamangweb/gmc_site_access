@@ -1,9 +1,15 @@
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { APPROVALS_REPORT_HEADERS } from "@/lib/domain/approvals-report";
+import {
+  APPROVALS_SHEETS,
+  buildReportSheets,
+} from "@/lib/domain/report-sheets";
 import { STAKEHOLDER_ROLES } from "@/lib/domain/types";
+import { buildReportWorkbook, XLSX_CONTENT_TYPE } from "@/lib/report-workbook";
 import {
   countEngagementsAwaitingApproval,
   countStakeholderApprovalsBy,
-  exportApprovalsCsv,
+  exportApprovalsRows,
 } from "@/lib/services/workflow-service";
 
 export async function GET(_request: Request): Promise<Response> {
@@ -38,13 +44,19 @@ export async function GET(_request: Request): Promise<Response> {
   }
 
   try {
-    const csv = await exportApprovalsCsv(delegatedTo);
+    const workbook = await buildReportWorkbook(
+      buildReportSheets(
+        APPROVALS_REPORT_HEADERS,
+        await exportApprovalsRows(delegatedTo),
+        APPROVALS_SHEETS,
+      ),
+    );
     const date = new Date().toISOString().slice(0, 10);
 
-    return new Response(csv, {
+    return new Response(new Uint8Array(workbook), {
       headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="approvals-report-${date}.csv"`,
+        "Content-Type": XLSX_CONTENT_TYPE,
+        "Content-Disposition": `attachment; filename="approvals-data-${date}.xlsx"`,
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
       },

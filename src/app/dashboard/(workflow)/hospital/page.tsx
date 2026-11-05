@@ -51,8 +51,6 @@ import {
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
-  countAwaitingHospitalReviews,
-  countEngagementsForLayer,
   getLatestClearanceStatuses,
   listAwaitingHospitalReviews,
   listEngagementsForLayer,
@@ -103,18 +101,7 @@ export default async function HospitalQueuePage({
   const clearanceStatus = parseFilter(outcome, HOSPITAL_CLEARANCE_STATUSES);
   const recordedBy = parseIdFilter(by);
 
-  // The awaiting pills must show outstanding work on every tab, so the counts
-  // are their own queries.
-  const [
-    awaitingCount,
-    reviewCount,
-    awaiting,
-    awaitingReview,
-    recorded,
-    recorders,
-  ] = await Promise.all([
-    countEngagementsForLayer("AtHospital", ["Work", "WorkMine"]),
-    countAwaitingHospitalReviews(),
+  const [awaiting, awaitingReview, recorded, recorders] = await Promise.all([
     activeView === "awaiting"
       ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
       : undefined,
@@ -143,13 +130,11 @@ export default async function HospitalQueuePage({
       label: "Awaiting Clearance",
       value: "awaiting",
       href: "/dashboard/hospital",
-      count: awaitingCount,
     },
     {
       label: "Awaiting Review",
       value: "review",
       href: "/dashboard/hospital?view=review",
-      count: reviewCount,
     },
     {
       label: "Recorded Clearances",

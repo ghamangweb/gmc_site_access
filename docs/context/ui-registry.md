@@ -1738,7 +1738,7 @@ Files: `components/layout/queue-view-tabs.tsx` (new), `dashboard/(workflow)/hosp
 | Tab strip | `flex items-center gap-1 rounded-lg border border-border p-1` |
 | Active tab | `Button size="sm" variant="default"` |
 | Inactive tab | `Button size="sm" variant="ghost"` |
-| Tab count | `<span className="text-xs opacity-70">`, hidden at zero |
+| Tab count | None — tabs show their label only (removed 2026-11-05) |
 | Worked-on date column | `text-muted-foreground`, `formatQueueDate` → "03 Nov 2026" |
 | Row action (worked-on) | `Button variant="ghost" size="sm"` → the record page |
 | Outcome badge (Hospital) | Fit → success, Fit with Conditions → warning, Unfit → danger |
@@ -1767,9 +1767,9 @@ decisions in the history.
 **One search/page pair per page, not two.** With tabs only one table is on screen, so `q` and
 `page` are shared and the inactive query is never run (`activeView === … ? await … : undefined`,
 Reception's existing shape). This replaced an earlier two-stacked-sections version of the
-Hospital page that needed `cq`/`cpage` alongside `q`/`page`. The **count on the awaiting tab is
-its own query** (`countEngagementsForLayer`, `countEngagementsAwaitingApproval`) because the
-pill must show outstanding work while the worked-on tab is the one rendered.
+Hospital page that needed `cq`/`cpage` alongside `q`/`page`. **Tabs carry no count** — the
+per-tab count queries were removed (2026-11-05); Approvals still runs
+`countEngagementsAwaitingApproval` because it gates the delegate redirect.
 
 **Every layer form now redirects to its own queue after a successful submit** —
 `HospitalForm`, `TrainingForm`, `ItForm` push to `/dashboard/{layer}`, matching
@@ -2298,7 +2298,7 @@ Last updated: 2026-11-04
 | Border | `border-border` on the wrapper |
 | Border radius | `rounded-xl` |
 | Text — primary | table default |
-| Text — secondary | "Not recorded" `text-muted-foreground text-xs`; not-applicable "—" `text-muted-foreground` |
+| Text — secondary | none — "Pending" is a neutral badge (`bg-status-neutral-bg text-status-neutral-fg`), same as Access's Pending; a stage the visit never goes through is left empty |
 | Spacing | search row `mb-4 flex flex-wrap items-center justify-end gap-4` |
 | Hover state | table default — rows are not links |
 | Shadow | none — this system never uses `shadow-*` |
@@ -2306,8 +2306,9 @@ Last updated: 2026-11-04
 
 **Pattern notes:**
 Read-only by design: no row links, no actions column, no record pages. Medical and Induction show
-outcomes only — never doctor's or trainer's comments. "—" means the nature of visit never goes
-through that layer; "Not recorded" means it does but hasn't yet. No passport / Ghana Card column —
+outcomes only — never doctor's or trainer's comments. An empty cell means the nature of visit
+never goes through that layer (no "—", updated 2026-11-05); "Pending" means it does but nothing is
+recorded yet. Access is empty for a Familiarization Visit, which never gets a card. No passport / Ghana Card column —
 no dashboard table shows one (2026-11-04).
 
 ### ApprovalRowActions / ExtendStayDialog / StayExtensionsCard (2026-11-04)
@@ -2354,7 +2355,7 @@ Last updated: 2026-11-04
 
 | Property | Class |
 |---|---|
-| Background | dot + ring `bg-status-danger` (danger) / `bg-status-success` (success) |
+| Background | dot + ring `bg-status-danger` (danger) / `bg-status-warning` (warning) / `bg-status-success` (success) |
 | Border | none |
 | Border radius | `rounded-full` |
 | Text — primary | none — label is `title` tooltip + `sr-only` text |
@@ -2365,8 +2366,9 @@ Last updated: 2026-11-04
 | Status / accent usage | ring `animate-ping opacity-75`, hidden under `motion-reduce` |
 
 **Pattern notes:**
-Queue rows only, before the person's name. Danger = wrong or urgent; success = new and waiting on
-this viewer. One dot per row — `pickAttention` takes the first danger, else the first success.
+Queue rows only, before the person's name. Danger = wrong or urgent; warning = about to need
+action; success = new and waiting on this viewer. One dot per row — `pickAttention` takes the
+first danger, then the first warning, then the first success.
 `NameWithAttention` always reserves the dot's `size-2` slot so names line up. Don't flag a tab
 whose every row is the same condition (Reception's Rejected tab, Security's Revocations tab).
 
@@ -2377,4 +2379,16 @@ whose every row is the same condition (Reception's Rejected tab, Security's Revo
 | Training (Awaiting) | medical expired / expiring (≤ 30 days) | — |
 | Security (Granted, current card) | revocation requested, access expired | stay extended — update the card |
 | Approvals (Awaiting) | — | waiting more than 3 days |
+| Approvals (Approved, Extend Stay available) | stay ended (red) · ends within 7 days (yellow, `warning`) | — |
 | Site Access Records | revocation requested, Unfit (not exempted), access expired | — |
+
+### RecordStatusBadge (2026-11-05)
+
+File: src/components/workflow/record-status-badge.tsx (rule: src/lib/domain/record-status.ts)
+Last updated: 2026-11-05
+
+A record's status badge: its stage while in progress (info; Completed success, Cancelled danger,
+Draft neutral), its card's state once Completed with a card (Active success, Revocation Requested
+warning, Expired / Revoked danger). Used by the Approvals "Approved" tab and Reception's
+"Engagements" tab; replaces Reception's local `WORKFLOW_STATE_BADGE`. Pass the current card's
+expiry so a lapsed card reads Expired before `expireLapsedAccess` has run.

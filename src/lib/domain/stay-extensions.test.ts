@@ -4,6 +4,7 @@ import {
   earliestExtensionDate,
   isStayExtendable,
   type StayExtensionActor,
+  stayEndAttention,
   stayExtensionRole,
   validateStayExtension,
 } from "./stay-extensions";
@@ -127,4 +128,26 @@ test("a reason and a captured signature are required", () => {
 test("the picker starts the day after departure, or today once that has passed", () => {
   assert.equal(earliestExtensionDate(daysFromToday(3)), daysFromToday(4));
   assert.equal(earliestExtensionDate(daysFromToday(-30)), isoToday());
+});
+
+test("stay dot: red once ended, yellow within the last 7 days, none before", () => {
+  const today = "2026-11-05";
+
+  assert.deepEqual(stayEndAttention("2026-11-04", today), {
+    tone: "danger",
+    label: "Stay ended on 2026-11-04",
+  });
+  assert.deepEqual(stayEndAttention("2026-11-05", today), {
+    tone: "warning",
+    label: "Stay ends today",
+  });
+  assert.deepEqual(stayEndAttention("2026-11-06", today), {
+    tone: "warning",
+    label: "Stay ends in 1 day",
+  });
+  assert.deepEqual(stayEndAttention("2026-11-12", today), {
+    tone: "warning",
+    label: "Stay ends in 7 days",
+  });
+  assert.equal(stayEndAttention("2026-11-13", today), undefined);
 });

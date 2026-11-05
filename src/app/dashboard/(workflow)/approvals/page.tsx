@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { NameWithAttention } from "@/components/workflow/attention-dot";
+import { RecordStatusBadge } from "@/components/workflow/record-status-badge";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
@@ -28,8 +29,10 @@ import {
   parseFilter,
   workflowStateOptions,
 } from "@/lib/domain/queue-filters";
+import { recordStatus } from "@/lib/domain/record-status";
 import {
   isStayExtendable,
+  stayEndAttention,
   stayExtensionRole,
 } from "@/lib/domain/stay-extensions";
 import {
@@ -37,7 +40,6 @@ import {
   type AccessPurpose,
   type AccessState,
   STAKEHOLDER_ROLES,
-  WORKFLOW_STATE_LABELS,
   type WorkflowState,
 } from "@/lib/domain/types";
 import {
@@ -47,6 +49,7 @@ import {
 import {
   countEngagementsAwaitingApproval,
   countStakeholderApprovalsBy,
+  getCurrentCardExpiries,
   listEngagementsAwaitingApproval,
   listRecentStakeholderApprovals,
 } from "@/lib/services/workflow-service";
@@ -145,6 +148,11 @@ export default async function ApprovalsQueuePage({
   const mayBypass = canGrantWorkflowExemption(session);
   const mayExtend = stayExtensionRole(session) !== undefined;
 
+  // Completed records show their card's state instead of "Completed".
+  const cardExpiries = await getCurrentCardExpiries(
+    approved?.rows.map(({ engagement }) => engagement.id) ?? [],
+  );
+
   const firstName = session.displayName?.split(" ")[0] ?? "there";
 
   const views = [
@@ -152,7 +160,6 @@ export default async function ApprovalsQueuePage({
       label: "Awaiting Approval",
       value: "awaiting",
       href: "/dashboard/approvals",
-      count: pendingCount,
     },
     {
       label: "Approved",
@@ -310,7 +317,26 @@ export default async function ApprovalsQueuePage({
               <TableBody>
                 {approved.rows.map(({ approval, engagement, person }) => (
                   <TableRow key={approval.id} className="hover:bg-muted/50">
-                    <TableCell>{person.fullName}</TableCell>
+                    <TableCell>
+                      <NameWithAttention
+                        attention={
+                          // Only where this viewer's Extend Stay is enabled —
+                          // the same condition as the row action — so the dot
+                          // always points at something they can do. A
+                          // delegate sees no stay dot.
+                          mayExtend &&
+                          isStayExtendable({
+                            workflowState:
+                              engagement.workflowState as WorkflowState,
+                            accessState: engagement.accessState as AccessState,
+                          })
+                            ? stayEndAttention(engagement.departureDate)
+                            : undefined
+                        }
+                      >
+                        {person.fullName}
+                      </NameWithAttention>
+                    </TableCell>
                     <TableCell>
                       {approval.approverName}
                       <span className="ml-2 text-muted-foreground text-xs">
@@ -322,13 +348,16 @@ export default async function ApprovalsQueuePage({
                       {formatQueueDate(approval.approvedAt)}
                     </TableCell>
                     <TableCell>
-                      {
-                        // SAFETY: workflow_state is a text column the state
-                        // machine alone writes, always a WorkflowState member.
-                        WORKFLOW_STATE_LABELS[
-                          engagement.workflowState as WorkflowState
-                        ]
-                      }
+                      <RecordStatusBadge
+                        status={recordStatus({
+                          // SAFETY: workflow_state and access_state are text
+                          // columns written only from their unions.
+                          workflowState:
+                            engagement.workflowState as WorkflowState,
+                          accessState: engagement.accessState as AccessState,
+                          cardExpiry: cardExpiries.get(engagement.id),
+                        })}
+                      />
                     </TableCell>
                     <TableCell>{engagement.departureDate}</TableCell>
                     <TableCell className="text-right">

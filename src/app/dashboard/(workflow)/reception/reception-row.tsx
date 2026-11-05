@@ -27,23 +27,15 @@ import { Label } from "@/components/ui/label";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { NameWithAttention } from "@/components/workflow/attention-dot";
+import { RecordStatusBadge } from "@/components/workflow/record-status-badge";
 import type { Attention } from "@/lib/domain/attention";
+import { recordStatus } from "@/lib/domain/record-status";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
-  WORKFLOW_STATE_LABELS,
+  type AccessState,
   type WorkflowState,
 } from "@/lib/domain/types";
-
-export const WORKFLOW_STATE_BADGE: Record<WorkflowState, string> = {
-  Draft: "bg-status-neutral-bg text-status-neutral-fg",
-  AtReception: "bg-status-info-bg text-status-info-fg",
-  AtHospital: "bg-status-info-bg text-status-info-fg",
-  AtTraining: "bg-status-info-bg text-status-info-fg",
-  AtSecurity: "bg-status-info-bg text-status-info-fg",
-  Completed: "bg-status-success-bg text-status-success-fg",
-  Cancelled: "bg-status-danger-bg text-status-danger-fg",
-};
 
 type ReceptionRowProps = {
   engagementId: string;
@@ -51,6 +43,8 @@ type ReceptionRowProps = {
   accessPurpose: string;
   workflowState: WorkflowState;
   accessState: string;
+  /** The current card's expiry, so a lapsed card reads Expired. */
+  cardExpiry: string | undefined;
   /** A stakeholder rejected it and Reception has not asked again. */
   approvalRejected: boolean;
   /** The row's attention dot, worked out by the page. */
@@ -64,6 +58,7 @@ export function ReceptionRow({
   accessPurpose,
   workflowState,
   accessState,
+  cardExpiry,
   approvalRejected,
   attention,
   canManage,
@@ -117,9 +112,15 @@ export function ReceptionRow({
               Approval Rejected
             </Badge>
           ) : (
-            <Badge className={WORKFLOW_STATE_BADGE[workflowState]}>
-              {WORKFLOW_STATE_LABELS[workflowState]}
-            </Badge>
+            <RecordStatusBadge
+              status={recordStatus({
+                workflowState,
+                // SAFETY: access_state is a text column written only from the
+                // AccessState union.
+                accessState: accessState as AccessState,
+                cardExpiry,
+              })}
+            />
           )}
         </TableCell>
         {canManage && (

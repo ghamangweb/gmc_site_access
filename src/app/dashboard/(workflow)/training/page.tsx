@@ -26,7 +26,6 @@ import { accessPurposeOptions, parseFilter } from "@/lib/domain/queue-filters";
 import { ACCESS_PURPOSE_LABELS, type AccessPurpose } from "@/lib/domain/types";
 import {
   checkHospitalClearanceAge,
-  countEngagementsForLayer,
   listEngagementsForLayer,
   listRecentInductions,
 } from "@/lib/services/workflow-service";
@@ -58,8 +57,7 @@ export default async function TrainingQueuePage({
 
   // Both paths that reach induction: work-path visitors arriving from
   // Hospital, and visit+mine visitors who come straight from Reception.
-  const [awaitingCount, awaiting, recorded] = await Promise.all([
-    countEngagementsForLayer("AtTraining", TRAINING_PURPOSES),
+  const [awaiting, recorded] = await Promise.all([
     activeView === "awaiting"
       ? listEngagementsForLayer("AtTraining", TRAINING_PURPOSES, {
           ...request,
@@ -102,7 +100,6 @@ export default async function TrainingQueuePage({
       label: "Awaiting Induction",
       value: "awaiting",
       href: "/dashboard/training",
-      count: awaitingCount,
     },
     {
       label: "Recorded Inductions",
