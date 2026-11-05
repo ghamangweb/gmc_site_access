@@ -14,6 +14,7 @@ import {
   registrationRequests,
   staffUsers,
 } from "@/lib/db/schema";
+import { notice } from "@/lib/domain/notification-messages";
 import {
   DEFAULT_PAGE_SIZE,
   type Page,
@@ -194,7 +195,7 @@ export async function createRegistrationRequest(
       matchingHeads.map((head) => ({
         recipientStaffUserId: head.id,
         registrationRequestId: request.id,
-        message: `${visitorName} submitted a registration for ${department} and is awaiting your approval.`,
+        message: notice.registrationSubmitted(visitorName),
       })),
     );
   }
@@ -284,7 +285,7 @@ export async function approveRegistrationRequest(
       receptionists.map((receptionist) => ({
         recipientStaffUserId: receptionist.id,
         registrationRequestId: request.id,
-        message: `${visitorName} submitted a registration for ${department} and is ready to become an engagement.`,
+        message: notice.registrationApproved(visitorName),
       })),
     );
   }
@@ -413,44 +414,20 @@ export async function listRegistrationRequests(
       )
     : summaries;
 
+  // Reception's next job first: submissions still awaiting review, then the
+  // ones already turned into an engagement — each newest first. Ordered
+  // before paging, so the awaiting ones lead page 1.
+  const ordered = [
+    ...matched.filter((summary) => !summary.engagementId),
+    ...matched.filter((summary) => summary.engagementId),
+  ];
+
   return {
-    rows: matched.slice(pageOffset(page, pageSize), page * pageSize),
-    total: matched.length,
+    rows: ordered.slice(pageOffset(page, pageSize), page * pageSize),
+    total: ordered.length,
     page,
     pageSize,
   };
-}
-
-// Counts for the All / Local / Foreign filter, which must reflect every
-// submission rather than the page being shown.
-export async function countRegistrationRequestsByType(): Promise<{
-  all: number;
-  Local: number;
-  Foreign: number;
-}> {
-  const rows = await db
-    .select({
-      registrationType: registrationRequests.registrationType,
-      value: count(),
-    })
-    .from(registrationRequests)
-    .where(inArray(registrationRequests.status, RECEPTION_VISIBLE_STATUSES))
-    .groupBy(registrationRequests.registrationType);
-
-  const byType = { all: 0, Local: 0, Foreign: 0 };
-
-  for (const row of rows) {
-    byType.all += row.value;
-
-    if (
-      row.registrationType === "Local" ||
-      row.registrationType === "Foreign"
-    ) {
-      byType[row.registrationType] += row.value;
-    }
-  }
-
-  return byType;
 }
 
 export async function countOutstandingRegistrationRequests(): Promise<number> {

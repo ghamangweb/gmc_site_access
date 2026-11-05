@@ -1,8 +1,7 @@
 "use client";
 
-import { MoreHorizontalIcon } from "lucide-react";
+import { MoreVerticalIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -34,6 +33,7 @@ import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
   type AccessState,
+  getEffectiveAccessState,
   type WorkflowState,
 } from "@/lib/domain/types";
 
@@ -63,15 +63,17 @@ export function ReceptionRow({
   attention,
   canManage,
 }: ReceptionRowProps) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
 
   // Only live access can be revoked. Anything still moving through the
   // workflow is cancelled instead, and an expired or already-revoked card has
-  // nothing left to switch off. The server re-checks this against the card.
-  const eligibleForTermination = accessState === "Active";
+  // nothing left to switch off — read from the card's date, so a lapsed card
+  // isn't offered. The server re-checks this against the card.
+  const eligibleForTermination =
+    getEffectiveAccessState(accessState as AccessState, cardExpiry) ===
+    "Active";
 
   function handleSubmit() {
     startTransition(async () => {
@@ -92,15 +94,12 @@ export function ReceptionRow({
 
   return (
     <>
-      <TableRow
-        className="cursor-pointer"
-        onClick={() => router.push(`/dashboard/reception/${engagementId}`)}
-      >
+      {/* Not a link: the row menu's View opens the record, as on every other
+          queue. */}
+      <TableRow className="hover:bg-muted/50">
         <TableCell>
           <NameWithAttention attention={attention}>
-            <Link href={`/dashboard/reception/${engagementId}`}>
-              {personName}
-            </Link>
+            {personName}
           </NameWithAttention>
         </TableCell>
         <TableCell>
@@ -123,29 +122,29 @@ export function ReceptionRow({
             />
           )}
         </TableCell>
-        {canManage && (
-          <TableCell className="text-right">
-            {eligibleForTermination && (
-              // biome-ignore lint/a11y/noStaticElementInteractions: firewall only — stops the click bubbling to the row's navigation onClick, the DropdownMenuTrigger/Item inside are the real interactive elements
-              // biome-ignore lint/a11y/useKeyWithClickEvents: same — this span has no keyboard-relevant behavior of its own
-              <span onClick={(e) => e.stopPropagation()}>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="size-8">
-                      <MoreHorizontalIcon />
-                      <span className="sr-only">Open menu</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setOpen(true)}>
-                      Request Revocation
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </span>
-            )}
-          </TableCell>
-        )}
+        <TableCell className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8">
+                <MoreVerticalIcon />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={`/dashboard/reception/${engagementId}`}>View</Link>
+              </DropdownMenuItem>
+              {canManage && (
+                <DropdownMenuItem
+                  disabled={!eligibleForTermination}
+                  onSelect={() => setOpen(true)}
+                >
+                  Request Revocation
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
       </TableRow>
 
       <Dialog

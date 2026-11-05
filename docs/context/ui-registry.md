@@ -1522,9 +1522,8 @@ made the screen feel crowded.
 **Reception is two views, not two stacked tables** (`?view=submissions|engagements`,
 submissions default since that is where the workflow starts). Stacking them meant two tables,
 two paginators and two searches competing on one screen. Only the active view is queried —
-the other costs nothing. The tab counts and the "N awaiting" pill come from their own
-`count()` queries (`countRegistrationRequestsByType`,
-`countOutstandingRegistrationRequests`) so they describe everything, not the page on screen.
+the other costs nothing. (Tab counts were removed 2026-11-05; the Local / Foreign buttons became
+the "Registration Type" option in `QueueFilters`, so `countRegistrationRequestsByType` is gone.)
 
 **One exception to SQL filtering:** `listRegistrationRequests` searches in memory, because a
 submission's name and ID live inside the `form_data` jsonb under keys that differ by
@@ -2392,3 +2391,46 @@ Draft neutral), its card's state once Completed with a card (Active success, Rev
 warning, Expired / Revoked danger). Used by the Approvals "Approved" tab and Reception's
 "Engagements" tab; replaces Reception's local `WORKFLOW_STATE_BADGE`. Pass the current card's
 expiry so a lapsed card reads Expired before `expireLapsedAccess` has run.
+
+### Reception "Submitted Registrations" row menu (2026-11-05)
+
+File: src/app/dashboard/(workflow)/reception/registration-request-row.tsx
+
+The tab's buttons became the vertical-ellipsis menu used by Approvals/Security (`MoreVerticalIcon`,
+ghost `size-8` trigger). Not yet converted (and `canManage`): green attention dot "Submission
+awaiting review" + menu Review (`/dashboard/reception/new?requestId=…`) and Create Engagement (same
+URL + `#create-engagement`, the anchor wrapping `RegistrationCompletionForm` on the new page,
+`scroll-mt-6`). Converted: no dot, menu View Engagement only. Header reads "Actions".
+
+### QueueFilters — single popover (2026-11-05)
+
+File: src/components/layout/queue-filter.tsx (same props as before; all seven queues)
+
+One `Popover` + `cmdk` `Command`, never a Select or a popover on a popover. Step 1: searchable list
+of the tab's filters ("Filter..." input), each showing its current choice in
+`text-muted-foreground text-xs`. Step 2, in the same popover: a back row ("‹ {label}", `border-b`,
+`text-xs`) above a "{label}..." search, then All + the options with a `CheckIcon` on the current
+one. One value per filter (every queue query takes one); picking it again or All clears it, and
+choosing closes the popover. Backspace in an empty search steps back. "Clear filters" sits under
+the list when any filter is set.
+
+**Queue toolbar order:** tabs on the left; then filter · search · export on the right, all `h-11`.
+Export buttons left the page header (Reception keeps "New Registration" there).
+
+### Department dashboard — tabs and row menus (2026-11-05)
+
+Files: src/app/dashboard/(workflow)/department/{page,submission-row,invitation-row}.tsx
+
+Same shape as the other queues: invite form card, then `QueueViewTabs` (Submitted Registrations ·
+Invitations), then one table in `overflow-hidden rounded-xl border border-border bg-card`. Row
+actions are the `MoreVerticalIcon` ghost `size-8` menu: SubmissionRow → Approve / Reject (both
+`disabled` unless `PendingDepartmentApproval`; the existing confirm and reason dialogs are
+unchanged), InvitationRow → Revoke (`disabled` when revoked). A pending submission's name carries
+the green attention dot "Awaiting your approval" (`canManage` only).
+
+### Dashboard notifications — wording (2026-11-05)
+
+All bell text comes from `notice.*` in `src/lib/domain/notification-messages.ts`; services pass
+names and ISO dates only. Write new notices there, in the same style: "{Name} has …" / "{Name}'s
+… has been …", one sentence, optional "Please …" for the action. Never inline a message string in
+a service.

@@ -46,11 +46,13 @@ export function HospitalExportButton(): ReactElement {
     <Button
       type="button"
       variant="outline"
+      // Matches the filter button and search box it sits beside.
+      className="h-11"
       loading={exporting}
       onClick={handleExport}
     >
       {!exporting && <Download aria-hidden="true" />}
-      {exporting ? "Exporting..." : "Export Hospital Data"}
+      {exporting ? "Exporting..." : "Export Data"}
     </Button>
   );
 }

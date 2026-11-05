@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontalIcon } from "lucide-react";
+import { MoreVerticalIcon } from "lucide-react";
 import { useTransition } from "react";
 import { toast } from "sonner";
 
@@ -53,7 +53,7 @@ export function InvitationRow({
   }
 
   return (
-    <TableRow>
+    <TableRow className="hover:bg-muted/50">
       <TableCell>{email}</TableCell>
       <TableCell>{registrationType}</TableCell>
       <TableCell>{issuedAt.toLocaleDateString()}</TableCell>
@@ -70,26 +70,26 @@ export function InvitationRow({
       </TableCell>
       {canManage && (
         <TableCell className="text-right">
-          {!isRevoked && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  disabled={isPending}
-                >
-                  <MoreHorizontalIcon />
-                  <span className="sr-only">Open menu</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={handleRevoke}>
-                  Revoke
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          {/* Same row menu as every other queue; a revoked link has nothing
+              left to revoke. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                disabled={isPending}
+              >
+                <MoreVerticalIcon />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={isRevoked} onSelect={handleRevoke}>
+                Revoke
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TableCell>
       )}
     </TableRow>

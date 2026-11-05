@@ -33,16 +33,15 @@ test("Reception exemption email escapes visitor/approver comments and preserves 
     ])
       assert.ok(email.html.includes(expected), expected);
     assert.ok(!email.html.includes("<script>"));
+    // The bell notice is short (wording agreed 2026-11-05): who, and which
+    // stages. Passport, approver, comment and next stage stay in the email.
     const notice = workflowExemptionNotification(message);
-    for (const expected of [
-      message.personName,
-      message.passportNo,
-      message.approverName,
-      message.reason,
-      "Hospital, Training School",
-      "Next stage: Security",
-    ])
-      assert.ok(notice.includes(expected));
+    assert.equal(
+      notice,
+      `${message.personName}'s application has been approved with an exemption from Hospital and Training School.`,
+    );
+    for (const absent of [message.passportNo, message.reason, "Next stage"])
+      assert.ok(!notice.includes(absent), absent);
   } finally {
     if (previous === undefined) delete process.env.AUTH_URL;
     else process.env.AUTH_URL = previous;

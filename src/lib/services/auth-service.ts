@@ -2,10 +2,13 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db/client";
 import { notifications, staffUsers } from "@/lib/db/schema";
-import type {
-  GmcLiaisonDepartment,
-  SystemRole,
-  WorkflowRole,
+import { notice } from "@/lib/domain/notification-messages";
+import {
+  type GmcLiaisonDepartment,
+  type RequestableRole,
+  ROLE_LABELS,
+  type SystemRole,
+  type WorkflowRole,
 } from "@/lib/domain/types";
 
 export type StaffUser = typeof staffUsers.$inferSelect;
@@ -61,10 +64,12 @@ export async function requestAccess(
     );
 
   if (admins.length > 0) {
-    const roleDescription = requestedDepartment
-      ? `${requestedRole} (${requestedDepartment})`
-      : requestedRole;
-    const message = `Access request from ${requester.displayName} (${requester.email}) for role ${roleDescription}`;
+    // The requested department is on the notification row
+    // (`requestedDepartment`) and the System Admin's provisioning dialog.
+    const message = notice.accessRequested(
+      requester.displayName,
+      ROLE_LABELS[requestedRole as RequestableRole] ?? requestedRole,
+    );
     await db.insert(notifications).values(
       admins.map((admin) => ({
         recipientStaffUserId: admin.id,

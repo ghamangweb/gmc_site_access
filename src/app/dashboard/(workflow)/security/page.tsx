@@ -164,9 +164,6 @@ export default async function SecurityQueuePage({
       <PageHeader
         title="Security"
         subtitle="Review completed requirements, issue site access and revoke it when asked."
-        actions={
-          session.systemRole !== "Guest" ? <SecurityExportButton /> : undefined
-        }
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -194,6 +191,8 @@ export default async function SecurityQueuePage({
             />
           )}
           <QueueSearch searchParam="q" pageParam="page" />
+          {/* Last in the toolbar, after filter and search. */}
+          {session.systemRole !== "Guest" && <SecurityExportButton />}
         </div>
       </div>
 

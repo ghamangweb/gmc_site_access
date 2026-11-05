@@ -261,7 +261,7 @@ try {
               );
               assert.equal(
                 notices.every((notice) =>
-                  notice.message.includes("Verified exception"),
+                  notice.message.includes("approved with an exemption"),
                 ),
                 true,
               );
@@ -478,10 +478,16 @@ try {
           ),
           false,
         );
+        // Training was exempted, so the cleared notice says Security's next
+        // step. Checked on a non-empty set, not vacuously.
+        const cleared = notices.filter((notice) =>
+          notice.message.includes("has been medically cleared"),
+        );
+        assert.ok(cleared.length > 0);
         assert.equal(
-          notices
-            .filter((notice) => notice.message.startsWith("Hospital "))
-            .every((notice) => notice.message.includes("Security")),
+          cleared.every((notice) =>
+            notice.message.includes("ready for access activation"),
+          ),
           true,
         );
       },
@@ -745,8 +751,7 @@ try {
           notices.every(
             (notice) =>
               notice.message.includes("Test Visitor") &&
-              notice.message.includes("Verified exception") &&
-              notice.message.includes("Next stage: Security"),
+              notice.message.includes("approved with an exemption"),
           ),
           true,
         );

@@ -172,9 +172,6 @@ export default async function ApprovalsQueuePage({
     <div>
       <PageHeader
         title={`Welcome back, ${firstName}!`}
-        actions={
-          session.systemRole !== "Guest" ? <ApprovalsExportButton /> : undefined
-        }
         subtitle={
           stakeholderRole
             ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM, EM or MM is enough."
@@ -205,6 +202,8 @@ export default async function ApprovalsQueuePage({
             ]}
           />
           <QueueSearch searchParam="q" pageParam="page" />
+          {/* Last in the toolbar, after filter and search. */}
+          {session.systemRole !== "Guest" && <ApprovalsExportButton />}
         </div>
       </div>
 
