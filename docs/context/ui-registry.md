@@ -1,5 +1,37 @@
 # UI Registry
 
+## QueueFilters — one Filter button on every queue (2026-11-05)
+
+`components/layout/queue-filter.tsx` → `QueueFilters({ fields, pageParam })`. Use it for
+**fixed-value** fields only. Free text stays in the search box (name/passport), because
+everything else is encrypted.
+- **Trigger:** one outline `Button` (`h-11`, matching the search `Input`) with `ListFilterIcon`
+  and "Filter". When filters are active it shows a count chip: `rounded-full bg-primary px-1.5
+  text-primary-foreground text-xs`.
+- **Panel:** `PopoverContent align="end"`, `flex flex-col gap-4`. Each field (`{ param, label,
+  options }`) is a `Label` over a full-width `Select` whose first option is "All". A ghost
+  `sm` "Clear filters" button appears when any filter is active.
+- **URL:** writes to the URL like `QueueSearch` and drops the page param.
+- **Search box:** `QueueSearch` defaults to placeholder "Search" and width `max-w-56`. Pages
+  don't override it.
+- **Toolbar:** `ml-auto flex flex-wrap items-center justify-end gap-2`, Filter then search,
+  always right-aligned (also when wrapped below the view tabs). A tab with no filters omits
+  the button.
+
+Fields are per tab. Tab links are bare, so switching tabs clears them, and pagination keeps
+them (`QueuePagination searchParams`). Options and URL parsing come from
+`lib/domain/queue-filters.ts` (`parseFilter`, `parseIdFilter`, `*Options(values?)`). Pass a
+queue's own value subset, e.g. a layer's purposes.
+
+| Queue | Tab | Fields (param) |
+|---|---|---|
+| Overview | — | Stage (`stage`), Access (`access`), Nature of Visit (`purpose`) |
+| Reception | Submissions / Engagements | Nature of Visit / Stage, Nature of Visit (Local/Foreign links keep `purpose`) |
+| Approvals | Awaiting / Approved | Nature of Visit / Stage, Nature of Visit |
+| Hospital | Awaiting Review / Recorded | Review (`due`) / Outcome (`outcome`), Cleared By (`by`). No Stage filter |
+| Training | both | Nature of Visit |
+| Security | Awaiting / Granted | Nature of Visit / Access, Nature of Visit |
+
 ## Stakeholder exemption UI (2026-11-04)
 
 Approved design: `stakeholder-exemptions-plan.md`. Shared stage labels are Hospital
@@ -1648,7 +1680,7 @@ Outcome · Recorded · Cleared By · **Next Review Date** · Stage · Action. Ne
 
 `HospitalForm` takes optional `reviewOfClearanceId`: heading "Record Review", button "Submit Review",
 review-specific consequence text, and submits `submitHospitalReviewAction`. In both modes Fit with
-Conditions reveals a required "Next Review Date" `DatePicker` with `minDate` = tomorrow.
+Conditions reveals an optional "Next Review Date" `DatePicker` with `minDate` = tomorrow (optional since 2026-11-05).
 `HospitalHandoff` adds a "Next Review Date" field (same label/value styles as comments) when set.
 `DatePicker` gained optional `minDate` (YYYY-MM-DD → `disabled={{ before }}`); existing callers unchanged.
 

@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -14,10 +15,11 @@ import {
   notInArray,
   or,
   type SQL,
+  type SQLWrapper,
   sql,
 } from "drizzle-orm";
 import type { SessionUser } from "@/lib/auth/session";
-import { searchQueryTokens } from "@/lib/crypto";
+import { blindIndex, searchQueryTokens } from "@/lib/crypto";
 import { csvRow } from "@/lib/csv";
 import { type DbClient, db } from "@/lib/db/client";
 import {
@@ -60,6 +62,7 @@ import {
   type PageRequest,
   pageOffset,
 } from "@/lib/domain/pagination";
+import type { EngagementFilters, ReviewDue } from "@/lib/domain/queue-filters";
 import {
   RECEPTION_REPORT_HEADERS,
   receptionReportRows,
@@ -298,17 +301,72 @@ function personSearchFilter(search: string | undefined): SQL | undefined {
   return arrayContains(persons.searchTokens, tokens);
 }
 
+// The expiry of the card a record holds now: the latest provisioning in its
+// active cycle, the same pick as `getAccessProvisioning`, as a subquery.
+function currentCardExpiry(): SQL<string | null> {
+  return sql<string | null>`(
+    select ap.access_card_expiry from ${accessProvisionings} as ap
+    inner join ${workflowCycles} as wc on ap.workflow_cycle_id = wc.id
+    where wc.engagement_id = ${engagements.id} and wc.archived_at is null
+    order by wc.cycle_number desc, ap.activated_at desc
+    limit 1
+  )`;
+}
+
+// Access as the screens show it (`getEffectiveAccessState`): a stored Active
+// whose card has lapsed reads Expired, so the filter has to agree.
+function effectiveAccessStateFilter(
+  state: AccessState,
+  cardExpiry: SQLWrapper,
+): SQL | undefined {
+  const today = isoToday();
+
+  if (state === "Expired") {
+    return or(
+      eq(engagements.accessState, "Expired"),
+      and(eq(engagements.accessState, "Active"), sql`${cardExpiry} < ${today}`),
+    );
+  }
+
+  if (state === "Active") {
+    return and(
+      eq(engagements.accessState, "Active"),
+      sql`(${cardExpiry} is null or ${cardExpiry} >= ${today})`,
+    );
+  }
+
+  return eq(engagements.accessState, state);
+}
+
+// The dropdown filters queues share (queue-filters.ts). `cardExpiry` is the
+// card the row's access state is judged against: the record's current card by
+// default, or the row's own card on a per-provisioning list.
+function engagementFilterConditions(
+  filters: EngagementFilters,
+  cardExpiry: SQLWrapper = currentCardExpiry(),
+): SQL[] {
+  return [
+    filters.workflowState
+      ? eq(engagements.workflowState, filters.workflowState)
+      : undefined,
+    filters.accessPurpose
+      ? eq(engagements.accessPurpose, filters.accessPurpose)
+      : undefined,
+    filters.accessState
+      ? effectiveAccessStateFilter(filters.accessState, cardExpiry)
+      : undefined,
+  ].filter((filter): filter is SQL => filter !== undefined);
+}
+
 export async function listEngagementsWithPerson(
-  request: PageRequest & { workflowState?: WorkflowState } = {},
+  request: PageRequest & EngagementFilters = {},
 ): Promise<Page<EngagementRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
 
   const filters = [
     personSearchFilter(request.search),
-    request.workflowState
-      ? eq(engagements.workflowState, request.workflowState)
-      : undefined,
+    ...engagementFilterConditions(request),
   ].filter((filter): filter is SQL => filter !== undefined);
 
   const where = filters.length > 0 ? and(...filters) : undefined;
@@ -356,7 +414,7 @@ export type RecordOverviewRow = EngagementRow & {
 };
 
 export async function listRecordsOverview(
-  request: PageRequest = {},
+  request: PageRequest & EngagementFilters = {},
 ): Promise<Page<RecordOverviewRow>> {
   const engagementsPage = await listEngagementsWithPerson(request);
 
@@ -394,7 +452,7 @@ export async function listRecordsOverview(
 export async function listEngagementsForLayer(
   workflowState: WorkflowState,
   accessPurposes?: AccessPurpose[],
-  request: PageRequest = {},
+  request: PageRequest & Pick<EngagementFilters, "accessPurpose"> = {},
 ): Promise<Page<EngagementRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -404,6 +462,10 @@ export async function listEngagementsForLayer(
   if (accessPurposes && accessPurposes.length > 0) {
     conditions.push(inArray(engagements.accessPurpose, accessPurposes));
   }
+
+  conditions.push(
+    ...engagementFilterConditions({ accessPurpose: request.accessPurpose }),
+  );
 
   const search = personSearchFilter(request.search);
 
@@ -721,7 +783,7 @@ export async function submitForStakeholderApproval(
 // rejected request has `approvalRequestedAt` cleared, so it drops out here.
 export async function listEngagementsAwaitingApproval(
   delegatedApproverId?: string,
-  request: PageRequest = {},
+  request: PageRequest & Pick<EngagementFilters, "accessPurpose"> = {},
 ): Promise<Page<EngagementRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -734,6 +796,7 @@ export async function listEngagementsAwaitingApproval(
     eq(engagements.workflowState, "AtReception"),
     isNotNull(engagements.approvalRequestedAt),
     notInArray(engagements.id, approved),
+    ...engagementFilterConditions({ accessPurpose: request.accessPurpose }),
   ];
 
   if (delegatedApproverId) {
@@ -891,7 +954,8 @@ export type ApprovalRow = {
 };
 
 export async function listRecentStakeholderApprovals(
-  request: PageRequest = {},
+  request: PageRequest &
+    Pick<EngagementFilters, "workflowState" | "accessPurpose"> = {},
   /** Set for a delegated approver: their grant was per engagement, so they
    * see what they signed rather than every stakeholder's sign-offs. */
   approverStaffUserId?: string,
@@ -901,6 +965,10 @@ export async function listRecentStakeholderApprovals(
 
   const filters = [
     personSearchFilter(request.search),
+    ...engagementFilterConditions({
+      workflowState: request.workflowState,
+      accessPurpose: request.accessPurpose,
+    }),
     approverStaffUserId
       ? eq(stakeholderApprovals.approverStaffUserId, approverStaffUserId)
       : undefined,
@@ -956,11 +1024,28 @@ export type HospitalClearanceRow = {
 };
 
 export async function listRecentHospitalClearances(
-  request: PageRequest = {},
+  request: PageRequest & {
+    clearanceStatus?: HospitalClearanceStatus;
+    /** Staff user id of whoever recorded the clearance. */
+    recordedBy?: string;
+  } = {},
 ): Promise<Page<HospitalClearanceRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
-  const where = personSearchFilter(request.search);
+  const filters = [
+    personSearchFilter(request.search),
+    // The status itself is encrypted; its blind index is not.
+    request.clearanceStatus
+      ? eq(
+          hospitalClearances.clearanceStatusIndex,
+          blindIndex(request.clearanceStatus),
+        )
+      : undefined,
+    request.recordedBy
+      ? eq(hospitalClearances.recordedBy, request.recordedBy)
+      : undefined,
+  ].filter((filter): filter is SQL => filter !== undefined);
+  const where = filters.length > 0 ? and(...filters) : undefined;
 
   // A clearance hangs off the workflow cycle, not the engagement, so the
   // engagement and person both come through that join.
@@ -1030,15 +1115,38 @@ function awaitingHospitalReviewConditions() {
   );
 }
 
+// Options for the Recorded tab's Cleared By filter: everyone who has recorded
+// a clearance, deactivated staff included — their decisions are still listed.
+export async function listHospitalClearanceRecorders(): Promise<
+  { id: string; displayName: string }[]
+> {
+  return db
+    .selectDistinct({ id: staffUsers.id, displayName: staffUsers.displayName })
+    .from(staffUsers)
+    .innerJoin(
+      hospitalClearances,
+      eq(hospitalClearances.recordedBy, staffUsers.id),
+    )
+    .orderBy(staffUsers.displayName);
+}
+
 // Hospital's Awaiting Review tab, soonest review first.
 export async function listAwaitingHospitalReviews(
-  request: PageRequest = {},
+  request: PageRequest & { reviewDue?: ReviewDue } = {},
 ): Promise<Page<HospitalClearanceRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+  const today = isoToday();
   const where = and(
     awaitingHospitalReviewConditions(),
     personSearchFilter(request.search),
+    request.reviewDue === "overdue"
+      ? lt(hospitalClearances.nextReviewDate, today)
+      : request.reviewDue === "today"
+        ? eq(hospitalClearances.nextReviewDate, today)
+        : request.reviewDue === "upcoming"
+          ? gt(hospitalClearances.nextReviewDate, today)
+          : undefined,
   );
 
   const [rows, [totals]] = await Promise.all([
@@ -1979,12 +2087,12 @@ export async function getHospitalClearanceForEngagement(
 export type HospitalClearanceInput = {
   clearanceStatus: HospitalClearanceStatus;
   doctorComments: string;
-  /** YYYY-MM-DD. Required for Fit with Conditions, ignored otherwise. */
+  /** YYYY-MM-DD. Optional for Fit with Conditions, ignored otherwise. */
   nextReviewDate?: string;
 };
 
 // The rules a clearance and a review share. Returns the review date to store:
-// the given one for Fit with Conditions, NULL for anything else.
+// the given one (if any) for Fit with Conditions, NULL for anything else.
 function validateHospitalClearanceInput(
   input: HospitalClearanceInput,
 ): string | null {
@@ -2005,11 +2113,17 @@ function validateHospitalClearanceInput(
     return null;
   }
 
-  // Conditions are only worth setting if someone looks at them again.
-  const nextReviewDate = input.nextReviewDate ?? "";
+  // Optional: not every condition needs a medical follow-up. Without a date
+  // the clearance never enters Awaiting Review or the reminder job, but can
+  // still be reviewed from the recorded tab.
+  const nextReviewDate = input.nextReviewDate?.trim() ?? "";
+
+  if (nextReviewDate === "") {
+    return null;
+  }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(nextReviewDate)) {
-    throw new Error("Next review date is required for Fit with Conditions");
+    throw new Error("Next review date is not a valid date");
   }
 
   if (nextReviewDate <= isoToday()) {
@@ -2214,6 +2328,7 @@ export async function recordHospitalClearance(
     await tx.insert(hospitalClearances).values({
       workflowCycleId: cycle.id,
       clearanceStatus: input.clearanceStatus,
+      clearanceStatusIndex: blindIndex(input.clearanceStatus),
       doctorComments: input.doctorComments.trim(),
       recordedBy: performedBy,
       nextReviewDate,
@@ -2339,6 +2454,7 @@ export async function recordHospitalReview(
     await tx.insert(hospitalClearances).values({
       workflowCycleId: latest.cycle.id,
       clearanceStatus: input.clearanceStatus,
+      clearanceStatusIndex: blindIndex(input.clearanceStatus),
       doctorComments: input.doctorComments.trim(),
       recordedBy: performedBy,
       nextReviewDate,
@@ -2850,11 +2966,14 @@ export type InductionRow = {
 };
 
 export async function listRecentInductions(
-  request: PageRequest = {},
+  request: PageRequest & Pick<EngagementFilters, "accessPurpose"> = {},
 ): Promise<Page<InductionRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
-  const where = personSearchFilter(request.search);
+  const where = and(
+    personSearchFilter(request.search),
+    ...engagementFilterConditions({ accessPurpose: request.accessPurpose }),
+  );
 
   const [rows, [totals]] = await Promise.all([
     db
@@ -3949,11 +4068,22 @@ function latestCardUpdateAt() {
 }
 
 export async function listRecentProvisionings(
-  request: PageRequest = {},
+  request: PageRequest &
+    Pick<EngagementFilters, "accessState" | "accessPurpose"> = {},
 ): Promise<Page<ProvisioningRow>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
-  const where = personSearchFilter(request.search);
+  const where = and(
+    personSearchFilter(request.search),
+    // Each row shows access against its own card, so filter the same way.
+    ...engagementFilterConditions(
+      {
+        accessState: request.accessState,
+        accessPurpose: request.accessPurpose,
+      },
+      accessProvisionings.accessCardExpiry,
+    ),
+  );
 
   const [rows, [totals]] = await Promise.all([
     db

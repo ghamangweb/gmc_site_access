@@ -5,6 +5,7 @@ import { ApprovalRowActions } from "@/app/dashboard/(workflow)/approvals/approva
 
 import { ApprovalsExportButton } from "@/components/layout/approvals-export-button";
 import { PageHeader } from "@/components/layout/page-header";
+import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
@@ -22,6 +23,12 @@ import { RecordStatusBadge } from "@/components/workflow/record-status-badge";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
+import {
+  ACCESS_PURPOSES,
+  accessPurposeOptions,
+  parseFilter,
+  workflowStateOptions,
+} from "@/lib/domain/queue-filters";
 import { recordStatus } from "@/lib/domain/record-status";
 import {
   isStayExtendable,
@@ -51,6 +58,16 @@ import { formatQueueDate } from "@/lib/utils";
 // Past this, a record waiting for sign-off is flagged on the queue.
 const LONG_WAIT_DAYS = 3;
 
+// A signed-off record has left Draft, so the Approved tab never offers it.
+const APPROVED_STAGES: WorkflowState[] = [
+  "AtReception",
+  "AtHospital",
+  "AtTraining",
+  "AtSecurity",
+  "Completed",
+  "Cancelled",
+];
+
 function wholeDaysSince(value: Date): number {
   return Math.floor((Date.now() - value.getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -70,7 +87,13 @@ function daysWaiting(requestedAt: Date): string {
 export default async function ApprovalsQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    page?: string;
+    stage?: string;
+    purpose?: string;
+  }>;
 }) {
   const session = await requirePinConfirmed();
 
@@ -78,10 +101,12 @@ export default async function ApprovalsQueuePage({
     session.workflowRoles.includes(role),
   );
 
-  const { view, q, page } = await searchParams;
+  const { view, q, page, stage, purpose } = await searchParams;
 
   const activeView = view === "approved" ? "approved" : "awaiting";
   const request = toPageRequest(q, page);
+  const accessPurpose = parseFilter(purpose, ACCESS_PURPOSES);
+  const workflowState = parseFilter(stage, APPROVED_STAGES);
 
   // A delegate holds no stakeholder role — the grant is per engagement, so
   // they only see what was delegated to them.
@@ -93,12 +118,18 @@ export default async function ApprovalsQueuePage({
     // the only record of their part in the workflow.
     delegatedTo ? countStakeholderApprovalsBy(delegatedTo) : Promise.resolve(0),
     activeView === "awaiting"
-      ? listEngagementsAwaitingApproval(delegatedTo, request)
+      ? listEngagementsAwaitingApproval(delegatedTo, {
+          ...request,
+          accessPurpose,
+        })
       : undefined,
     // Stakeholders see every sign-off (any one approval is enough, so a
     // colleague's counts); a delegate sees only their own.
     activeView === "approved"
-      ? listRecentStakeholderApprovals(request, delegatedTo)
+      ? listRecentStakeholderApprovals(
+          { ...request, workflowState, accessPurpose },
+          delegatedTo,
+        )
       : undefined,
   ]);
 
@@ -153,15 +184,28 @@ export default async function ApprovalsQueuePage({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <QueueViewTabs views={views} activeView={activeView} />
-        <QueueSearch
-          searchParam="q"
-          pageParam="page"
-          placeholder={
-            activeView === "awaiting"
-              ? "Search the queue"
-              : "Search approved records"
-          }
-        />
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <QueueFilters
+            pageParam="page"
+            fields={[
+              ...(activeView === "approved"
+                ? [
+                    {
+                      param: "stage",
+                      label: "Stage",
+                      options: workflowStateOptions(APPROVED_STAGES),
+                    },
+                  ]
+                : []),
+              {
+                param: "purpose",
+                label: "Nature of Visit",
+                options: accessPurposeOptions(),
+              },
+            ]}
+          />
+          <QueueSearch searchParam="q" pageParam="page" />
+        </div>
       </div>
 
       {activeView === "awaiting" && pending && (
@@ -245,7 +289,7 @@ export default async function ApprovalsQueuePage({
             pageSize={pending.pageSize}
             total={pending.total}
             pageParam="page"
-            searchParams={{ q }}
+            searchParams={{ q, purpose }}
           />
         </div>
       )}
@@ -348,7 +392,7 @@ export default async function ApprovalsQueuePage({
             pageSize={approved.pageSize}
             total={approved.total}
             pageParam="page"
-            searchParams={{ q, view }}
+            searchParams={{ q, view, stage, purpose }}
           />
         </div>
       )}

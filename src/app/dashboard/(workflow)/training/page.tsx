@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
@@ -21,6 +22,7 @@ import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { type Attention, danger } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
+import { accessPurposeOptions, parseFilter } from "@/lib/domain/queue-filters";
 import { ACCESS_PURPOSE_LABELS, type AccessPurpose } from "@/lib/domain/types";
 import {
   checkHospitalClearanceAge,
@@ -29,10 +31,17 @@ import {
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
 
+const TRAINING_PURPOSES: AccessPurpose[] = ["Work", "WorkMine", "VisitMine"];
+
 export default async function TrainingQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    page?: string;
+    purpose?: string;
+  }>;
 }) {
   const session = await requirePinConfirmed();
 
@@ -40,22 +49,24 @@ export default async function TrainingQueuePage({
     redirect("/dashboard");
   }
 
-  const { view, q, page } = await searchParams;
+  const { view, q, page, purpose } = await searchParams;
 
   const activeView = view === "recorded" ? "recorded" : "awaiting";
   const request = toPageRequest(q, page);
+  const accessPurpose = parseFilter(purpose, TRAINING_PURPOSES);
 
   // Both paths that reach induction: work-path visitors arriving from
   // Hospital, and visit+mine visitors who come straight from Reception.
   const [awaiting, recorded] = await Promise.all([
     activeView === "awaiting"
-      ? listEngagementsForLayer(
-          "AtTraining",
-          ["Work", "WorkMine", "VisitMine"],
-          request,
-        )
+      ? listEngagementsForLayer("AtTraining", TRAINING_PURPOSES, {
+          ...request,
+          accessPurpose,
+        })
       : undefined,
-    activeView === "recorded" ? listRecentInductions(request) : undefined,
+    activeView === "recorded"
+      ? listRecentInductions({ ...request, accessPurpose })
+      : undefined,
   ]);
 
   // The medical has to be valid at sign-off, so a lapsed or lapsing one is
@@ -109,15 +120,19 @@ export default async function TrainingQueuePage({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <QueueViewTabs views={views} activeView={activeView} />
-        <QueueSearch
-          searchParam="q"
-          pageParam="page"
-          placeholder={
-            activeView === "awaiting"
-              ? "Search the queue"
-              : "Search recorded inductions"
-          }
-        />
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <QueueFilters
+            pageParam="page"
+            fields={[
+              {
+                param: "purpose",
+                label: "Nature of Visit",
+                options: accessPurposeOptions(TRAINING_PURPOSES),
+              },
+            ]}
+          />
+          <QueueSearch searchParam="q" pageParam="page" />
+        </div>
       </div>
 
       {activeView === "awaiting" && awaiting && (
@@ -180,7 +195,7 @@ export default async function TrainingQueuePage({
             pageSize={awaiting.pageSize}
             total={awaiting.total}
             pageParam="page"
-            searchParams={{ q }}
+            searchParams={{ q, purpose }}
           />
         </div>
       )}
@@ -227,7 +242,7 @@ export default async function TrainingQueuePage({
             pageSize={recorded.pageSize}
             total={recorded.total}
             pageParam="page"
-            searchParams={{ q, view }}
+            searchParams={{ q, view, purpose }}
           />
         </div>
       )}

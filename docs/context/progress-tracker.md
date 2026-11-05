@@ -1727,6 +1727,43 @@ Dashboard + email for each audience; each email links to a page that audience ca
 
 ---
 
+## Hospital: optional Next Review Date (2026-11-05)
+
+- [x] Fit with Conditions no longer requires a Next Review Date (a condition may need no medical
+      follow-up). Picker still shown for FwC, labelled "(optional)"; comments still required
+- [x] `validateHospitalClearanceInput`: blank date → NULL; a given date must still be valid and
+      in the future. Applies to both clearances and reviews
+- [x] An undated FwC stays out of Awaiting Review and the reminder job (both key on a non-null
+      date) but can still be reviewed from the Recorded tab
+- [ ] Manual check: FwC submits without a date; with a date it still appears in Awaiting Review
+
+---
+
+## Queue filters on every dashboard (2026-11-05)
+
+- [x] Search stays name/passport; fixed-value fields get `QueueFilter` dropdowns per tab (see
+      `ui-registry.md` for the queue × tab × param table)
+- [x] `lib/domain/queue-filters.ts`: `EngagementFilters`, `parseFilter` / `parseIdFilter` (bad
+      values read as no filter), option builders. Unit tests in `queue-filters.test.ts`
+- [x] `workflow-service.ts`: `engagementFilterConditions` shared by the list functions. Access
+      matches the **effective** state (stored Active + lapsed card = Expired), judged against
+      the current card (`currentCardExpiry`) or, on Security's Granted list, the row's own card
+- [x] Hospital Outcome: clearance status is encrypted, so new `hospital_clearances.
+      clearance_status_index` (blind index), written on clearance and review. Migration
+      `0033_clearance_status_index.sql`. **Written, NOT applied**
+- [x] Hospital Cleared By (`listHospitalClearanceRecorders`), Review due (overdue/today/upcoming).
+      No Stage filter on Hospital. Filters live in one "Filter" button (popover); search
+      narrowed (`max-w-56`), placeholder "Search" everywhere; toolbar right-aligned
+- [x] Reception submissions filter by purpose in JS (it lives in `form_data`)
+- [x] Exports are unchanged: still the full data set, ignoring filters
+- [x] `tsc --noEmit`, `biome check` clean on changed files; unit tests pass
+- [ ] **`bun run db:migrate` then `bun run db:backfill:clearance-index`, dev then production.**
+      Until the backfill runs, older clearances don't match an Outcome filter
+- [ ] Manual check: each filter narrows its tab, survives paging, clears on tab switch; Security
+      Expired includes lapsed Active cards
+
+---
+
 ## Slice 8 — Visa / Permit Expiry Flagging 🔲
 
 *Not started.*

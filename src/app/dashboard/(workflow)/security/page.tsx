@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { GrantedRowActions } from "@/app/dashboard/(workflow)/security/granted-row-actions";
 import { PageHeader } from "@/components/layout/page-header";
+import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
@@ -28,6 +29,11 @@ import {
   isCardExpiryUpdatable,
 } from "@/lib/domain/card-expiry";
 import { toPageRequest } from "@/lib/domain/pagination";
+import {
+  accessPurposeOptions,
+  accessStateOptions,
+  parseFilter,
+} from "@/lib/domain/queue-filters";
 import {
   ACCESS_PURPOSE_LABELS,
   ACCESS_STATE_LABELS,
@@ -69,10 +75,26 @@ function accessDuration(activatedAt: Date, cardExpiry: string): string {
   return days === 1 ? "1 day" : `${days} days`;
 }
 
+const SECURITY_PURPOSES: AccessPurpose[] = ["Work", "WorkMine", "VisitMine"];
+
+// A granted card is never Pending, so the Granted tab does not offer it.
+const GRANTED_ACCESS_STATES: AccessState[] = [
+  "Active",
+  "Expired",
+  "TerminationRequested",
+  "Terminated",
+];
+
 export default async function SecurityQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    page?: string;
+    access?: string;
+    purpose?: string;
+  }>;
 }) {
   const session = await requirePinConfirmed();
 
@@ -80,7 +102,7 @@ export default async function SecurityQueuePage({
     redirect("/dashboard");
   }
 
-  const { view, q, page } = await searchParams;
+  const { view, q, page, access, purpose } = await searchParams;
 
   // Guests see Security's register read-only.
   const canWrite = session.systemRole !== "Guest";
@@ -89,6 +111,8 @@ export default async function SecurityQueuePage({
     view === "granted" || view === "revocations" ? view : "awaiting";
 
   const request = toPageRequest(q, page);
+  const accessPurpose = parseFilter(purpose, SECURITY_PURPOSES);
+  const grantedAccessState = parseFilter(access, GRANTED_ACCESS_STATES);
 
   // Bring the stored state up to date before the register reads it.
   if (activeView === "granted") {
@@ -98,15 +122,20 @@ export default async function SecurityQueuePage({
   // Visit-only records never reach Security — they finish at Reception.
   const [awaiting, granted, revocations] = await Promise.all([
     activeView === "awaiting"
-      ? listEngagementsForLayer(
-          "AtSecurity",
-          ["Work", "WorkMine", "VisitMine"],
-          request,
-        )
+      ? listEngagementsForLayer("AtSecurity", SECURITY_PURPOSES, {
+          ...request,
+          accessPurpose,
+        })
       : undefined,
     // The end of the line: Security has issued a card, so the visitor is
     // through every stage — one row per card issued.
-    activeView === "granted" ? listRecentProvisionings(request) : undefined,
+    activeView === "granted"
+      ? listRecentProvisionings({
+          ...request,
+          accessState: grantedAccessState,
+          accessPurpose,
+        })
+      : undefined,
     // Access Reception has asked to switch off. Security carries it out; there
     // is no approval step in between.
     activeView === "revocations" ? listPendingRevocations(request) : undefined,
@@ -142,17 +171,30 @@ export default async function SecurityQueuePage({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <QueueViewTabs views={views} activeView={activeView} />
-        <QueueSearch
-          searchParam="q"
-          pageParam="page"
-          placeholder={
-            activeView === "awaiting"
-              ? "Search the queue"
-              : activeView === "revocations"
-                ? "Search revocation requests"
-                : "Search granted access"
-          }
-        />
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {activeView !== "revocations" && (
+            <QueueFilters
+              pageParam="page"
+              fields={[
+                ...(activeView === "granted"
+                  ? [
+                      {
+                        param: "access",
+                        label: "Access",
+                        options: accessStateOptions(GRANTED_ACCESS_STATES),
+                      },
+                    ]
+                  : []),
+                {
+                  param: "purpose",
+                  label: "Nature of Visit",
+                  options: accessPurposeOptions(SECURITY_PURPOSES),
+                },
+              ]}
+            />
+          )}
+          <QueueSearch searchParam="q" pageParam="page" />
+        </div>
       </div>
 
       {activeView === "awaiting" && awaiting && (
@@ -211,7 +253,7 @@ export default async function SecurityQueuePage({
             pageSize={awaiting.pageSize}
             total={awaiting.total}
             pageParam="page"
-            searchParams={{ q }}
+            searchParams={{ q, purpose }}
           />
         </div>
       )}
@@ -362,7 +404,7 @@ export default async function SecurityQueuePage({
             pageSize={granted.pageSize}
             total={granted.total}
             pageParam="page"
-            searchParams={{ q, view }}
+            searchParams={{ q, view, access, purpose }}
           />
         </div>
       )}

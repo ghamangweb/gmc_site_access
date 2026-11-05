@@ -66,6 +66,7 @@ test("Security displays authorised exemptions instead of missing or completed ou
         id: "clearance",
         workflowCycleId: "cycle-1",
         clearanceStatus: "Fit",
+        clearanceStatusIndex: null,
         doctorComments: "Stale medical",
         clearanceDate: new Date(),
         recordedBy: null,

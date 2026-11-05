@@ -374,7 +374,10 @@ function summariseRequest(
 // `registrationData`), so the search runs over the summarised rows instead.
 // Volume here is bounded by invitations issued, not by every visitor ever.
 export async function listRegistrationRequests(
-  request: PageRequest & { registrationType?: RegistrationType } = {},
+  request: PageRequest & {
+    registrationType?: RegistrationType;
+    accessPurpose?: AccessPurpose;
+  } = {},
 ): Promise<Page<RegistrationRequestSummary>> {
   const page = request.page ?? 1;
   const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -392,7 +395,14 @@ export async function listRegistrationRequests(
     )
     .orderBy(desc(registrationRequests.createdAt));
 
-  const summaries = rows.map(summariseRequest);
+  // Nature of visit is inside `form_data` too, so it filters here as well.
+  const summaries = rows
+    .map(summariseRequest)
+    .filter(
+      (summary) =>
+        !request.accessPurpose ||
+        summary.accessPurpose === request.accessPurpose,
+    );
   const search = request.search?.toLowerCase();
 
   const matched = search

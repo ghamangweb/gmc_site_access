@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { ReceptionRow } from "@/app/dashboard/(workflow)/reception/reception-row";
 import { RegistrationRequestRow } from "@/app/dashboard/(workflow)/reception/registration-request-row";
 import { PageHeader } from "@/components/layout/page-header";
+import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
@@ -22,6 +23,13 @@ import {
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { danger, pickAttention } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
+import {
+  ACCESS_PURPOSES,
+  accessPurposeOptions,
+  parseFilter,
+  WORKFLOW_STATES,
+  workflowStateOptions,
+} from "@/lib/domain/queue-filters";
 import {
   ACCESS_PURPOSE_LABELS,
   type AccessPurpose,
@@ -44,6 +52,7 @@ import { formatQueueDate } from "@/lib/utils";
 function filterHref(
   value: "Local" | "Foreign" | undefined,
   search: string | undefined,
+  purpose: string | undefined,
 ): string {
   const params = new URLSearchParams();
 
@@ -53,6 +62,10 @@ function filterHref(
 
   if (search) {
     params.set("q", search);
+  }
+
+  if (purpose) {
+    params.set("purpose", purpose);
   }
 
   const query = params.toString();
@@ -74,6 +87,8 @@ export default async function ReceptionQueuePage({
     type?: string;
     q?: string;
     page?: string;
+    stage?: string;
+    purpose?: string;
   }>;
 }) {
   const session = await requirePinConfirmed();
@@ -89,7 +104,7 @@ export default async function ReceptionQueuePage({
     session.systemRole !== "Guest" &&
     session.workflowRoles.includes("Receptionist");
 
-  const { view, type, q, page } = await searchParams;
+  const { view, type, q, page, stage, purpose } = await searchParams;
 
   // One queue at a time. Stacking submissions above engagements meant two
   // tables, two paginators and two searches competing on one screen; this is
@@ -105,6 +120,8 @@ export default async function ReceptionQueuePage({
     type === "Local" || type === "Foreign" ? type : undefined;
 
   const request = toPageRequest(q, page);
+  const accessPurpose = parseFilter(purpose, ACCESS_PURPOSES);
+  const engagementStage = parseFilter(stage, WORKFLOW_STATES);
 
   const typeCounts = await countRegistrationRequestsByType();
 
@@ -113,12 +130,17 @@ export default async function ReceptionQueuePage({
       ? await listRegistrationRequests({
           ...request,
           registrationType: activeFilter,
+          accessPurpose,
         })
       : undefined;
 
   const engagements =
     activeView === "engagements"
-      ? await listEngagementsWithPerson(request)
+      ? await listEngagementsWithPerson({
+          ...request,
+          workflowState: engagementStage,
+          accessPurpose,
+        })
       : undefined;
 
   // For the Engagements tab's attention dots: an Unfit is Reception's to
@@ -177,17 +199,30 @@ export default async function ReceptionQueuePage({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <QueueViewTabs views={views} activeView={activeView} />
-        <QueueSearch
-          searchParam="q"
-          pageParam="page"
-          placeholder={
-            activeView === "submissions"
-              ? "Search submissions"
-              : activeView === "rejected"
-                ? "Search rejected records"
-                : "Search engagements"
-          }
-        />
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {activeView !== "rejected" && (
+            <QueueFilters
+              pageParam="page"
+              fields={[
+                ...(activeView === "engagements"
+                  ? [
+                      {
+                        param: "stage",
+                        label: "Stage",
+                        options: workflowStateOptions(),
+                      },
+                    ]
+                  : []),
+                {
+                  param: "purpose",
+                  label: "Nature of Visit",
+                  options: accessPurposeOptions(),
+                },
+              ]}
+            />
+          )}
+          <QueueSearch searchParam="q" pageParam="page" />
+        </div>
       </div>
 
       {activeView === "submissions" && submissions && (
@@ -202,7 +237,7 @@ export default async function ReceptionQueuePage({
                   size="sm"
                   variant={activeFilter === filter.value ? "default" : "ghost"}
                 >
-                  <Link href={filterHref(filter.value, q)}>
+                  <Link href={filterHref(filter.value, q, purpose)}>
                     {filter.label}
                     <span className="text-xs opacity-70">
                       {filter.value ? typeCounts[filter.value] : typeCounts.all}
@@ -255,7 +290,7 @@ export default async function ReceptionQueuePage({
               pageSize={submissions.pageSize}
               total={submissions.total}
               pageParam="page"
-              searchParams={{ q, type }}
+              searchParams={{ q, type, purpose }}
             />
           </div>
         </>
@@ -331,7 +366,7 @@ export default async function ReceptionQueuePage({
             pageSize={engagements.pageSize}
             total={engagements.total}
             pageParam="page"
-            searchParams={{ q, view: "engagements" }}
+            searchParams={{ q, view: "engagements", stage, purpose }}
           />
         </div>
       )}

@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 
 import { HospitalExportButton } from "@/components/layout/hospital-export-button";
 import { PageHeader } from "@/components/layout/page-header";
+import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
@@ -35,6 +36,14 @@ import { requirePinConfirmed } from "@/lib/auth/guards";
 import { danger, success } from "@/lib/domain/attention";
 import { toPageRequest } from "@/lib/domain/pagination";
 import {
+  clearanceStatusOptions,
+  HOSPITAL_CLEARANCE_STATUSES,
+  parseFilter,
+  parseIdFilter,
+  REVIEW_DUE_VALUES,
+  reviewDueOptions,
+} from "@/lib/domain/queue-filters";
+import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
   isoToday,
@@ -45,6 +54,7 @@ import {
   getLatestClearanceStatuses,
   listAwaitingHospitalReviews,
   listEngagementsForLayer,
+  listHospitalClearanceRecorders,
   listRecentHospitalClearances,
 } from "@/lib/services/workflow-service";
 import { formatQueueDate } from "@/lib/utils";
@@ -61,7 +71,14 @@ const CLEARANCE_BADGE: Record<HospitalClearanceStatus, string> = {
 export default async function HospitalQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    page?: string;
+    outcome?: string;
+    by?: string;
+    due?: string;
+  }>;
 }) {
   const session = await requirePinConfirmed();
 
@@ -69,7 +86,7 @@ export default async function HospitalQueuePage({
     redirect("/dashboard");
   }
 
-  const { view, q, page } = await searchParams;
+  const { view, q, page, outcome, by, due } = await searchParams;
 
   // One queue at a time, like Reception. Awaiting is the default: it is the
   // work, and the recorded tab is the reference.
@@ -78,14 +95,27 @@ export default async function HospitalQueuePage({
 
   const request = toPageRequest(q, page);
 
-  const [awaiting, awaitingReview, recorded] = await Promise.all([
+  // Filters belong to one tab each. Switching tabs drops every param (the tab
+  // links are bare), so a filter never lingers on a tab it does not apply to.
+  const reviewDue = parseFilter(due, REVIEW_DUE_VALUES);
+  const clearanceStatus = parseFilter(outcome, HOSPITAL_CLEARANCE_STATUSES);
+  const recordedBy = parseIdFilter(by);
+
+  const [awaiting, awaitingReview, recorded, recorders] = await Promise.all([
     activeView === "awaiting"
       ? listEngagementsForLayer("AtHospital", ["Work", "WorkMine"], request)
       : undefined,
-    activeView === "review" ? listAwaitingHospitalReviews(request) : undefined,
-    activeView === "recorded"
-      ? listRecentHospitalClearances(request)
+    activeView === "review"
+      ? listAwaitingHospitalReviews({ ...request, reviewDue })
       : undefined,
+    activeView === "recorded"
+      ? listRecentHospitalClearances({
+          ...request,
+          clearanceStatus,
+          recordedBy,
+        })
+      : undefined,
+    activeView === "recorded" ? listHospitalClearanceRecorders() : [],
   ]);
 
   // Awaiting rows that were already marked Unfit are back for re-clearance —
@@ -125,17 +155,37 @@ export default async function HospitalQueuePage({
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <QueueViewTabs views={views} activeView={activeView} />
-        <QueueSearch
-          searchParam="q"
-          pageParam="page"
-          placeholder={
-            activeView === "awaiting"
-              ? "Search the queue"
-              : activeView === "review"
-                ? "Search awaiting reviews"
-                : "Search recorded clearances"
-          }
-        />
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {activeView === "review" && (
+            <QueueFilters
+              pageParam="page"
+              fields={[
+                { param: "due", label: "Review", options: reviewDueOptions() },
+              ]}
+            />
+          )}
+          {activeView === "recorded" && (
+            <QueueFilters
+              pageParam="page"
+              fields={[
+                {
+                  param: "outcome",
+                  label: "Outcome",
+                  options: clearanceStatusOptions(),
+                },
+                {
+                  param: "by",
+                  label: "Cleared By",
+                  options: recorders.map((recorder) => ({
+                    value: recorder.id,
+                    label: recorder.displayName,
+                  })),
+                },
+              ]}
+            />
+          )}
+          <QueueSearch searchParam="q" pageParam="page" />
+        </div>
       </div>
 
       {activeView === "awaiting" && awaiting && (
@@ -204,7 +254,7 @@ export default async function HospitalQueuePage({
             <EmptyState
               icon={CalendarClockIcon}
               title="No reviews awaiting"
-              description="Fit with Conditions clearances appear here, soonest review date first, until their review is recorded."
+              description="Fit with Conditions clearances with a review date appear here, soonest first, until their review is recorded."
             />
           ) : (
             <Table>
@@ -280,7 +330,7 @@ export default async function HospitalQueuePage({
             pageSize={awaitingReview.pageSize}
             total={awaitingReview.total}
             pageParam="page"
-            searchParams={{ q, view }}
+            searchParams={{ q, view, outcome, by, due }}
           />
         </div>
       )}
@@ -409,7 +459,7 @@ export default async function HospitalQueuePage({
             pageSize={recorded.pageSize}
             total={recorded.total}
             pageParam="page"
-            searchParams={{ q, view }}
+            searchParams={{ q, view, outcome, by, due }}
           />
         </div>
       )}
