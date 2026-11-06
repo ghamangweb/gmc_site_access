@@ -30,7 +30,7 @@ export const uploadRouter = {
   // /api/register/documents POST enforced.
   registrationDocument: f(DOCUMENT_FILE_CONFIG)
     .input(z.object({ token: z.string().min(1), docType: z.enum(DOC_TYPES) }))
-    .middleware(async ({ input }) => {
+    .middleware(async ({ input, files }) => {
       const invitation = await validateInvitationToken(input.token);
 
       if (!invitation) {
@@ -47,6 +47,18 @@ export const uploadRouter = {
         )
       ) {
         throw new UploadThingError("Invalid document type");
+      }
+
+      if (
+        input.docType === "passport_photo" &&
+        files.some(
+          (file) =>
+            !["image/jpeg", "image/png", "image/webp"].includes(file.type),
+        )
+      ) {
+        throw new UploadThingError(
+          "Choose a JPEG, PNG or WebP passport photograph",
+        );
       }
 
       const existing = await getDocumentsForInvitation(invitation.id);
@@ -69,7 +81,7 @@ export const uploadRouter = {
         contentType: file.type,
       });
 
-      return { documentId: document.id };
+      return { documentId: document.id, validationError: null };
     }),
 
   // Staff uploads against a real Engagement. The role that may upload is

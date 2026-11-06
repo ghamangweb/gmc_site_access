@@ -21,6 +21,10 @@ import {
   type PageRequest,
   pageOffset,
 } from "@/lib/domain/pagination";
+import {
+  EMERGENCY_PHONE_ERROR,
+  isSamePhoneNumber,
+} from "@/lib/domain/phone-numbers";
 import { RegistrationError } from "@/lib/domain/registration-error";
 import {
   type AccessPurpose,
@@ -117,6 +121,15 @@ export async function createRegistrationRequest(
       "invalid_invitation",
       "This invitation link is invalid, already used, or has been revoked",
     );
+  }
+
+  if (
+    isSamePhoneNumber(
+      formData.person.phone,
+      formData.person.emergencyContactPhone,
+    )
+  ) {
+    throw new RegistrationError("submit_failed", EMERGENCY_PHONE_ERROR);
   }
 
   // Checked before consuming the token, so a submission blocked on a missing

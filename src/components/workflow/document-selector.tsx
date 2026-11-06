@@ -1,6 +1,7 @@
 "use client";
 
 import { EyeIcon, Trash2Icon } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ import { useRegistrationLanguage } from "@/components/workflow/registration-lang
 import { DOCUMENT_LABELS, type DocType } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 import { useUploadThing } from "@/lib/uploadthing/client";
+import { validatePassportPhotoFile } from "@/lib/uploadthing/passport-photo-client";
 
 const RECEPTION_DOCUMENT_TYPES: DocType[] = [
   "passport_biodata",
@@ -98,7 +100,11 @@ export function DocumentSelector({
         return (
           <div
             key={docType}
-            className="flex items-center justify-between gap-3"
+            className={
+              docType === "passport_photo"
+                ? "flex flex-wrap items-center justify-between gap-3"
+                : "flex items-center justify-between gap-3"
+            }
           >
             {mode === "required" ? (
               <span
@@ -153,6 +159,15 @@ export function DocumentSelector({
                   disabled={disabled}
                 />
               ))}
+            {docType === "passport_photo" && isApplicable && (
+              <p className="w-full text-xs text-destructive">
+                {t(
+                  invitationToken
+                    ? "35:45 portrait ratio, at least 350 × 450 pixels. Plain white or near-white background. JPEG, PNG or WebP, up to 16 MB."
+                    : "35 × 45 mm portrait frame. White backgrounds accepted.",
+                )}
+              </p>
+            )}
           </div>
         );
       })}
@@ -270,6 +285,42 @@ function UploadSlot({
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const photoDocumentId =
+    docType === "passport_photo" ? uploaded?.id : undefined;
+
+  useEffect(() => {
+    setPreviewUrl(null);
+
+    if (!photoDocumentId) return;
+
+    let cancelled = false;
+
+    const url = invitationToken
+      ? `/api/register/documents?token=${encodeURIComponent(invitationToken)}&documentId=${photoDocumentId}`
+      : `/api/documents/${photoDocumentId}`;
+
+    async function loadPreview(): Promise<void> {
+      try {
+        const response = await fetch(url);
+
+        if (!response.ok) throw new Error("Couldn't load the document");
+        const { data } = await response.json();
+
+        if (!cancelled) setPreviewUrl(data.url);
+      } catch {
+        if (!cancelled) toast.error(t("Couldn't load the document"));
+      }
+    }
+
+    void loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photoDocumentId, invitationToken, t]);
 
   function clearInput() {
     if (inputRef.current) {
@@ -284,7 +335,16 @@ function UploadSlot({
   const { startUpload, isUploading } = useUploadThing(
     invitationToken ? "registrationDocument" : "engagementDocument",
     {
-      onClientUploadComplete: () => {
+      onClientUploadComplete: (files) => {
+        const result = files[0]?.serverData;
+
+        if (result && "validationError" in result && result.validationError) {
+          toast.error(t(result.validationError));
+          clearInput();
+
+          return;
+        }
+
         toast.success(`${t(DOCUMENT_LABELS[docType])} ${t("uploaded")}`);
         clearInput();
         router.refresh();
@@ -297,18 +357,50 @@ function UploadSlot({
   );
 
   useEffect(() => {
-    onBusyChange?.(docType, isUploading || isDeleting);
-  }, [docType, isUploading, isDeleting, onBusyChange]);
+    onBusyChange?.(docType, isValidating || isUploading || isDeleting);
+  }, [docType, isValidating, isUploading, isDeleting, onBusyChange]);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || isValidating || isUploading) return;
 
-    const input = invitationToken
-      ? { token: invitationToken, docType }
-      : { engagementId: engagementId ?? "", docType };
+    if (
+      docType === "passport_photo" &&
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+    ) {
+      toast.error(t("Choose a JPEG, PNG or WebP passport photograph"));
+      clearInput();
 
-    void startUpload([file], input);
+      return;
+    }
+
+    setIsValidating(true);
+
+    try {
+      if (invitationToken && docType === "passport_photo") {
+        const error = await validatePassportPhotoFile(file);
+
+        if (error) {
+          toast.error(t(error));
+          clearInput();
+
+          return;
+        }
+      }
+
+      const input = invitationToken
+        ? { token: invitationToken, docType }
+        : { engagementId: engagementId ?? "", docType };
+
+      await startUpload([file], input);
+    } catch {
+      toast.error(t("Upload failed"));
+      clearInput();
+    } finally {
+      setIsValidating(false);
+    }
   }
 
   async function handleView() {
@@ -319,6 +411,7 @@ function UploadSlot({
     const response = await fetch(url).catch(() => null);
     if (!response?.ok) {
       toast.error(t("Couldn't load the document"));
+
       return;
     }
     const { data } = await response.json();
@@ -327,6 +420,7 @@ function UploadSlot({
 
   function handleDelete() {
     if (!uploaded) return;
+
     const confirmed = window.confirm(
       `Remove ${fileNameFromUrl(uploaded.fileUrl)}? You'll need to upload it again if it's still required.`,
     );
@@ -353,49 +447,49 @@ function UploadSlot({
       });
   }
 
-  if (uploaded) {
-    return (
-      <div className="flex shrink-0 items-center gap-1">
-        <button
-          type="button"
-          onClick={handleView}
-          className="max-w-40 truncate text-sm text-primary underline hover:text-primary/80"
-        >
-          {fileNameFromUrl(uploaded.fileUrl)}
-        </button>
+  const controls = uploaded ? (
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={handleView}
+        className="max-w-40 truncate text-sm text-primary underline hover:text-primary/80"
+      >
+        {fileNameFromUrl(uploaded.fileUrl)}
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8"
+        onClick={handleView}
+      >
+        <EyeIcon />
+        <span className="sr-only">{t("View")}</span>
+      </Button>
+      {!disabled && (
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="size-8"
-          onClick={handleView}
+          loading={isDeleting}
+          onClick={handleDelete}
         >
-          <EyeIcon />
-          <span className="sr-only">{t("View")}</span>
+          <Trash2Icon />
+          <span className="sr-only">{t("Remove")}</span>
         </Button>
-        {!disabled && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            loading={isDeleting}
-            onClick={handleDelete}
-          >
-            <Trash2Icon />
-            <span className="sr-only">{t("Remove")}</span>
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-  return (
+      )}
+    </div>
+  ) : (
     <div className="flex shrink-0 items-center gap-3">
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf,image/*"
+        accept={
+          docType === "passport_photo"
+            ? "image/jpeg,image/png,image/webp"
+            : "application/pdf,image/*"
+        }
         className="hidden"
         onChange={handleFile}
       />
@@ -403,7 +497,7 @@ function UploadSlot({
         type="button"
         variant="outline"
         size="sm"
-        loading={isUploading}
+        loading={isUploading || isValidating}
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
@@ -412,6 +506,30 @@ function UploadSlot({
       <span className="text-xs text-muted-foreground">
         {t(optional ? "Optional" : "Required")}
       </span>
+    </div>
+  );
+
+  if (docType !== "passport_photo") return controls;
+
+  return (
+    <div className="flex shrink-0 items-center gap-3">
+      {previewUrl && (
+        <div className="relative aspect-[7/9] w-14 shrink-0 overflow-hidden rounded-md border border-border bg-background">
+          <Image
+            src={previewUrl}
+            alt={t("Passport photograph")}
+            fill
+            sizes="56px"
+            unoptimized
+            className="object-contain"
+            onError={() => {
+              setPreviewUrl(null);
+              toast.error(t("Couldn't load the document"));
+            }}
+          />
+        </div>
+      )}
+      {controls}
     </div>
   );
 }

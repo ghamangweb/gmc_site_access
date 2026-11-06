@@ -80,7 +80,7 @@ const ZH_ENTRIES = {
   "Other Inductions / Training": "其他入场培训",
   "Bringing Equipment on Site": "携带设备进入现场",
   "PPE Required": "需要个人防护装备",
-  "IT Access Required": "需要 IT 系统权限",
+  "Internet Access Required": "需要互联网访问",
   "Visa Type": "签证类型",
   "Access Level": "准入级别",
 
@@ -120,6 +120,28 @@ const ZH_ENTRIES = {
   No: "否",
 
   // --- Document uploads --------------------------------------------------
+  "Passport photograph": "护照照片",
+  "35 × 45 mm portrait frame. White backgrounds accepted.":
+    "35 × 45 毫米竖版相框，可使用白色背景照片。",
+  "Choose a JPEG, PNG or WebP passport photograph":
+    "请选择 JPEG、PNG 或 WebP 格式的护照照片",
+  "35:45 portrait ratio, at least 350 × 450 pixels. Plain white or near-white background. JPEG, PNG or WebP, up to 16 MB.":
+    "宽高比为 35:45，至少 350 × 450 像素。使用纯白色或近白色背景。支持 JPEG、PNG 或 WebP，文件不超过 16 MB。",
+  "Passport photograph must be 16 MB or smaller": "护照照片文件不得超过 16 MB",
+  "Passport photograph must be at least 350 × 450 pixels":
+    "护照照片至少应为 350 × 450 像素",
+  "Use a portrait photograph with a 35:45 width-to-height ratio":
+    "请使用宽高比为 35:45 的竖版照片",
+  "Passport photograph must not exceed 40 megapixels":
+    "护照照片不得超过 4000 万像素",
+  "Use a plain white or near-white background for the passport photograph":
+    "护照照片请使用纯白色或近白色背景",
+  "The passport photograph could not be read. Choose another image":
+    "无法读取护照照片，请选择其他图片",
+  "Choose a still passport photograph, not an animated image":
+    "请选择静态护照照片，不要使用动画图片",
+  "The passport photograph could not be validated. Please try again":
+    "无法验证护照照片，请重试",
   "Passport biodata page": "护照资料页",
   "Valid visa": "有效签证",
   "MINCOM letter of approval": "矿业委员会批准函",
@@ -152,6 +174,8 @@ const ZH_ENTRIES = {
 
   // --- Validation messages (zod keeps the English string as its key) -----
   Required_validation: "此项为必填",
+  "Emergency contact number must be different from the main telephone number":
+    "紧急联系人的电话号码必须与主要电话号码不同",
   "Enter a valid email": "请输入有效的电子邮箱",
   "Enter a valid phone number for the selected country":
     "请输入与所选国家／地区匹配的有效电话号码",

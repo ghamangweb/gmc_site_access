@@ -5,7 +5,7 @@ import { isValidPhoneNumber } from "libphonenumber-js";
 import { Loader2, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   type Control,
   Controller,
@@ -51,6 +51,10 @@ import { useRegistrationLanguage } from "@/components/workflow/registration-lang
 import { RegistrationSuccess } from "@/components/workflow/registration-success";
 import { GHANA_LOCATIONS } from "@/lib/domain/ghana-locations";
 import { NATIONALITIES } from "@/lib/domain/nationalities";
+import {
+  EMERGENCY_PHONE_ERROR,
+  isSamePhoneNumber,
+} from "@/lib/domain/phone-numbers";
 import {
   ACCESS_PURPOSE_LABELS,
   DOCUMENT_LABELS,
@@ -166,6 +170,14 @@ const receptionFormSchema = z
     ),
   })
   .superRefine((values, ctx) => {
+    if (isSamePhoneNumber(values.phone, values.emergencyContactPhone)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["emergencyContactPhone"],
+        message: EMERGENCY_PHONE_ERROR,
+      });
+    }
+
     if (values.airportPickup && !values.pickupDate) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -269,6 +281,23 @@ export function ReceptionForm({
   } | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  const [busyDocuments, setBusyDocuments] = useState<
+    Partial<Record<DocType, boolean>>
+  >({});
+
+  const documentBusy = Object.values(busyDocuments).some(Boolean);
+
+  const handleDocumentBusyChange = useCallback(
+    (docType: DocType, busy: boolean): void => {
+      setBusyDocuments((previous) =>
+        previous[docType] === busy
+          ? previous
+          : { ...previous, [docType]: busy },
+      );
+    },
+    [],
+  );
+
   const form = useForm<ReceptionFormValues>({
     resolver: zodResolver(receptionFormSchema),
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
@@ -341,6 +370,8 @@ export function ReceptionForm({
   }
 
   function onSubmit(values: ReceptionFormValues) {
+    if (documentBusy) return;
+
     startTransition(async () => {
       const { applicableDocuments, ...rest } = values;
       const payload = {
@@ -773,7 +804,7 @@ export function ReceptionForm({
             <CheckboxField
               control={form.control}
               name="itAccessRequired"
-              label="IT Access Required"
+              label="Internet Access Required"
               disabled={disabled}
             />
             <CheckboxField
@@ -826,6 +857,7 @@ export function ReceptionForm({
               docTypes={getRegistrationDocTypes("Foreign")}
               requiredDocTypes={requiredDocTypes}
               uploadedDocuments={uploadedDocuments}
+              onDocumentBusyChange={handleDocumentBusyChange}
               disabled={disabled}
             />
           ) : (
@@ -886,7 +918,11 @@ export function ReceptionForm({
             <Button
               type="submit"
               loading={isPending}
-              disabled={!!activeEngagementId || missingRequiredDocs.length > 0}
+              disabled={
+                documentBusy ||
+                !!activeEngagementId ||
+                missingRequiredDocs.length > 0
+              }
               className="w-fit"
             >
               {publicToken

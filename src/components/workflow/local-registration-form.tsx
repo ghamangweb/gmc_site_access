@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { isValidPhoneNumber } from "libphonenumber-js";
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { type Control, type FieldPath, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -34,7 +34,12 @@ import { PhoneInput } from "@/components/workflow/phone-input";
 import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
 import { RegistrationSuccess } from "@/components/workflow/registration-success";
 import {
+  EMERGENCY_PHONE_ERROR,
+  isSamePhoneNumber,
+} from "@/lib/domain/phone-numbers";
+import {
   DOCUMENT_LABELS,
+  type DocType,
   getRegistrationDocTypes,
   REGISTRATION_DOCUMENT_TYPES,
 } from "@/lib/domain/types";
@@ -78,43 +83,48 @@ const phoneFieldSchema = z.string().superRefine((value, ctx) => {
   }
 });
 
-const localFormSchema = z.object({
-  passportNo: z.string().min(1, "Required"),
-  fullName: z.string().min(1, "Required"),
-  dateOfBirth: z.string().min(1, "Required"),
-  gender: z.string().min(1, "Required"),
-  email: z.union([z.literal(""), z.email("Enter a valid email")]),
-  phone: phoneFieldSchema,
-  telephoneOnSite: phoneFieldSchema,
-  emergencyContactName: z.string().min(1, "Required"),
-  emergencyContactPhone: phoneFieldSchema,
-  employmentStatus: z.string().min(1, "Required"),
-  accessPurpose: z.enum(["Work", "WorkMine", "Visit", "VisitMine"]),
-  arrivalDate: z.string().min(1, "Required"),
-  departureDate: z.string().min(1, "Required"),
-  companyName: z.string().min(1, "Required"),
-  contactNameMonthly: z.string().min(1, "Required"),
-  contactEmail: z.union([z.literal(""), z.email("Enter a valid email")]),
-  companyEmergencyName: z.string().min(1, "Required"),
-  companyEmergencyTel: phoneFieldSchema,
-  gmcLiaisonPerson: z.string().min(1, "Required"),
-  reasonForRequest: z.string().min(1, "Required"),
-  airportPickup: z.boolean(),
-  transportTo: z.boolean(),
-  transportFrom: z.boolean(),
-  accommodationRequired: z.boolean(),
-  permanentAccessBadge: z.boolean(),
-  generalSiteInduction: z.boolean(),
-  otherInductions: z.boolean(),
-  bringingEquipment: z.boolean(),
-  ppeRequired: z.boolean(),
-  itAccessRequired: z.boolean(),
-  accessLevel: z.string().min(1, "Required"),
-  accommodationConfirmed: z.boolean(),
-  itineraryAttached: z.boolean(),
-  inflightUpdated: z.boolean(),
-  remarks: z.string(),
-});
+const localFormSchema = z
+  .object({
+    passportNo: z.string().min(1, "Required"),
+    fullName: z.string().min(1, "Required"),
+    dateOfBirth: z.string().min(1, "Required"),
+    gender: z.string().min(1, "Required"),
+    email: z.union([z.literal(""), z.email("Enter a valid email")]),
+    phone: phoneFieldSchema,
+    telephoneOnSite: phoneFieldSchema,
+    emergencyContactName: z.string().min(1, "Required"),
+    emergencyContactPhone: phoneFieldSchema,
+    employmentStatus: z.string().min(1, "Required"),
+    accessPurpose: z.enum(["Work", "WorkMine", "Visit", "VisitMine"]),
+    arrivalDate: z.string().min(1, "Required"),
+    departureDate: z.string().min(1, "Required"),
+    companyName: z.string().min(1, "Required"),
+    contactNameMonthly: z.string().min(1, "Required"),
+    contactEmail: z.union([z.literal(""), z.email("Enter a valid email")]),
+    companyEmergencyName: z.string().min(1, "Required"),
+    companyEmergencyTel: phoneFieldSchema,
+    gmcLiaisonPerson: z.string().min(1, "Required"),
+    reasonForRequest: z.string().min(1, "Required"),
+    airportPickup: z.boolean(),
+    transportTo: z.boolean(),
+    transportFrom: z.boolean(),
+    accommodationRequired: z.boolean(),
+    permanentAccessBadge: z.boolean(),
+    generalSiteInduction: z.boolean(),
+    otherInductions: z.boolean(),
+    bringingEquipment: z.boolean(),
+    ppeRequired: z.boolean(),
+    itAccessRequired: z.boolean(),
+    accessLevel: z.string().min(1, "Required"),
+    accommodationConfirmed: z.boolean(),
+    itineraryAttached: z.boolean(),
+    inflightUpdated: z.boolean(),
+    remarks: z.string(),
+  })
+  .refine(
+    (values) => !isSamePhoneNumber(values.phone, values.emergencyContactPhone),
+    { path: ["emergencyContactPhone"], message: EMERGENCY_PHONE_ERROR },
+  );
 
 type LocalFormValues = z.infer<typeof localFormSchema>;
 
@@ -168,6 +178,23 @@ export function LocalRegistrationForm({
   const [isPending, startTransition] = useTransition();
   const [submitted, setSubmitted] = useState(false);
 
+  const [busyDocuments, setBusyDocuments] = useState<
+    Partial<Record<DocType, boolean>>
+  >({});
+
+  const documentBusy = Object.values(busyDocuments).some(Boolean);
+
+  const handleDocumentBusyChange = useCallback(
+    (docType: DocType, busy: boolean): void => {
+      setBusyDocuments((previous) =>
+        previous[docType] === busy
+          ? previous
+          : { ...previous, [docType]: busy },
+      );
+    },
+    [],
+  );
+
   const { t, tActionError } = useRegistrationLanguage();
 
   const form = useForm<LocalFormValues>({
@@ -182,6 +209,8 @@ export function LocalRegistrationForm({
   );
 
   function onSubmit(values: LocalFormValues) {
+    if (documentBusy) return;
+
     startTransition(async () => {
       const payload = {
         person: {
@@ -462,7 +491,7 @@ export function LocalRegistrationForm({
             <YesNoField
               control={form.control}
               name="itAccessRequired"
-              label="IT Access Required"
+              label="Internet Access Required"
               disabled={isPending}
             />
             <YesNoField
@@ -503,6 +532,7 @@ export function LocalRegistrationForm({
             docTypes={getRegistrationDocTypes("Local")}
             requiredDocTypes={REGISTRATION_DOCUMENT_TYPES.Local}
             uploadedDocuments={uploadedDocuments}
+            onDocumentBusyChange={handleDocumentBusyChange}
             disabled={isPending}
           />
         </Card>
@@ -511,7 +541,7 @@ export function LocalRegistrationForm({
           <Button
             type="submit"
             loading={isPending}
-            disabled={missingRequiredDocs.length > 0}
+            disabled={documentBusy || missingRequiredDocs.length > 0}
             className="w-fit"
           >
             {t("Submit")}

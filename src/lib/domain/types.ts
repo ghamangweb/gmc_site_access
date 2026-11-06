@@ -212,12 +212,13 @@ export const REGISTRATION_OPTIONAL_DOCUMENT_TYPES: Record<
   DocType[]
 > = {
   Foreign: [
+    "passport_photo",
     "work_residence_permit",
     "mincom_letter",
     "assignment_letter",
     "insurance_proof",
   ],
-  Local: ["assignment_letter", "insurance_proof"],
+  Local: ["passport_photo", "assignment_letter", "insurance_proof"],
 };
 
 // A visitor collecting their visa at the airport has no visa document to
