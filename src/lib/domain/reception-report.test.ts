@@ -40,10 +40,10 @@ test("Reception rows preserve identity, submission dates, rejection details and 
   const row = values(receptionReportRows([record])[0]);
   assert.equal(row["Passport/ID Number"], "001234");
   assert.equal(row["Current Workflow Stage"], "Reception");
-  assert.equal(row["Submitted At (UTC)"], "2026-11-01T09:00:00.000Z");
+  assert.equal(row["Submitted At (UTC)"], "09:00:00");
   assert.equal(row["Rejected By"], "Approver (CSO)");
   assert.equal(row["Rejection Reason"], record.rejectionReason);
-  assert.equal(row["Rejected At (UTC)"], "2026-11-03T10:00:00.000Z");
+  assert.equal(row["Rejected At (UTC)"], "10:00:00");
 });
 
 test("outstanding submissions have no fabricated workflow or access status", () => {

@@ -123,6 +123,11 @@ over stale outcomes. Exemptions are never styled as completed medicals or induct
 
 ## ApprovalsExportButton (2026-11-05)
 
+**All report exports (2026-11-06):** Timestamp cells use UTC time only,
+`HH:mm:ss`, via `lib/domain/report-timestamp.ts`. No fractional seconds, calendar date or ISO `T`/`Z`
+appears in timestamp cells. Existing date-only fields keep their dates. Applies to
+CSV row exporters and all Excel sheets through the shared report row builders.
+
 File: `src/components/layout/approvals-export-button.tsx`, in Approvals PageHeader actions.
 
 Matches Training/Security/Reception/Hospital: shared outline `Button`, inherited surface,
@@ -2476,6 +2481,12 @@ the list when any filter is set.
 Export buttons left the page header (Reception keeps "New Registration" there).
 
 ### Department dashboard — tabs and row menus (2026-11-05)
+
+**Rejection email feedback (2026-11-06):** `SubmissionRow` shows `toast.warning`
+when rejection succeeds but its notice cannot be emailed to the original invitation
+recipient. Otherwise it shows the existing success toast. Both outcomes close the
+dialog; an actual decision failure still uses the error toast. Matches approval's
+existing success-with-warning pattern.
 
 Files: src/app/dashboard/(workflow)/department/{page,submission-row,invitation-row}.tsx
 

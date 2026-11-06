@@ -1,3 +1,4 @@
+import { reportTimestamp } from "@/lib/domain/report-timestamp";
 import {
   ACCESS_PURPOSE_LABELS,
   ACCESS_STATE_LABELS,
@@ -138,14 +139,14 @@ export function securityReportRows(
       card?.idType ?? "",
       card?.accessCardNumber ?? "",
       card?.accessCardExpiry ?? "",
-      card?.activatedAt.toISOString() ?? "",
+      reportTimestamp(card?.activatedAt),
       audit?.performedBy ?? "",
       audit?.comments ?? "",
-      revocation?.requestedAt.toISOString() ?? "",
+      reportTimestamp(revocation?.requestedAt),
       revocation?.requestedBy ?? "",
       revocation?.reason ?? "",
       revocation?.status === "Revoked"
-        ? (revocation.decidedAt?.toISOString() ?? "")
+        ? reportTimestamp(revocation.decidedAt)
         : "",
       revocation?.status === "Revoked" ? revocation.decidedBy : "",
       ...workflowExemptionReportValues(cycleExemptions),

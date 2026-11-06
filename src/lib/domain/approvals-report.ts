@@ -1,3 +1,4 @@
+import { reportTimestamp } from "@/lib/domain/report-timestamp";
 import {
   ACCESS_PURPOSE_LABELS,
   WORKFLOW_STATE_LABELS,
@@ -82,14 +83,14 @@ export function approvalsReportRows(
       record.departure,
       approved ? "Approved" : "Awaiting Approval",
       labelFor(WORKFLOW_STATE_LABELS, record.workflowState),
-      record.requestedAt?.toISOString() ?? "",
+      reportTimestamp(record.requestedAt),
       approved ? record.approvedBy : "",
       approved ? record.approverRole : "",
-      approved ? (record.approvedAt?.toISOString() ?? "") : "",
+      approved ? reportTimestamp(record.approvedAt) : "",
       record.isDelegated ? "Yes" : "No",
       record.isDelegated ? record.delegatedTo : "",
       record.isDelegated ? record.delegatedBy : "",
-      record.isDelegated ? (record.delegatedAt?.toISOString() ?? "") : "",
+      record.isDelegated ? reportTimestamp(record.delegatedAt) : "",
       record.isDelegated ? record.delegationReason : "",
       ...workflowExemptionReportValues(approvalExemptions),
     ];

@@ -8,9 +8,11 @@ import type { ActionResult } from "@/lib/domain/types";
 import { sendEmail } from "@/lib/email/send";
 import {
   departmentInvitationTemplate,
+  registrationRejectedTemplate,
   registrationSubmittedTemplate,
 } from "@/lib/email/templates";
 import {
+  getInvitationEmail,
   issueInvitation,
   revokeInvitation,
 } from "@/lib/services/invitation-service";
@@ -223,14 +225,41 @@ export async function rejectRegistrationRequestAction(
       return { success: false, error: "Reason is required" };
     }
 
-    await rejectRegistrationRequest(
+    const request = await rejectRegistrationRequest(
       requestId,
       session.staffUserId,
       trimmedReason,
     );
 
     revalidatePath("/dashboard/department");
-    return { success: true };
+
+    // Rejection is already saved. A notification failure must not report that
+    // the decision failed or encourage a retry of a final decision.
+    let emailSent = false;
+
+    try {
+      const recipient = await getInvitationEmail(request.invitationId);
+
+      if (recipient) {
+        emailSent = await sendEmail({
+          to: recipient,
+          ...registrationRejectedTemplate({
+            department: request.department,
+            reason: trimmedReason,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error("[actions/registration] rejection email", error);
+    }
+
+    return emailSent
+      ? { success: true }
+      : {
+          success: true,
+          warning:
+            "Registration rejected, but the invitation recipient could not be notified by email",
+        };
   } catch (error) {
     console.error("[actions/registration]", error);
     return {

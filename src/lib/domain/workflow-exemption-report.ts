@@ -1,3 +1,4 @@
+import { reportTimestamp } from "@/lib/domain/report-timestamp";
 import {
   WORKFLOW_EXEMPTION_STAGE_LABELS,
   type WorkflowExemptionStage,
@@ -46,6 +47,8 @@ export function workflowExemptionReportValues(
       ...new Set(
         exemptions.map((exemption) => exemption.approvedAt.toISOString()),
       ),
-    ].join("; "),
+    ]
+      .map((timestamp) => reportTimestamp(new Date(timestamp)))
+      .join("; "),
   ];
 }

@@ -104,7 +104,11 @@ export function SubmissionRow({
         rejectReason,
       );
       if (result.success) {
-        toast.success("Registration rejected");
+        if (result.warning) {
+          toast.warning(result.warning);
+        } else {
+          toast.success("Registration rejected");
+        }
         setRejectOpen(false);
       } else {
         toast.error("Couldn't reject registration", {

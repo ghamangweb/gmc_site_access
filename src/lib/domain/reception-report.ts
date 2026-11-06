@@ -1,3 +1,4 @@
+import { reportTimestamp } from "@/lib/domain/report-timestamp";
 import {
   ACCESS_PURPOSE_LABELS,
   ACCESS_STATE_LABELS,
@@ -77,12 +78,12 @@ export function receptionReportRows(
       record.arrival,
       record.departure,
       record.submissionStatus,
-      record.submittedAt?.toISOString() ?? "",
+      reportTimestamp(record.submittedAt),
       labelFor(WORKFLOW_STATE_LABELS, record.workflowState),
       labelFor(ACCESS_STATE_LABELS, accessState),
       record.rejectedBy,
       record.rejectionReason,
-      record.rejectedAt?.toISOString() ?? "",
+      reportTimestamp(record.rejectedAt),
       ...workflowExemptionReportValues(
         exemptions.filter(
           (exemption) =>

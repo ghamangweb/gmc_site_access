@@ -56,7 +56,7 @@ test("approved decision remains distinct from current stage and preserves UTC at
   assert.equal(row["Passport/ID Number"], "001234");
   assert.equal(row["Approved By"], "Approver");
   assert.equal(row["Approver Role"], "CSO");
-  assert.equal(row["Approved At (UTC)"], "2026-11-02T10:00:00.000Z");
+  assert.equal(row["Approved At (UTC)"], "10:00:00");
 });
 
 test("pending approval never invents an approver, decision date or exemptions", () => {
@@ -94,7 +94,7 @@ test("delegation details describe both pending assignments and signed delegated 
     assert.equal(row["Delegated Approval"], "Yes");
     assert.equal(row["Delegated To"], "Delegate");
     assert.equal(row["Delegated By"], "Granting Stakeholder");
-    assert.equal(row["Delegated At (UTC)"], "2026-11-01T11:00:00.000Z");
+    assert.equal(row["Delegated At (UTC)"], "11:00:00");
     assert.equal(row["Delegation Reason"], "Authorised cover");
   }
 });

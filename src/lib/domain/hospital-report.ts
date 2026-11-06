@@ -1,3 +1,4 @@
+import { reportTimestamp } from "@/lib/domain/report-timestamp";
 import {
   ACCESS_PURPOSE_LABELS,
   HOSPITAL_CLEARANCE_LABELS,
@@ -120,7 +121,7 @@ export function hospitalReportRows(
           ? labelFor(HOSPITAL_CLEARANCE_LABELS, clearance.clearanceStatus)
           : "",
         clearance?.doctorComments ?? "",
-        clearance?.clearanceDate.toISOString() ?? "",
+        reportTimestamp(clearance?.clearanceDate),
         clearance?.recordedByName ?? "",
         reviewDate ?? "",
         clearance ? (clearance.isLatest ? "Yes" : "No") : "",

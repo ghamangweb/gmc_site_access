@@ -106,7 +106,7 @@ test("latest card uses its own cycle's activation audit and excludes earlier rev
     [revocation],
   );
   const data = values(row);
-  assert.equal(data["Activated At (UTC)"], latest.activatedAt.toISOString());
+  assert.equal(data["Activated At (UTC)"], "10:00:00");
   assert.equal(data["Activated By"], "");
   assert.equal(data["Activation Comments"], "");
   assert.equal(data["Revocation Reason"], "");
@@ -133,7 +133,7 @@ test("revoked access retains activation and revocation accountability", () => {
   assert.equal(data["Activation Comments"], audit.comments);
   assert.equal(data["Revocation Requested By"], revocation.requestedBy);
   assert.equal(data["Revocation Reason"], revocation.reason);
-  assert.equal(data["Revoked At (UTC)"], decidedAt.toISOString());
+  assert.equal(data["Revoked At (UTC)"], "12:00:00");
   assert.equal(data["Revoked By"], "Security Two");
 });
 
