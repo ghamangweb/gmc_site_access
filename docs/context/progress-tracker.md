@@ -1,5 +1,56 @@
 # Progress Tracker
 
+## Passport photograph row layout (2026-11-06)
+
+- [x] Requirements text uses the existing red `text-destructive` token.
+- [x] Matches other document rows: label left, controls right; requirements span the
+      full width underneath. Removed the empty avatar frame; uploaded photos use a
+      compact portrait thumbnail beside the controls. Validation rules unchanged.
+- [ ] Manual browser check: alignment with adjacent document rows and mobile wrapping.
+
+---
+
+## Passport photograph validation (2026-11-06, in progress)
+
+- [x] Approved design: optional photographs; 7:9 portrait ratio (2% rounding tolerance),
+      minimum 350 × 450 pixels, existing 16 MB limit; white/near-white background checks;
+      repeat checks server-side and remove rejected uploads before attaching documents.
+- [x] Shared policy in `lib/domain/passport-photo.ts`. Background checks inspect the top
+      and upper side edges separately (85% near-white per region), excluding clothing at
+      the bottom. This is a heuristic, not face detection or passport certification.
+- [x] Browser decoding and canvas sampling, translated rejection messages, visible
+      requirements, and busy-state handling. Both Local/Foreign forms reuse the slot.
+- [x] Ten policy/registration tests pass; Biome and the new domain/client anti-slop checks pass.
+- [ ] Server decoder and invalid-file cleanup: awaiting permission to declare the installed
+      `sharp@0.34.5` as a direct dependency, as required by `CLAUDE.md` for library additions.
+- [ ] Server image-format sniffing, orientation-aware dimensions, background sampling,
+      invalid-file deletion, and returning rejection details through UploadThing serverData.
+- [ ] Server tests and manual browser check. No dev server started.
+
+---
+
+## Registration form updates (2026-11-06)
+
+- [x] Approved scope: optional passport photograph for Local and Foreign registrations;
+      35 × 45 mm portrait frame with white backgrounds accepted; distinct main and
+      emergency phone numbers; rename IT Access Required to Internet Access Required.
+- [x] Reused `passport_photo` and invitation upload authorization. Photograph is in
+      the optional document lists only; existing required documents and visa-on-arrival
+      rules remain intact. JPEG/PNG/WebP validation in the client and upload middleware.
+- [x] Signed inline photograph preview with view/remove actions; existing document
+      handoff carries the photograph to Security. Submit waits for uploads/deletions.
+- [x] Normalized phone comparison in both form schemas and the registration service,
+      before the invitation is consumed. English/Chinese copy updated, including preview.
+- [x] TypeScript, Biome and five focused tests passed. CodeRabbit reviewed the changed
+      tracked code with no findings. Anti-slop comparison against HEAD: no introduced
+      diagnostics (72 existing findings remain in touched files, down from 74).
+- [ ] Manual browser check: both registration types can submit without a photograph;
+      a white-background photograph uploads/previews/removes correctly on mobile;
+      duplicate emergency numbers show a field error; Internet Access label appears
+      correctly in both languages. No dev server was started.
+
+---
+
 ## Loading skeletons — awaiting user verification (2026-11-06)
 
 - [x] `ui/skeleton.tsx` primitive plus shared shapes in `layout/page-skeletons.tsx`.

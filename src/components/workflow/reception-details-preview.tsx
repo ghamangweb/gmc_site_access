@@ -212,7 +212,7 @@ export function ReceptionDetailsPreview({
             muted={values.ppeRequired !== true}
           />
           <Field
-            label="IT Access Required"
+            label="Internet Access Required"
             value={yesNo(values.itAccessRequired)}
             muted={values.itAccessRequired !== true}
           />

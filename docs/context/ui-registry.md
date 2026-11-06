@@ -696,6 +696,27 @@ for typed) instead of rendering inert controls.
 
 ### DocumentSelector
 
+**Registration passport photograph (2026-11-06):** Local and Foreign forms offer
+`passport_photo` as an optional document. Its row follows the other documents:
+label on the left, upload/view/remove controls aligned to the right. Requirements
+use the full row width underneath (`w-full text-xs text-destructive`, red) instead
+of a narrow text column. No empty avatar frame is shown. Once uploaded, a compact
+7:9 portrait preview (`w-14 rounded-md border border-border bg-background`) appears
+beside the controls, using an unoptimized `next/image` with `object-contain` and a
+token-scoped signed URL. Registration helper text shows the 35:45 ratio,
+350 × 450 pixel minimum, white/near-white background and 16 MB JPEG/PNG/WebP limits.
+Browser validation decodes the image and samples its upper background regions using
+the shared passport-photo policy; it does not crop or modify the photo. The upload
+button stays busy during checking, and the form's busy callback blocks submission.
+Server validation is in progress (see `progress-tracker.md`). Security's existing
+staff upload keeps its earlier requirements.
+Existing outline upload and ghost view/remove buttons are reused. Both public forms
+track per-document busy callbacks and block submission during uploads/deletions.
+
+The support checkbox and read-only details now say **Internet Access Required**;
+the stored field remains `itAccessRequired`. The emergency phone validation message
+is attached to the emergency field and compares normalized international numbers.
+
 File: `src/components/workflow/document-selector.tsx`
 Last updated: 2026-07-16
 
