@@ -2,12 +2,20 @@ import { CheckCircle2Icon, ClipboardCheckIcon } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { ApprovalRowActions } from "@/app/dashboard/(workflow)/approvals/approval-row-actions";
-
+import {
+  APPROVED_COLUMNS,
+  AWAITING_COLUMNS,
+} from "@/app/dashboard/(workflow)/approvals/skeleton-columns";
 import { ApprovalsExportButton } from "@/components/layout/approvals-export-button";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeletons";
 import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
+import {
+  QueuePending,
+  QueueTransitionProvider,
+} from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -169,232 +177,249 @@ export default async function ApprovalsQueuePage({
   ];
 
   return (
-    <div>
-      <PageHeader
-        title={`Welcome back, ${firstName}!`}
-        subtitle={
-          stakeholderRole
-            ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM, EM or MM is enough."
-            : "Engagements delegated to you for sign-off."
-        }
-      />
+    <QueueTransitionProvider>
+      <div>
+        <PageHeader
+          title={`Welcome back, ${firstName}!`}
+          subtitle={
+            stakeholderRole
+              ? "Engagements waiting for stakeholder sign-off. Any one of CSO, HCM, GMM, EM or MM is enough."
+              : "Engagements delegated to you for sign-off."
+          }
+        />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <QueueViewTabs views={views} activeView={activeView} />
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <QueueFilters
-            pageParam="page"
-            fields={[
-              ...(activeView === "approved"
-                ? [
-                    {
-                      param: "stage",
-                      label: "Stage",
-                      options: workflowStateOptions(APPROVED_STAGES),
-                    },
-                  ]
-                : []),
-              {
-                param: "purpose",
-                label: "Nature of Visit",
-                options: accessPurposeOptions(),
-              },
-            ]}
-          />
-          <QueueSearch searchParam="q" pageParam="page" />
-          {/* Last in the toolbar, after filter and search. */}
-          {session.systemRole !== "Guest" && <ApprovalsExportButton />}
-        </div>
-      </div>
-
-      {activeView === "awaiting" && pending && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {pending.rows.length === 0 ? (
-            <EmptyState
-              icon={ClipboardCheckIcon}
-              title="Nothing awaiting approval"
-              description="When Reception sends an engagement for sign-off, it shows up here."
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <QueueViewTabs views={views} activeView={activeView} />
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <QueueFilters
+              pageParam="page"
+              fields={[
+                ...(activeView === "approved"
+                  ? [
+                      {
+                        param: "stage",
+                        label: "Stage",
+                        options: workflowStateOptions(APPROVED_STAGES),
+                      },
+                    ]
+                  : []),
+                {
+                  param: "purpose",
+                  label: "Nature of Visit",
+                  options: accessPurposeOptions(),
+                },
+              ]}
             />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Nature of Visit</TableHead>
-                  <TableHead>Arrival</TableHead>
-                  <TableHead>Requested</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pending.rows.map(({ engagement, person }) => {
-                  // SAFETY: access_purpose is a text column written only from
-                  // the AccessPurpose union; the ?? shows a stray legacy value
-                  // raw rather than rendering undefined.
-                  const purpose = engagement.accessPurpose as AccessPurpose;
-                  const purposeLabel =
-                    ACCESS_PURPOSE_LABELS[purpose] ?? engagement.accessPurpose;
+            <QueueSearch searchParam="q" pageParam="page" />
+            {/* Last in the toolbar, after filter and search. */}
+            {session.systemRole !== "Guest" && <ApprovalsExportButton />}
+          </div>
+        </div>
 
-                  return (
-                    <TableRow key={engagement.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <NameWithAttention
-                          attention={
-                            engagement.approvalRequestedAt &&
-                            wholeDaysSince(engagement.approvalRequestedAt) >
-                              LONG_WAIT_DAYS
-                              ? success(
-                                  `Waiting ${wholeDaysSince(engagement.approvalRequestedAt)} days for sign-off`,
-                                )
-                              : undefined
-                          }
-                        >
-                          {person.fullName}
-                        </NameWithAttention>
-                      </TableCell>
-                      <TableCell>{purposeLabel}</TableCell>
-                      <TableCell>{engagement.arrivalDate}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {engagement.approvalRequestedAt
-                          ? daysWaiting(engagement.approvalRequestedAt)
-                          : "-"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <ApprovalRowActions
-                          view="awaiting"
-                          engagementId={engagement.id}
-                          personName={person.fullName}
-                          accessPurpose={purpose}
-                          departureDate={engagement.departureDate}
-                          // Same rule as the record page's "Approve with
-                          // Exemption": a requested, unrejected record with a
-                          // stage that can be exempted.
-                          canBypass={
-                            mayBypass &&
-                            engagement.approvalRequestedAt !== null &&
-                            engagement.approvalRejectedAt === null &&
-                            exemptableStages(purpose).length > 0
-                          }
-                        />
-                      </TableCell>
+        {activeView === "awaiting" && pending && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={AWAITING_COLUMNS} pagination />}
+            >
+              {pending.rows.length === 0 ? (
+                <EmptyState
+                  icon={ClipboardCheckIcon}
+                  title="Nothing awaiting approval"
+                  description="When Reception sends an engagement for sign-off, it shows up here."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Nature of Visit</TableHead>
+                      <TableHead>Arrival</TableHead>
+                      <TableHead>Requested</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={pending.page}
-            pageSize={pending.pageSize}
-            total={pending.total}
-            pageParam="page"
-            searchParams={{ q, purpose }}
-          />
-        </div>
-      )}
+                  </TableHeader>
+                  <TableBody>
+                    {pending.rows.map(({ engagement, person }) => {
+                      // SAFETY: access_purpose is a text column written only from
+                      // the AccessPurpose union; the ?? shows a stray legacy value
+                      // raw rather than rendering undefined.
+                      const purpose = engagement.accessPurpose as AccessPurpose;
+                      const purposeLabel =
+                        ACCESS_PURPOSE_LABELS[purpose] ??
+                        engagement.accessPurpose;
 
-      {activeView === "approved" && approved && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {approved.rows.length === 0 ? (
-            <EmptyState
-              icon={CheckCircle2Icon}
-              title="Nothing approved yet"
-              description="Engagements you or another stakeholder sign off appear here."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Approved By</TableHead>
-                  <TableHead>Approved On</TableHead>
-                  <TableHead>Stage</TableHead>
-                  <TableHead>Departure</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {approved.rows.map(({ approval, engagement, person }) => (
-                  <TableRow key={approval.id} className="hover:bg-muted/50">
-                    <TableCell>
-                      <NameWithAttention
-                        attention={
-                          // Only where this viewer's Extend Stay is enabled —
-                          // the same condition as the row action — so the dot
-                          // always points at something they can do. A
-                          // delegate sees no stay dot.
-                          mayExtend &&
-                          isStayExtendable({
-                            workflowState:
-                              engagement.workflowState as WorkflowState,
-                            accessState: engagement.accessState as AccessState,
-                          })
-                            ? stayEndAttention(engagement.departureDate)
-                            : undefined
-                        }
-                      >
-                        {person.fullName}
-                      </NameWithAttention>
-                    </TableCell>
-                    <TableCell>
-                      {approval.approverName}
-                      <span className="ml-2 text-muted-foreground text-xs">
-                        {approval.approverRole}
-                        {approval.isDelegated ? " (delegated)" : ""}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatQueueDate(approval.approvedAt)}
-                    </TableCell>
-                    <TableCell>
-                      <RecordStatusBadge
-                        status={recordStatus({
-                          // SAFETY: workflow_state and access_state are text
-                          // columns written only from their unions.
-                          workflowState:
-                            engagement.workflowState as WorkflowState,
-                          accessState: engagement.accessState as AccessState,
-                          cardExpiry: cardExpiries.get(engagement.id),
-                        })}
-                      />
-                    </TableCell>
-                    <TableCell>{engagement.departureDate}</TableCell>
-                    <TableCell className="text-right">
-                      <ApprovalRowActions
-                        view="approved"
-                        engagementId={engagement.id}
-                        personName={person.fullName}
-                        // SAFETY: access_purpose, workflow_state and
-                        // access_state are text columns written only from
-                        // their unions.
-                        accessPurpose={
-                          engagement.accessPurpose as AccessPurpose
-                        }
-                        departureDate={engagement.departureDate}
-                        canExtend={
-                          mayExtend &&
-                          isStayExtendable({
-                            workflowState:
-                              engagement.workflowState as WorkflowState,
-                            accessState: engagement.accessState as AccessState,
-                          })
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={approved.page}
-            pageSize={approved.pageSize}
-            total={approved.total}
-            pageParam="page"
-            searchParams={{ q, view, stage, purpose }}
-          />
-        </div>
-      )}
-    </div>
+                      return (
+                        <TableRow
+                          key={engagement.id}
+                          className="hover:bg-muted/50"
+                        >
+                          <TableCell>
+                            <NameWithAttention
+                              attention={
+                                engagement.approvalRequestedAt &&
+                                wholeDaysSince(engagement.approvalRequestedAt) >
+                                  LONG_WAIT_DAYS
+                                  ? success(
+                                      `Waiting ${wholeDaysSince(engagement.approvalRequestedAt)} days for sign-off`,
+                                    )
+                                  : undefined
+                              }
+                            >
+                              {person.fullName}
+                            </NameWithAttention>
+                          </TableCell>
+                          <TableCell>{purposeLabel}</TableCell>
+                          <TableCell>{engagement.arrivalDate}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {engagement.approvalRequestedAt
+                              ? daysWaiting(engagement.approvalRequestedAt)
+                              : "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <ApprovalRowActions
+                              view="awaiting"
+                              engagementId={engagement.id}
+                              personName={person.fullName}
+                              accessPurpose={purpose}
+                              departureDate={engagement.departureDate}
+                              // Same rule as the record page's "Approve with
+                              // Exemption": a requested, unrejected record with a
+                              // stage that can be exempted.
+                              canBypass={
+                                mayBypass &&
+                                engagement.approvalRequestedAt !== null &&
+                                engagement.approvalRejectedAt === null &&
+                                exemptableStages(purpose).length > 0
+                              }
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={pending.page}
+                pageSize={pending.pageSize}
+                total={pending.total}
+                pageParam="page"
+                searchParams={{ q, purpose }}
+              />
+            </QueuePending>
+          </div>
+        )}
+
+        {activeView === "approved" && approved && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={APPROVED_COLUMNS} pagination />}
+            >
+              {approved.rows.length === 0 ? (
+                <EmptyState
+                  icon={CheckCircle2Icon}
+                  title="Nothing approved yet"
+                  description="Engagements you or another stakeholder sign off appear here."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Approved By</TableHead>
+                      <TableHead>Approved On</TableHead>
+                      <TableHead>Stage</TableHead>
+                      <TableHead>Departure</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {approved.rows.map(({ approval, engagement, person }) => (
+                      <TableRow key={approval.id} className="hover:bg-muted/50">
+                        <TableCell>
+                          <NameWithAttention
+                            attention={
+                              // Only where this viewer's Extend Stay is enabled —
+                              // the same condition as the row action — so the dot
+                              // always points at something they can do. A
+                              // delegate sees no stay dot.
+                              mayExtend &&
+                              isStayExtendable({
+                                workflowState:
+                                  engagement.workflowState as WorkflowState,
+                                accessState:
+                                  engagement.accessState as AccessState,
+                              })
+                                ? stayEndAttention(engagement.departureDate)
+                                : undefined
+                            }
+                          >
+                            {person.fullName}
+                          </NameWithAttention>
+                        </TableCell>
+                        <TableCell>
+                          {approval.approverName}
+                          <span className="ml-2 text-muted-foreground text-xs">
+                            {approval.approverRole}
+                            {approval.isDelegated ? " (delegated)" : ""}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatQueueDate(approval.approvedAt)}
+                        </TableCell>
+                        <TableCell>
+                          <RecordStatusBadge
+                            status={recordStatus({
+                              // SAFETY: workflow_state and access_state are text
+                              // columns written only from their unions.
+                              workflowState:
+                                engagement.workflowState as WorkflowState,
+                              accessState:
+                                engagement.accessState as AccessState,
+                              cardExpiry: cardExpiries.get(engagement.id),
+                            })}
+                          />
+                        </TableCell>
+                        <TableCell>{engagement.departureDate}</TableCell>
+                        <TableCell className="text-right">
+                          <ApprovalRowActions
+                            view="approved"
+                            engagementId={engagement.id}
+                            personName={person.fullName}
+                            // SAFETY: access_purpose, workflow_state and
+                            // access_state are text columns written only from
+                            // their unions.
+                            accessPurpose={
+                              engagement.accessPurpose as AccessPurpose
+                            }
+                            departureDate={engagement.departureDate}
+                            canExtend={
+                              mayExtend &&
+                              isStayExtendable({
+                                workflowState:
+                                  engagement.workflowState as WorkflowState,
+                                accessState:
+                                  engagement.accessState as AccessState,
+                              })
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={approved.page}
+                pageSize={approved.pageSize}
+                total={approved.total}
+                pageParam="page"
+                searchParams={{ q, view, stage, purpose }}
+              />
+            </QueuePending>
+          </div>
+        )}
+      </div>
+    </QueueTransitionProvider>
   );
 }

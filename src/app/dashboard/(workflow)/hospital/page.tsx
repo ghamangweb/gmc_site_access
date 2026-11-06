@@ -7,12 +7,21 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-
+import {
+  AWAITING_COLUMNS,
+  RECORDED_COLUMNS,
+  REVIEW_COLUMNS,
+} from "@/app/dashboard/(workflow)/hospital/skeleton-columns";
 import { HospitalExportButton } from "@/components/layout/hospital-export-button";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeletons";
 import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
+import {
+  QueuePending,
+  QueueTransitionProvider,
+} from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,304 +151,330 @@ export default async function HospitalQueuePage({
   ];
 
   return (
-    <div>
-      <PageHeader
-        title="Hospital"
-        subtitle="Medical clearance queue for work-path visitors."
-      />
+    <QueueTransitionProvider>
+      <div>
+        <PageHeader
+          title="Hospital"
+          subtitle="Medical clearance queue for work-path visitors."
+        />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <QueueViewTabs views={views} activeView={activeView} />
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {activeView === "review" && (
-            <QueueFilters
-              pageParam="page"
-              fields={[
-                { param: "due", label: "Review", options: reviewDueOptions() },
-              ]}
-            />
-          )}
-          {activeView === "recorded" && (
-            <QueueFilters
-              pageParam="page"
-              fields={[
-                {
-                  param: "outcome",
-                  label: "Outcome",
-                  options: clearanceStatusOptions(),
-                },
-                {
-                  param: "by",
-                  label: "Cleared By",
-                  options: recorders.map((recorder) => ({
-                    value: recorder.id,
-                    label: recorder.displayName,
-                  })),
-                },
-              ]}
-            />
-          )}
-          <QueueSearch searchParam="q" pageParam="page" />
-          {/* Last in the toolbar, after filter and search. */}
-          {session.systemRole !== "Guest" && <HospitalExportButton />}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <QueueViewTabs views={views} activeView={activeView} />
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {activeView === "review" && (
+              <QueueFilters
+                pageParam="page"
+                fields={[
+                  {
+                    param: "due",
+                    label: "Review",
+                    options: reviewDueOptions(),
+                  },
+                ]}
+              />
+            )}
+            {activeView === "recorded" && (
+              <QueueFilters
+                pageParam="page"
+                fields={[
+                  {
+                    param: "outcome",
+                    label: "Outcome",
+                    options: clearanceStatusOptions(),
+                  },
+                  {
+                    param: "by",
+                    label: "Cleared By",
+                    options: recorders.map((recorder) => ({
+                      value: recorder.id,
+                      label: recorder.displayName,
+                    })),
+                  },
+                ]}
+              />
+            )}
+            <QueueSearch searchParam="q" pageParam="page" />
+            {/* Last in the toolbar, after filter and search. */}
+            {session.systemRole !== "Guest" && <HospitalExportButton />}
+          </div>
         </div>
-      </div>
 
-      {activeView === "awaiting" && awaiting && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {awaiting.rows.length === 0 ? (
-            <EmptyState
-              icon={Stethoscope}
-              title="No records awaiting Hospital clearance"
-              description="Work-path visitors will appear here once they reach the Hospital stage."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Arrival</TableHead>
-                  <TableHead>Departure</TableHead>
-                  {/* w-px shrinks the column to the button, so the header
-                      starts where "Record Clearance" starts, at the right. */}
-                  <TableHead className="w-px">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {awaiting.rows.map(({ engagement, person }) => (
-                  <TableRow key={engagement.id} className="hover:bg-muted/50">
-                    <TableCell>
-                      <NameWithAttention
-                        attention={
-                          awaitingStatuses.get(engagement.id) === "Unfit"
-                            ? danger("Marked Unfit — awaiting re-clearance")
-                            : undefined
-                        }
-                      >
-                        <Link href={`/dashboard/hospital/${engagement.id}`}>
-                          {person.fullName}
-                        </Link>
-                      </NameWithAttention>
-                    </TableCell>
-                    <TableCell>{engagement.arrivalDate}</TableCell>
-                    <TableCell>{engagement.departureDate}</TableCell>
-                    <TableCell>
-                      <Button asChild size="sm">
-                        <Link href={`/dashboard/hospital/${engagement.id}`}>
-                          Record Clearance
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={awaiting.page}
-            pageSize={awaiting.pageSize}
-            total={awaiting.total}
-            pageParam="page"
-            searchParams={{ q }}
-          />
-        </div>
-      )}
-
-      {activeView === "review" && awaitingReview && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {awaitingReview.rows.length === 0 ? (
-            <EmptyState
-              icon={CalendarClockIcon}
-              title="No reviews awaiting"
-              description="Fit with Conditions clearances with a review date appear here, soonest first, until their review is recorded."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Recorded</TableHead>
-                  <TableHead>Cleared By</TableHead>
-                  <TableHead>Next Review Date</TableHead>
-                  <TableHead>Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {awaitingReview.rows.map(
-                  ({ clearance, engagement, person, recordedByName }) => (
-                    <TableRow key={clearance.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <NameWithAttention
-                          attention={
-                            clearance.nextReviewDate &&
-                            clearance.nextReviewDate <= today
-                              ? success(
-                                  clearance.nextReviewDate < today
-                                    ? "Review overdue"
-                                    : "Review due today",
-                                )
-                              : undefined
-                          }
-                        >
-                          <Link
-                            href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
-                          >
-                            {person.fullName}
-                          </Link>
-                        </NameWithAttention>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatQueueDate(clearance.clearanceDate)}
-                      </TableCell>
-                      <TableCell>{recordedByName ?? "-"}</TableCell>
-                      <TableCell>
-                        {clearance.nextReviewDate
-                          ? formatQueueDate(parseISO(clearance.nextReviewDate))
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Button asChild size="sm">
-                          <Link
-                            href={`/dashboard/hospital/${engagement.id}?review=${clearance.id}`}
-                          >
-                            Record Review
-                          </Link>
-                        </Button>
-                      </TableCell>
+        {activeView === "awaiting" && awaiting && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={AWAITING_COLUMNS} pagination />}
+            >
+              {awaiting.rows.length === 0 ? (
+                <EmptyState
+                  icon={Stethoscope}
+                  title="No records awaiting Hospital clearance"
+                  description="Work-path visitors will appear here once they reach the Hospital stage."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Arrival</TableHead>
+                      <TableHead>Departure</TableHead>
+                      {/* w-px shrinks the column to the button, so the header
+                          starts where "Record Clearance" starts, at the right. */}
+                      <TableHead className="w-px">Action</TableHead>
                     </TableRow>
-                  ),
-                )}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={awaitingReview.page}
-            pageSize={awaitingReview.pageSize}
-            total={awaitingReview.total}
-            pageParam="page"
-            searchParams={{ q, view, outcome, by, due }}
-          />
-        </div>
-      )}
-
-      {activeView === "recorded" && recorded && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {recorded.rows.length === 0 ? (
-            <EmptyState
-              icon={ClipboardListIcon}
-              title="No clearances recorded yet"
-              description="Every clearance decision you record appears here, with its outcome and the stage the record has since reached."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Outcome</TableHead>
-                  <TableHead>Recorded</TableHead>
-                  <TableHead>Cleared By</TableHead>
-                  <TableHead>Next Review Date</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recorded.rows.map(
-                  ({
-                    clearance,
-                    engagement,
-                    person,
-                    recordedByName,
-                    isLatest,
-                  }) => {
-                    // SAFETY: clearance_status is a text column written only
-                    // from the HospitalClearanceStatus union by
-                    // `recordHospitalClearance`, and the table's check
-                    // constraint allows nothing else.
-                    const status =
-                      clearance.clearanceStatus as HospitalClearanceStatus;
-                    // Only Fit with Conditions is reviewed, and only its
-                    // latest clearance while the record is past Hospital —
-                    // the same rule `recordHospitalReview` enforces.
-
-                    const reviewable =
-                      status === "FitWithConditions" &&
-                      isLatest &&
-                      engagement.workflowState !== "AtHospital";
-
-                    return (
+                  </TableHeader>
+                  <TableBody>
+                    {awaiting.rows.map(({ engagement, person }) => (
                       <TableRow
-                        key={clearance.id}
+                        key={engagement.id}
                         className="hover:bg-muted/50"
                       >
-                        <TableCell>{person.fullName}</TableCell>
                         <TableCell>
-                          <Badge className={CLEARANCE_BADGE[status]}>
-                            {HOSPITAL_CLEARANCE_LABELS[status]}
-                          </Badge>
+                          <NameWithAttention
+                            attention={
+                              awaitingStatuses.get(engagement.id) === "Unfit"
+                                ? danger("Marked Unfit — awaiting re-clearance")
+                                : undefined
+                            }
+                          >
+                            <Link href={`/dashboard/hospital/${engagement.id}`}>
+                              {person.fullName}
+                            </Link>
+                          </NameWithAttention>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatQueueDate(clearance.clearanceDate)}
-                        </TableCell>
-                        <TableCell>{recordedByName ?? "-"}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {clearance.nextReviewDate
-                            ? formatQueueDate(
-                                parseISO(clearance.nextReviewDate),
-                              )
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                              >
-                                <MoreVerticalIcon />
-                                <span className="sr-only">Open menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
-                                >
-                                  View
-                                </Link>
-                              </DropdownMenuItem>
-                              {reviewable ? (
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    href={`/dashboard/hospital/${engagement.id}?review=${clearance.id}`}
-                                  >
-                                    Review
-                                  </Link>
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem disabled>
-                                  Review
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        <TableCell>{engagement.arrivalDate}</TableCell>
+                        <TableCell>{engagement.departureDate}</TableCell>
+                        <TableCell>
+                          <Button asChild size="sm">
+                            <Link href={`/dashboard/hospital/${engagement.id}`}>
+                              Record Clearance
+                            </Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
-                    );
-                  },
-                )}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={recorded.page}
-            pageSize={recorded.pageSize}
-            total={recorded.total}
-            pageParam="page"
-            searchParams={{ q, view, outcome, by, due }}
-          />
-        </div>
-      )}
-    </div>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={awaiting.page}
+                pageSize={awaiting.pageSize}
+                total={awaiting.total}
+                pageParam="page"
+                searchParams={{ q }}
+              />
+            </QueuePending>
+          </div>
+        )}
+
+        {activeView === "review" && awaitingReview && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={REVIEW_COLUMNS} pagination />}
+            >
+              {awaitingReview.rows.length === 0 ? (
+                <EmptyState
+                  icon={CalendarClockIcon}
+                  title="No reviews awaiting"
+                  description="Fit with Conditions clearances with a review date appear here, soonest first, until their review is recorded."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Recorded</TableHead>
+                      <TableHead>Cleared By</TableHead>
+                      <TableHead>Next Review Date</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {awaitingReview.rows.map(
+                      ({ clearance, engagement, person, recordedByName }) => (
+                        <TableRow
+                          key={clearance.id}
+                          className="hover:bg-muted/50"
+                        >
+                          <TableCell>
+                            <NameWithAttention
+                              attention={
+                                clearance.nextReviewDate &&
+                                clearance.nextReviewDate <= today
+                                  ? success(
+                                      clearance.nextReviewDate < today
+                                        ? "Review overdue"
+                                        : "Review due today",
+                                    )
+                                  : undefined
+                              }
+                            >
+                              <Link
+                                href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
+                              >
+                                {person.fullName}
+                              </Link>
+                            </NameWithAttention>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatQueueDate(clearance.clearanceDate)}
+                          </TableCell>
+                          <TableCell>{recordedByName ?? "-"}</TableCell>
+                          <TableCell>
+                            {clearance.nextReviewDate
+                              ? formatQueueDate(
+                                  parseISO(clearance.nextReviewDate),
+                                )
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Button asChild size="sm">
+                              <Link
+                                href={`/dashboard/hospital/${engagement.id}?review=${clearance.id}`}
+                              >
+                                Record Review
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ),
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={awaitingReview.page}
+                pageSize={awaitingReview.pageSize}
+                total={awaitingReview.total}
+                pageParam="page"
+                searchParams={{ q, view, outcome, by, due }}
+              />
+            </QueuePending>
+          </div>
+        )}
+
+        {activeView === "recorded" && recorded && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={RECORDED_COLUMNS} pagination />}
+            >
+              {recorded.rows.length === 0 ? (
+                <EmptyState
+                  icon={ClipboardListIcon}
+                  title="No clearances recorded yet"
+                  description="Every clearance decision you record appears here, with its outcome and the stage the record has since reached."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Outcome</TableHead>
+                      <TableHead>Recorded</TableHead>
+                      <TableHead>Cleared By</TableHead>
+                      <TableHead>Next Review Date</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recorded.rows.map(
+                      ({
+                        clearance,
+                        engagement,
+                        person,
+                        recordedByName,
+                        isLatest,
+                      }) => {
+                        // SAFETY: clearance_status is a text column written only
+                        // from the HospitalClearanceStatus union by
+                        // `recordHospitalClearance`, and the table's check
+                        // constraint allows nothing else.
+                        const status =
+                          clearance.clearanceStatus as HospitalClearanceStatus;
+                        // Only Fit with Conditions is reviewed, and only its
+                        // latest clearance while the record is past Hospital —
+                        // the same rule `recordHospitalReview` enforces.
+
+                        const reviewable =
+                          status === "FitWithConditions" &&
+                          isLatest &&
+                          engagement.workflowState !== "AtHospital";
+
+                        return (
+                          <TableRow
+                            key={clearance.id}
+                            className="hover:bg-muted/50"
+                          >
+                            <TableCell>{person.fullName}</TableCell>
+                            <TableCell>
+                              <Badge className={CLEARANCE_BADGE[status]}>
+                                {HOSPITAL_CLEARANCE_LABELS[status]}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatQueueDate(clearance.clearanceDate)}
+                            </TableCell>
+                            <TableCell>{recordedByName ?? "-"}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {clearance.nextReviewDate
+                                ? formatQueueDate(
+                                    parseISO(clearance.nextReviewDate),
+                                  )
+                                : "-"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                  >
+                                    <MoreVerticalIcon />
+                                    <span className="sr-only">Open menu</span>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem asChild>
+                                    <Link
+                                      href={`/dashboard/hospital/${engagement.id}?clearance=${clearance.id}`}
+                                    >
+                                      View
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  {reviewable ? (
+                                    <DropdownMenuItem asChild>
+                                      <Link
+                                        href={`/dashboard/hospital/${engagement.id}?review=${clearance.id}`}
+                                      >
+                                        Review
+                                      </Link>
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem disabled>
+                                      Review
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      },
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={recorded.page}
+                pageSize={recorded.pageSize}
+                total={recorded.total}
+                pageParam="page"
+                searchParams={{ q, view, outcome, by, due }}
+              />
+            </QueuePending>
+          </div>
+        )}
+      </div>
+    </QueueTransitionProvider>
   );
 }

@@ -1,5 +1,21 @@
 # Progress Tracker
 
+## Loading skeletons — awaiting user verification (2026-11-06)
+
+- [x] `ui/skeleton.tsx` primitive plus shared shapes in `layout/page-skeletons.tsx`.
+- [x] Queues: one `QueueTransitionProvider` per page. Filter, Search, Pagination and tabs
+      share its transition, and `QueuePending` swaps the table card to a skeleton with the
+      real headers while new data loads. Pagination and tabs are still `next/link`
+      (`QueueLink` + `onNavigate`), so prefetching and new-tab clicks still work. Server
+      queries unchanged.
+- [x] `loading.tsx` shaped like the page for every dashboard route: 7 queues, 5 record
+      pages, Reception New, System Admin Users and Delegations.
+- [x] Document viewer and thumbnails: the spinner became a page-shaped skeleton (the user
+      asked to "include everything", which reverses the 2026-10-21 decision).
+- [x] Biome, `tsc --noEmit` and anti-slop on new files are clean. Existing warnings unchanged.
+- [ ] User verifies in browser: filter/search/page/tab on each queue, route navigation,
+      document preview, light and dark mode.
+
 ## Stakeholder Approvals CSV export — awaiting user verification (2026-11-05)
 
 - [x] User approved continuation from Hospital. Implement only Stakeholder Approvals;

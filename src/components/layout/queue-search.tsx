@@ -2,8 +2,9 @@
 
 import { SearchIcon, XIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 
+import { useQueueTransition } from "@/components/layout/queue-transition";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -26,7 +27,7 @@ export function QueueSearch({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { isPending, startTransition } = useQueueTransition();
 
   const current = searchParams.get(searchParam) ?? "";
   const [value, setValue] = useState(current);
@@ -67,6 +68,7 @@ export function QueueSearch({
     searchParam,
     pageParam,
     searchParams.toString,
+    startTransition,
   ]);
 
   return (

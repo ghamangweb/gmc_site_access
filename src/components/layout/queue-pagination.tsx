@@ -1,6 +1,6 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import Link from "next/link";
 
+import { QueueLink } from "@/components/layout/queue-transition";
 import { Button } from "@/components/ui/button";
 import { pageOffset, totalPages } from "@/lib/domain/pagination";
 
@@ -63,10 +63,10 @@ export function QueuePagination({
             onto the label. */}
         {page > 1 ? (
           <Button asChild variant="outline" size="sm">
-            <Link href={hrefFor(page - 1)} scroll={false}>
+            <QueueLink href={hrefFor(page - 1)} scroll={false}>
               <ChevronLeftIcon />
               Previous
-            </Link>
+            </QueueLink>
           </Button>
         ) : (
           <Button variant="outline" size="sm" disabled>
@@ -81,10 +81,10 @@ export function QueuePagination({
 
         {page < pages ? (
           <Button asChild variant="outline" size="sm">
-            <Link href={hrefFor(page + 1)} scroll={false}>
+            <QueueLink href={hrefFor(page + 1)} scroll={false}>
               Next
               <ChevronRightIcon />
-            </Link>
+            </QueueLink>
           </Button>
         ) : (
           <Button variant="outline" size="sm" disabled>

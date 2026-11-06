@@ -2,8 +2,9 @@
 
 import { CheckIcon, ChevronLeftIcon, ListFilterIcon } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
+import { useQueueTransition } from "@/components/layout/queue-transition";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -45,7 +46,7 @@ export function QueueFilters({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { isPending, startTransition } = useQueueTransition();
   const [open, setOpen] = useState(false);
   // The filter whose options are showing; null while choosing a filter.
   const [activeParam, setActiveParam] = useState<string | null>(null);
