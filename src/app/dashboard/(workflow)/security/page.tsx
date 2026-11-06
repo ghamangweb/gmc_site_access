@@ -3,10 +3,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { GrantedRowActions } from "@/app/dashboard/(workflow)/security/granted-row-actions";
+import {
+  AWAITING_COLUMNS,
+  GRANTED_COLUMNS,
+  REVOCATION_COLUMNS,
+} from "@/app/dashboard/(workflow)/security/skeleton-columns";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeletons";
 import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
+import {
+  QueuePending,
+  QueueTransitionProvider,
+} from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { SecurityExportButton } from "@/components/layout/security-export-button";
 import { Badge } from "@/components/ui/badge";
@@ -160,319 +170,344 @@ export default async function SecurityQueuePage({
   ];
 
   return (
-    <div>
-      <PageHeader
-        title="Security"
-        subtitle="Review completed requirements, issue site access and revoke it when asked."
-      />
+    <QueueTransitionProvider>
+      <div>
+        <PageHeader
+          title="Security"
+          subtitle="Review completed requirements, issue site access and revoke it when asked."
+        />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <QueueViewTabs views={views} activeView={activeView} />
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          {activeView !== "revocations" && (
-            <QueueFilters
-              pageParam="page"
-              fields={[
-                ...(activeView === "granted"
-                  ? [
-                      {
-                        param: "access",
-                        label: "Access",
-                        options: accessStateOptions(GRANTED_ACCESS_STATES),
-                      },
-                    ]
-                  : []),
-                {
-                  param: "purpose",
-                  label: "Nature of Visit",
-                  options: accessPurposeOptions(SECURITY_PURPOSES),
-                },
-              ]}
-            />
-          )}
-          <QueueSearch searchParam="q" pageParam="page" />
-          {/* Last in the toolbar, after filter and search. */}
-          {session.systemRole !== "Guest" && <SecurityExportButton />}
-        </div>
-      </div>
-
-      {activeView === "awaiting" && awaiting && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {awaiting.rows.length === 0 ? (
-            <EmptyState
-              icon={ShieldCheckIcon}
-              title="No records awaiting Security review"
-              description="Records arrive here once Training School signs off the induction."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Nature of Visit</TableHead>
-                  <TableHead>Arrival</TableHead>
-                  <TableHead>Departure</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {awaiting.rows.map(({ engagement, person }) => {
-                  // SAFETY: access_purpose is a text column written only from
-                  // the AccessPurpose union by `createEngagement`.
-                  const purposeLabel =
-                    ACCESS_PURPOSE_LABELS[
-                      engagement.accessPurpose as AccessPurpose
-                    ] ?? engagement.accessPurpose;
-
-                  return (
-                    <TableRow key={engagement.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <Link href={`/dashboard/security/${engagement.id}`}>
-                          {person.fullName}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{purposeLabel}</TableCell>
-                      <TableCell>{engagement.arrivalDate}</TableCell>
-                      <TableCell>{engagement.departureDate}</TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild size="sm">
-                          <Link href={`/dashboard/security/${engagement.id}`}>
-                            Review
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={awaiting.page}
-            pageSize={awaiting.pageSize}
-            total={awaiting.total}
-            pageParam="page"
-            searchParams={{ q, purpose }}
-          />
-        </div>
-      )}
-
-      {activeView === "granted" && granted && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {granted.rows.length === 0 ? (
-            <EmptyState
-              icon={IdCardIcon}
-              title="Nobody has site access yet"
-              description="Visitors appear here once Security activates their access card, the end of the workflow."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Nature of Visit</TableHead>
-                  <TableHead>Card No.</TableHead>
-                  <TableHead>Access From</TableHead>
-                  <TableHead>Access Until</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Access</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {granted.rows.map(
-                  ({
-                    provisioning,
-                    engagement,
-                    person,
-                    cycleArchivedAt,
-                    latestExtensionAt,
-                    latestCardUpdateAt,
-                  }) => {
-                    // SAFETY: access_state is a text column written only from
-                    // the AccessState union.
-                    const accessState = getEffectiveAccessState(
-                      engagement.accessState as AccessState,
-                      provisioning.accessCardExpiry,
-                    );
-
-                    // SAFETY: access_purpose is a text column written only from
-                    // the AccessPurpose union by `createEngagement`.
-                    const purposeLabel =
-                      ACCESS_PURPOSE_LABELS[
-                        engagement.accessPurpose as AccessPurpose
-                      ] ?? engagement.accessPurpose;
-
-                    return (
-                      <TableRow
-                        key={provisioning.id}
-                        className="hover:bg-muted/50"
-                      >
-                        <TableCell>
-                          <NameWithAttention
-                            attention={
-                              // The card the record holds now; an earlier
-                              // cycle's card is history.
-                              cycleArchivedAt === null
-                                ? pickAttention(
-                                    accessState === "TerminationRequested" &&
-                                      danger("Revocation requested"),
-                                    accessState === "Expired" &&
-                                      danger("Access expired"),
-                                    hasPendingStayExtension({
-                                      cardActivatedAt: provisioning.activatedAt,
-                                      latestExtensionAt,
-                                      latestCardUpdateAt,
-                                    }) &&
-                                      success(
-                                        "Stay extended — update the card expiry",
-                                      ),
-                                  )
-                                : undefined
-                            }
-                          >
-                            {person.fullName}
-                          </NameWithAttention>
-                        </TableCell>
-                        <TableCell>{purposeLabel}</TableCell>
-                        <TableCell>{provisioning.accessCardNumber}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatQueueDate(provisioning.activatedAt)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {provisioning.accessCardExpiry}
-                        </TableCell>
-                        <TableCell>
-                          {accessDuration(
-                            provisioning.activatedAt,
-                            provisioning.accessCardExpiry,
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              accessState === "Active"
-                                ? "bg-status-success-bg text-status-success-fg"
-                                : accessState === "TerminationRequested"
-                                  ? "bg-status-warning-bg text-status-warning-fg"
-                                  : accessState === "Expired" ||
-                                      accessState === "Terminated"
-                                    ? "bg-status-danger-bg text-status-danger-fg"
-                                    : "bg-status-neutral-bg text-status-neutral-fg"
-                            }
-                          >
-                            {ACCESS_STATE_LABELS[accessState]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <GrantedRowActions
-                            engagementId={engagement.id}
-                            accessProvisioningId={provisioning.id}
-                            personName={person.fullName}
-                            currentExpiry={provisioning.accessCardExpiry}
-                            departureDate={engagement.departureDate}
-                            // The card the record holds now, live or lapsed,
-                            // a viewer who can write, and only once a
-                            // stakeholder has extended the stay since the card
-                            // was issued or last updated.
-                            canUpdate={
-                              canWrite &&
-                              cycleArchivedAt === null &&
-                              hasPendingStayExtension({
-                                cardActivatedAt: provisioning.activatedAt,
-                                latestExtensionAt,
-                                latestCardUpdateAt,
-                              }) &&
-                              isCardExpiryUpdatable({
-                                workflowState:
-                                  engagement.workflowState as WorkflowState,
-                                accessState,
-                              })
-                            }
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <QueueViewTabs views={views} activeView={activeView} />
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {activeView !== "revocations" && (
+              <QueueFilters
+                pageParam="page"
+                fields={[
+                  ...(activeView === "granted"
+                    ? [
+                        {
+                          param: "access",
+                          label: "Access",
+                          options: accessStateOptions(GRANTED_ACCESS_STATES),
+                        },
+                      ]
+                    : []),
+                  {
+                    param: "purpose",
+                    label: "Nature of Visit",
+                    options: accessPurposeOptions(SECURITY_PURPOSES),
                   },
-                )}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={granted.page}
-            pageSize={granted.pageSize}
-            total={granted.total}
-            pageParam="page"
-            searchParams={{ q, view, access, purpose }}
-          />
+                ]}
+              />
+            )}
+            <QueueSearch searchParam="q" pageParam="page" />
+            {/* Last in the toolbar, after filter and search. */}
+            {session.systemRole !== "Guest" && <SecurityExportButton />}
+          </div>
         </div>
-      )}
 
-      {activeView === "revocations" && revocations && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {revocations.rows.length === 0 ? (
-            <EmptyState
-              icon={BanIcon}
-              title="No revocation requests"
-              description="When Reception asks for someone's site access to be revoked, the request appears here for you to carry out."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Card No.</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Requested By</TableHead>
-                  <TableHead>Requested</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {revocations.rows.map(
-                  ({
-                    request: terminationRequest,
-                    engagement,
-                    person,
-                    requestedByName,
-                    accessCardNumber,
-                  }) => (
-                    <TableRow
-                      key={terminationRequest.id}
-                      className="hover:bg-muted/50"
-                    >
-                      <TableCell>{person.fullName}</TableCell>
-                      <TableCell>{accessCardNumber ?? "-"}</TableCell>
-                      <TableCell className="max-w-xs whitespace-normal">
-                        {terminationRequest.reason}
-                      </TableCell>
-                      <TableCell>{requestedByName}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatQueueDate(terminationRequest.requestedAt)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {session.systemRole !== "Guest" && (
-                          <RevokeAccessButton
-                            engagementId={engagement.id}
-                            personName={person.fullName}
-                          />
-                        )}
-                      </TableCell>
+        {activeView === "awaiting" && awaiting && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={AWAITING_COLUMNS} pagination />}
+            >
+              {awaiting.rows.length === 0 ? (
+                <EmptyState
+                  icon={ShieldCheckIcon}
+                  title="No records awaiting Security review"
+                  description="Records arrive here once Training School signs off the induction."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Nature of Visit</TableHead>
+                      <TableHead>Arrival</TableHead>
+                      <TableHead>Departure</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
-                  ),
-                )}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={revocations.page}
-            pageSize={revocations.pageSize}
-            total={revocations.total}
-            pageParam="page"
-            searchParams={{ q, view }}
-          />
-        </div>
-      )}
-    </div>
+                  </TableHeader>
+                  <TableBody>
+                    {awaiting.rows.map(({ engagement, person }) => {
+                      // SAFETY: access_purpose is a text column written only from
+                      // the AccessPurpose union by `createEngagement`.
+                      const purposeLabel =
+                        ACCESS_PURPOSE_LABELS[
+                          engagement.accessPurpose as AccessPurpose
+                        ] ?? engagement.accessPurpose;
+
+                      return (
+                        <TableRow
+                          key={engagement.id}
+                          className="hover:bg-muted/50"
+                        >
+                          <TableCell>
+                            <Link href={`/dashboard/security/${engagement.id}`}>
+                              {person.fullName}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{purposeLabel}</TableCell>
+                          <TableCell>{engagement.arrivalDate}</TableCell>
+                          <TableCell>{engagement.departureDate}</TableCell>
+                          <TableCell className="text-right">
+                            <Button asChild size="sm">
+                              <Link
+                                href={`/dashboard/security/${engagement.id}`}
+                              >
+                                Review
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={awaiting.page}
+                pageSize={awaiting.pageSize}
+                total={awaiting.total}
+                pageParam="page"
+                searchParams={{ q, purpose }}
+              />
+            </QueuePending>
+          </div>
+        )}
+
+        {activeView === "granted" && granted && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={GRANTED_COLUMNS} pagination />}
+            >
+              {granted.rows.length === 0 ? (
+                <EmptyState
+                  icon={IdCardIcon}
+                  title="Nobody has site access yet"
+                  description="Visitors appear here once Security activates their access card, the end of the workflow."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Nature of Visit</TableHead>
+                      <TableHead>Card No.</TableHead>
+                      <TableHead>Access From</TableHead>
+                      <TableHead>Access Until</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Access</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {granted.rows.map(
+                      ({
+                        provisioning,
+                        engagement,
+                        person,
+                        cycleArchivedAt,
+                        latestExtensionAt,
+                        latestCardUpdateAt,
+                      }) => {
+                        // SAFETY: access_state is a text column written only from
+                        // the AccessState union.
+                        const accessState = getEffectiveAccessState(
+                          engagement.accessState as AccessState,
+                          provisioning.accessCardExpiry,
+                        );
+
+                        // SAFETY: access_purpose is a text column written only from
+                        // the AccessPurpose union by `createEngagement`.
+                        const purposeLabel =
+                          ACCESS_PURPOSE_LABELS[
+                            engagement.accessPurpose as AccessPurpose
+                          ] ?? engagement.accessPurpose;
+
+                        return (
+                          <TableRow
+                            key={provisioning.id}
+                            className="hover:bg-muted/50"
+                          >
+                            <TableCell>
+                              <NameWithAttention
+                                attention={
+                                  // The card the record holds now; an earlier
+                                  // cycle's card is history.
+                                  cycleArchivedAt === null
+                                    ? pickAttention(
+                                        accessState ===
+                                          "TerminationRequested" &&
+                                          danger("Revocation requested"),
+                                        accessState === "Expired" &&
+                                          danger("Access expired"),
+                                        hasPendingStayExtension({
+                                          cardActivatedAt:
+                                            provisioning.activatedAt,
+                                          latestExtensionAt,
+                                          latestCardUpdateAt,
+                                        }) &&
+                                          success(
+                                            "Stay extended — update the card expiry",
+                                          ),
+                                      )
+                                    : undefined
+                                }
+                              >
+                                {person.fullName}
+                              </NameWithAttention>
+                            </TableCell>
+                            <TableCell>{purposeLabel}</TableCell>
+                            <TableCell>
+                              {provisioning.accessCardNumber}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatQueueDate(provisioning.activatedAt)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {provisioning.accessCardExpiry}
+                            </TableCell>
+                            <TableCell>
+                              {accessDuration(
+                                provisioning.activatedAt,
+                                provisioning.accessCardExpiry,
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={
+                                  accessState === "Active"
+                                    ? "bg-status-success-bg text-status-success-fg"
+                                    : accessState === "TerminationRequested"
+                                      ? "bg-status-warning-bg text-status-warning-fg"
+                                      : accessState === "Expired" ||
+                                          accessState === "Terminated"
+                                        ? "bg-status-danger-bg text-status-danger-fg"
+                                        : "bg-status-neutral-bg text-status-neutral-fg"
+                                }
+                              >
+                                {ACCESS_STATE_LABELS[accessState]}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <GrantedRowActions
+                                engagementId={engagement.id}
+                                accessProvisioningId={provisioning.id}
+                                personName={person.fullName}
+                                currentExpiry={provisioning.accessCardExpiry}
+                                departureDate={engagement.departureDate}
+                                // The card the record holds now, live or lapsed,
+                                // a viewer who can write, and only once a
+                                // stakeholder has extended the stay since the card
+                                // was issued or last updated.
+                                canUpdate={
+                                  canWrite &&
+                                  cycleArchivedAt === null &&
+                                  hasPendingStayExtension({
+                                    cardActivatedAt: provisioning.activatedAt,
+                                    latestExtensionAt,
+                                    latestCardUpdateAt,
+                                  }) &&
+                                  isCardExpiryUpdatable({
+                                    workflowState:
+                                      engagement.workflowState as WorkflowState,
+                                    accessState,
+                                  })
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      },
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={granted.page}
+                pageSize={granted.pageSize}
+                total={granted.total}
+                pageParam="page"
+                searchParams={{ q, view, access, purpose }}
+              />
+            </QueuePending>
+          </div>
+        )}
+
+        {activeView === "revocations" && revocations && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={
+                <TableSkeleton columns={REVOCATION_COLUMNS} pagination />
+              }
+            >
+              {revocations.rows.length === 0 ? (
+                <EmptyState
+                  icon={BanIcon}
+                  title="No revocation requests"
+                  description="When Reception asks for someone's site access to be revoked, the request appears here for you to carry out."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Card No.</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>Requested By</TableHead>
+                      <TableHead>Requested</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {revocations.rows.map(
+                      ({
+                        request: terminationRequest,
+                        engagement,
+                        person,
+                        requestedByName,
+                        accessCardNumber,
+                      }) => (
+                        <TableRow
+                          key={terminationRequest.id}
+                          className="hover:bg-muted/50"
+                        >
+                          <TableCell>{person.fullName}</TableCell>
+                          <TableCell>{accessCardNumber ?? "-"}</TableCell>
+                          <TableCell className="max-w-xs whitespace-normal">
+                            {terminationRequest.reason}
+                          </TableCell>
+                          <TableCell>{requestedByName}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatQueueDate(terminationRequest.requestedAt)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {session.systemRole !== "Guest" && (
+                              <RevokeAccessButton
+                                engagementId={engagement.id}
+                                personName={person.fullName}
+                              />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ),
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={revocations.page}
+                pageSize={revocations.pageSize}
+                total={revocations.total}
+                pageParam="page"
+                searchParams={{ q, view }}
+              />
+            </QueuePending>
+          </div>
+        )}
+      </div>
+    </QueueTransitionProvider>
   );
 }

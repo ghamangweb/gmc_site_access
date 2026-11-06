@@ -2,10 +2,19 @@ import { ClipboardListIcon, GraduationCapIcon } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import {
+  AWAITING_COLUMNS,
+  RECORDED_COLUMNS,
+} from "@/app/dashboard/(workflow)/training/skeleton-columns";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeletons";
 import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
+import {
+  QueuePending,
+  QueueTransitionProvider,
+} from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { TrainingExportButton } from "@/components/layout/training-export-button";
 import { Button } from "@/components/ui/button";
@@ -109,142 +118,164 @@ export default async function TrainingQueuePage({
   ];
 
   return (
-    <div>
-      <PageHeader
-        title="Training School"
-        subtitle="Induction queue for work-path and mine-site visitors."
-      />
+    <QueueTransitionProvider>
+      <div>
+        <PageHeader
+          title="Training School"
+          subtitle="Induction queue for work-path and mine-site visitors."
+        />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <QueueViewTabs views={views} activeView={activeView} />
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <QueueFilters
-            pageParam="page"
-            fields={[
-              {
-                param: "purpose",
-                label: "Nature of Visit",
-                options: accessPurposeOptions(TRAINING_PURPOSES),
-              },
-            ]}
-          />
-          <QueueSearch searchParam="q" pageParam="page" />
-          {/* Last in the toolbar, after filter and search. */}
-          {session.systemRole !== "Guest" && <TrainingExportButton />}
-        </div>
-      </div>
-
-      {activeView === "awaiting" && awaiting && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {awaiting.rows.length === 0 ? (
-            <EmptyState
-              icon={GraduationCapIcon}
-              title="No records awaiting induction"
-              description="Visitors appear here once Hospital clears them, or once Reception sends a mine-site visit through."
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <QueueViewTabs views={views} activeView={activeView} />
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <QueueFilters
+              pageParam="page"
+              fields={[
+                {
+                  param: "purpose",
+                  label: "Nature of Visit",
+                  options: accessPurposeOptions(TRAINING_PURPOSES),
+                },
+              ]}
             />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Nature of Visit</TableHead>
-                  <TableHead>Arrival</TableHead>
-                  <TableHead>Departure</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {awaiting.rows.map(({ engagement, person }) => {
-                  // SAFETY: access_purpose is a text column written only from
-                  // the AccessPurpose union by `createEngagement`.
-                  const purposeLabel =
-                    ACCESS_PURPOSE_LABELS[
-                      engagement.accessPurpose as AccessPurpose
-                    ] ?? engagement.accessPurpose;
+            <QueueSearch searchParam="q" pageParam="page" />
+            {/* Last in the toolbar, after filter and search. */}
+            {session.systemRole !== "Guest" && <TrainingExportButton />}
+          </div>
+        </div>
 
-                  return (
-                    <TableRow key={engagement.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <NameWithAttention
-                          attention={clearanceFlags.get(engagement.id)}
-                        >
-                          <Link href={`/dashboard/training/${engagement.id}`}>
-                            {person.fullName}
-                          </Link>
-                        </NameWithAttention>
-                      </TableCell>
-                      <TableCell>{purposeLabel}</TableCell>
-                      <TableCell>{engagement.arrivalDate}</TableCell>
-                      <TableCell>{engagement.departureDate}</TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild size="sm">
-                          <Link href={`/dashboard/training/${engagement.id}`}>
-                            Record Induction
-                          </Link>
-                        </Button>
-                      </TableCell>
+        {activeView === "awaiting" && awaiting && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={AWAITING_COLUMNS} pagination />}
+            >
+              {awaiting.rows.length === 0 ? (
+                <EmptyState
+                  icon={GraduationCapIcon}
+                  title="No records awaiting induction"
+                  description="Visitors appear here once Hospital clears them, or once Reception sends a mine-site visit through."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Nature of Visit</TableHead>
+                      <TableHead>Arrival</TableHead>
+                      <TableHead>Departure</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={awaiting.page}
-            pageSize={awaiting.pageSize}
-            total={awaiting.total}
-            pageParam="page"
-            searchParams={{ q, purpose }}
-          />
-        </div>
-      )}
+                  </TableHeader>
+                  <TableBody>
+                    {awaiting.rows.map(({ engagement, person }) => {
+                      // SAFETY: access_purpose is a text column written only from
+                      // the AccessPurpose union by `createEngagement`.
+                      const purposeLabel =
+                        ACCESS_PURPOSE_LABELS[
+                          engagement.accessPurpose as AccessPurpose
+                        ] ?? engagement.accessPurpose;
 
-      {activeView === "recorded" && recorded && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {recorded.rows.length === 0 ? (
-            <EmptyState
-              icon={ClipboardListIcon}
-              title="No inductions recorded yet"
-              description="Every induction you sign off appears here."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Inductions</TableHead>
-                  <TableHead>Completed</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recorded.rows.map(({ induction, person }) => (
-                  <TableRow key={induction.id} className="hover:bg-muted/50">
-                    <TableCell>{person.fullName}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {[
-                        induction.generalSiteInduction ? "General site" : null,
-                        induction.otherInductions ? "Other" : null,
-                      ]
-                        .filter((label) => label !== null)
-                        .join(", ") || "-"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatQueueDate(induction.completedAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          <QueuePagination
-            page={recorded.page}
-            pageSize={recorded.pageSize}
-            total={recorded.total}
-            pageParam="page"
-            searchParams={{ q, view, purpose }}
-          />
-        </div>
-      )}
-    </div>
+                      return (
+                        <TableRow
+                          key={engagement.id}
+                          className="hover:bg-muted/50"
+                        >
+                          <TableCell>
+                            <NameWithAttention
+                              attention={clearanceFlags.get(engagement.id)}
+                            >
+                              <Link
+                                href={`/dashboard/training/${engagement.id}`}
+                              >
+                                {person.fullName}
+                              </Link>
+                            </NameWithAttention>
+                          </TableCell>
+                          <TableCell>{purposeLabel}</TableCell>
+                          <TableCell>{engagement.arrivalDate}</TableCell>
+                          <TableCell>{engagement.departureDate}</TableCell>
+                          <TableCell className="text-right">
+                            <Button asChild size="sm">
+                              <Link
+                                href={`/dashboard/training/${engagement.id}`}
+                              >
+                                Record Induction
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={awaiting.page}
+                pageSize={awaiting.pageSize}
+                total={awaiting.total}
+                pageParam="page"
+                searchParams={{ q, purpose }}
+              />
+            </QueuePending>
+          </div>
+        )}
+
+        {activeView === "recorded" && recorded && (
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <QueuePending
+              fallback={<TableSkeleton columns={RECORDED_COLUMNS} pagination />}
+            >
+              {recorded.rows.length === 0 ? (
+                <EmptyState
+                  icon={ClipboardListIcon}
+                  title="No inductions recorded yet"
+                  description="Every induction you sign off appears here."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Name</TableHead>
+                      <TableHead>Inductions</TableHead>
+                      <TableHead>Completed</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recorded.rows.map(({ induction, person }) => (
+                      <TableRow
+                        key={induction.id}
+                        className="hover:bg-muted/50"
+                      >
+                        <TableCell>{person.fullName}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {[
+                            induction.generalSiteInduction
+                              ? "General site"
+                              : null,
+                            induction.otherInductions ? "Other" : null,
+                          ]
+                            .filter((label) => label !== null)
+                            .join(", ") || "-"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatQueueDate(induction.completedAt)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              <QueuePagination
+                page={recorded.page}
+                pageSize={recorded.pageSize}
+                total={recorded.total}
+                pageParam="page"
+                searchParams={{ q, view, purpose }}
+              />
+            </QueuePending>
+          </div>
+        )}
+      </div>
+    </QueueTransitionProvider>
   );
 }

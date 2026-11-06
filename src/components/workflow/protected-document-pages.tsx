@@ -1,8 +1,8 @@
 "use client";
 
-import { Loader2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type PdfjsModule = typeof import("pdfjs-dist");
@@ -167,11 +167,12 @@ export function ProtectedDocumentPages({
       onContextMenu={(event) => event.preventDefault()}
       onDragStart={(event) => event.preventDefault()}
     >
-      {/* Centred in the fixed area the pages will fill, so nothing resizes
-          or jumps when they arrive. */}
+      {/* A page-shaped placeholder in the fixed area the pages will fill,
+          so nothing resizes or jumps when they arrive. */}
       {status === "loading" && (
-        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-          <Loader2Icon className="size-5 shrink-0 animate-spin" />
+        <div className="absolute inset-0 overflow-hidden">
+          <Skeleton className="aspect-[1/1.414] w-full" />
+          <span className="sr-only">Loading preview</span>
         </div>
       )}
       <div

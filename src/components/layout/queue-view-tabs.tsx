@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { QueueLink } from "@/components/layout/queue-transition";
 import { Button } from "@/components/ui/button";
 
 export type QueueView = {
@@ -27,7 +26,7 @@ export function QueueViewTabs({ views, activeView }: QueueViewTabsProps) {
           size="sm"
           variant={activeView === view.value ? "default" : "ghost"}
         >
-          <Link href={view.href}>{view.label}</Link>
+          <QueueLink href={view.href}>{view.label}</QueueLink>
         </Button>
       ))}
     </div>

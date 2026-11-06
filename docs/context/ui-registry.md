@@ -1,5 +1,42 @@
 # UI Registry
 
+## Loading skeletons — tables, pages, document viewer (2026-11-06)
+
+Files: `components/ui/skeleton.tsx`, `components/layout/page-skeletons.tsx`,
+`components/layout/queue-transition.tsx`, `<route>/skeleton-columns.ts`, `<route>/loading.tsx`.
+
+| Property | Class |
+|---|---|
+| Block | `Skeleton`: `animate-pulse rounded-md bg-muted`, `aria-hidden` |
+| Text line | `h-4` (labels `h-3`, card headings `h-6`, page title `h-8`) |
+| Badge | `h-5 w-20 rounded-full` |
+| Row button / menu | `h-9 w-28` (sm Button) / `size-8` (ghost icon menu) |
+| Toolbar controls | `h-11` (Filter `w-24`, search `w-56`, export `w-32`), tabs `h-9 w-36` in `rounded-lg border border-border p-1` |
+| Containers | The real ones: table card `overflow-hidden rounded-xl border border-border bg-card`, field/form cards `rounded-xl border border-border bg-card p-6` |
+| Shadow / accent | none |
+
+**Pattern notes:**
+- A skeleton copies the component it replaces: same container, padding and real
+  table headers, with blocks where the content goes. No new colours, only `bg-muted`.
+- **Inside a queue:** wrap the page in `QueueTransitionProvider` and each table card's
+  contents in `<QueuePending fallback={<TableSkeleton columns={...} pagination />}>`.
+  Filter, Search, `QueuePagination` and `QueueViewTabs` all navigate through the shared
+  transition (`useQueueTransition`, `QueueLink` = `next/link` + `onNavigate`), so the card
+  shows the skeleton while new data loads. The header and toolbar stay usable. Outside a
+  provider the controls fall back to their own transition. Department has no paged
+  footer, so it leaves out `pagination`.
+- **Column specs** (`SkeletonColumn { header, cell, align?, className? }`; cells `name`,
+  `text`, `short`, `date`, `long`, `badge`, `button`, `menu`) live in each queue's
+  `skeleton-columns.ts` and are shared by `page.tsx` and `loading.tsx`. Change them
+  whenever a table's headers change.
+- **Between pages:** every dashboard route has a `loading.tsx`. Queues use
+  `QueuePageSkeleton({ columns, tabs, filter, search, exportButton, headerAction })`.
+  Record pages use `DetailPageSkeleton` with `FieldsCardSkeleton`, `FormCardSkeleton` and
+  `PreviewBarSkeleton` (`EngagementDetailSkeleton` for Reception/Approvals records). The
+  loading boundary is keyed without search params, so it never replaces the toolbar on a
+  filter or search.
+- When you switch tabs, the skeleton keeps the old tab's headers until the new tab arrives.
+
 ## QueueFilters — one Filter button on every queue (2026-11-05)
 
 `components/layout/queue-filter.tsx` → `QueueFilters({ fields, pageParam })`. Use it for
@@ -1342,7 +1379,7 @@ Used by: `registration-submission-preview.tsx`
 | Leaf pile | Only when `documents.page_count` > 1: one `absolute inset-0 origin-bottom-left rounded-md border border-border bg-card` leaf per extra page, max 3, offset **right only** (`translate-x-[5px]/[10px]/[15px]`, no vertical offset). Wrapper is `group`; on hover leaves fan out (`rotate-[2deg]/[4deg]/[6deg]` and +2/3/4px translate (toned down 2026-10-21 from 4/8/12deg)), staggered `delay-75`/`delay-150`, `transition-transform duration-300 ease-out`, off under `motion-reduce`. Single-page / unknown count = plain sheet, no animation (2026-10-21) |
 | Page | `pointer-events-none relative aspect-[1/1.414] overflow-hidden rounded-md border border-border bg-card`, `max-w-[120px]` (shrunk from 260px 2026-10-21 — a visual cue, not a reader) |
 | Sheet content | `ProtectedDocumentPages firstPageOnly` — page 1 on a canvas, `object-contain`; no `previewUrl` prop and no signed URL in the page any more |
-| Loading | Centred `Loader2Icon` `size-5 animate-spin` (skeletons were tried and reverted 2026-10-21), absolutely positioned inside the fixed sheet / `min-h-full` viewer body so it never shifts layout. Pages mount hidden and fade in (`animate-in fade-in-0 duration-300`) once all are drawn. Failure: "Preview unavailable" |
+| Loading | Page-shaped `Skeleton` `aspect-[1/1.414] w-full` (2026-11-06; replaced the spinner kept since 2026-10-21) in an `absolute inset-0 overflow-hidden` layer, positioned inside the fixed sheet / `min-h-full` viewer body so it never shifts layout. Pages mount hidden and fade in (`animate-in fade-in-0 duration-300`) once all are drawn. Failure: "Preview unavailable" |
 | Fallback | lucide `FileTextIcon` `h-6 w-6` + "No preview", muted |
 | Actions | None (2026-10-21). The tile is one `<button>` (`group cursor-pointer`) that opens a `Dialog` (**fixed** `h-[90vh] w-[calc(100vw-2rem)] sm:max-w-4xl`, `print:hidden` — never content-sized: the dialog is centred by translate, so a changing height made it jump), body `overflow-y-auto [scrollbar-gutter:stable]` holding every page, drawn by `ProtectedDocumentPages`. The label swaps on hover/focus: name fades out, centred `EyeIcon` `size-3.5` + "Preview" fades in. Leaf fan-out shares the same `group`. No Download anywhere |
 | Size | Tile is a fixed `w-[140px]`, sheet a fixed `w-[120px] shrink-0`, icons `size-*` + `shrink-0` — previously `w-full max-w-[120px]` shrank in narrow grid cells, so the sheet and its icons varied in size between screens (2026-10-21) |

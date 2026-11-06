@@ -1,10 +1,16 @@
 import { UsersRound } from "lucide-react";
 import { redirect } from "next/navigation";
 
+import { RECORD_COLUMNS } from "@/app/dashboard/(workflow)/overview/skeleton-columns";
 import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeletons";
 import { QueueFilters } from "@/components/layout/queue-filter";
 import { QueuePagination } from "@/components/layout/queue-pagination";
 import { QueueSearch } from "@/components/layout/queue-search";
+import {
+  QueuePending,
+  QueueTransitionProvider,
+} from "@/components/layout/queue-transition";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -157,121 +163,131 @@ export default async function RecordsOverviewPage({
   });
 
   return (
-    <div>
-      <PageHeader
-        title="Site Access Records"
-        subtitle="Where every record stands, and what each stage has recorded."
-      />
-
-      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-        <QueueFilters
-          pageParam="page"
-          fields={[
-            {
-              param: "stage",
-              label: "Stage",
-              options: workflowStateOptions(),
-            },
-            {
-              param: "access",
-              label: "Access",
-              options: accessStateOptions(),
-            },
-            {
-              param: "purpose",
-              label: "Nature of Visit",
-              options: accessPurposeOptions(),
-            },
-          ]}
+    <QueueTransitionProvider>
+      <div>
+        <PageHeader
+          title="Site Access Records"
+          subtitle="Where every record stands, and what each stage has recorded."
         />
-        <QueueSearch searchParam="q" pageParam="page" />
-      </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        {records.rows.length === 0 ? (
-          <EmptyState
-            icon={UsersRound}
-            title="No records yet"
-            description="Records appear here once Reception registers a visitor."
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <QueueFilters
+            pageParam="page"
+            fields={[
+              {
+                param: "stage",
+                label: "Stage",
+                options: workflowStateOptions(),
+              },
+              {
+                param: "access",
+                label: "Access",
+                options: accessStateOptions(),
+              },
+              {
+                param: "purpose",
+                label: "Nature of Visit",
+                options: accessPurposeOptions(),
+              },
+            ]}
           />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Name</TableHead>
-                <TableHead>Nature of Visit</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Medical</TableHead>
-                <TableHead>Induction</TableHead>
-                <TableHead>Access</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {records.rows.map((row) => {
-                const { engagement, person } = row;
-                // SAFETY: access_purpose, workflow_state and access_state are
-                // text columns written only from their unions.
-                const purpose = engagement.accessPurpose as AccessPurpose;
-                const workflowState = engagement.workflowState as WorkflowState;
-                const accessState = getEffectiveAccessState(
-                  engagement.accessState as AccessState,
-                  row.accessCardExpiry,
-                );
+          <QueueSearch searchParam="q" pageParam="page" />
+        </div>
 
-                return (
-                  <TableRow key={engagement.id}>
-                    <TableCell>
-                      <NameWithAttention
-                        attention={pickAttention(
-                          accessState === "TerminationRequested" &&
-                            danger("Revocation requested"),
-                          row.clearanceStatus === "Unfit" &&
-                            !row.exemptedStages.includes("Hospital") &&
-                            danger("Marked Unfit"),
-                          accessState === "Expired" && danger("Access expired"),
-                        )}
-                      >
-                        {person.fullName}
-                      </NameWithAttention>
-                    </TableCell>
-                    <TableCell>
-                      {ACCESS_PURPOSE_LABELS[purpose] ??
-                        engagement.accessPurpose}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={WORKFLOW_STATE_BADGE[workflowState]}>
-                        {WORKFLOW_STATE_LABELS[workflowState]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <MedicalCell row={row} purpose={purpose} />
-                    </TableCell>
-                    <TableCell>
-                      <InductionCell row={row} purpose={purpose} />
-                    </TableCell>
-                    <TableCell>
-                      {/* A familiarization visit never gets a card, so its
-                          access stays empty rather than reading Pending. */}
-                      {CARD_PATHS.includes(purpose) && (
-                        <Badge className={ACCESS_STATE_BADGE[accessState]}>
-                          {ACCESS_STATE_LABELS[accessState]}
-                        </Badge>
-                      )}
-                    </TableCell>
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <QueuePending
+            fallback={<TableSkeleton columns={RECORD_COLUMNS} pagination />}
+          >
+            {records.rows.length === 0 ? (
+              <EmptyState
+                icon={UsersRound}
+                title="No records yet"
+                description="Records appear here once Reception registers a visitor."
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Nature of Visit</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Medical</TableHead>
+                    <TableHead>Induction</TableHead>
+                    <TableHead>Access</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-        <QueuePagination
-          page={records.page}
-          pageSize={records.pageSize}
-          total={records.total}
-          pageParam="page"
-          searchParams={{ q, stage, access, purpose }}
-        />
+                </TableHeader>
+                <TableBody>
+                  {records.rows.map((row) => {
+                    const { engagement, person } = row;
+                    // SAFETY: access_purpose, workflow_state and access_state are
+                    // text columns written only from their unions.
+                    const purpose = engagement.accessPurpose as AccessPurpose;
+                    const workflowState =
+                      engagement.workflowState as WorkflowState;
+                    const accessState = getEffectiveAccessState(
+                      engagement.accessState as AccessState,
+                      row.accessCardExpiry,
+                    );
+
+                    return (
+                      <TableRow key={engagement.id}>
+                        <TableCell>
+                          <NameWithAttention
+                            attention={pickAttention(
+                              accessState === "TerminationRequested" &&
+                                danger("Revocation requested"),
+                              row.clearanceStatus === "Unfit" &&
+                                !row.exemptedStages.includes("Hospital") &&
+                                danger("Marked Unfit"),
+                              accessState === "Expired" &&
+                                danger("Access expired"),
+                            )}
+                          >
+                            {person.fullName}
+                          </NameWithAttention>
+                        </TableCell>
+                        <TableCell>
+                          {ACCESS_PURPOSE_LABELS[purpose] ??
+                            engagement.accessPurpose}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={WORKFLOW_STATE_BADGE[workflowState]}
+                          >
+                            {WORKFLOW_STATE_LABELS[workflowState]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <MedicalCell row={row} purpose={purpose} />
+                        </TableCell>
+                        <TableCell>
+                          <InductionCell row={row} purpose={purpose} />
+                        </TableCell>
+                        <TableCell>
+                          {/* A familiarization visit never gets a card, so its
+                              access stays empty rather than reading Pending. */}
+                          {CARD_PATHS.includes(purpose) && (
+                            <Badge className={ACCESS_STATE_BADGE[accessState]}>
+                              {ACCESS_STATE_LABELS[accessState]}
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            <QueuePagination
+              page={records.page}
+              pageSize={records.pageSize}
+              total={records.total}
+              pageParam="page"
+              searchParams={{ q, stage, access, purpose }}
+            />
+          </QueuePending>
+        </div>
       </div>
-    </div>
+    </QueueTransitionProvider>
   );
 }
