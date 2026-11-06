@@ -91,7 +91,7 @@ test("each recorded decision and review remains a separate row", () => {
   assert.equal(rows[0]["Clearance Outcome"], "Fit with Conditions");
   assert.equal(rows[0]["Hospital Status"], "Awaiting Review");
   assert.equal(rows[0]["Recorded By"], "Doctor One");
-  assert.equal(rows[0]["Recorded At (UTC)"], "2026-11-04T09:00:00.000Z");
+  assert.equal(rows[0]["Recorded At (UTC)"], "09:00:00");
   assert.equal(rows[1]["Clearance Outcome"], "Unfit");
   assert.equal(rows[1]["Doctor Comments"], "Earlier decision");
   assert.equal(rows[1]["Hospital Status"], "Recorded");

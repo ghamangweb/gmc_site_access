@@ -1,5 +1,43 @@
 # Progress Tracker
 
+## Report timestamps without dates (2026-11-06)
+
+- [x] Updated format at user request: UTC `HH:mm:ss` (for example `14:30:12`),
+      without the calendar date, ISO `T`/`Z`, or fractional seconds. Fractional
+      seconds are truncated, never rounded into the next second or day.
+- [x] Shared `reportTimestamp` formatter used by Reception, Approvals, Hospital,
+      Training, Security and exemption rows. Shared rows feed CSV and every Excel sheet.
+- [x] Arrival/departure, next review and card expiry date-only fields are unchanged;
+      missing timestamps stay blank. Export column names and UTC labels are retained.
+- [x] All 52 report/CSV/workbook tests pass with whole-second timestamps, including
+      UTC offset/day rollover and fractional-second truncation checks.
+- [x] Review follow-up: exemption approvals are deduplicated by the original full
+      timestamp before formatting, preserving distinct dates with matching times.
+      Two added regression tests and all 30 affected report tests pass. TypeScript
+      and Biome pass. Review's suggestion to retain displayed dates conflicts with
+      the approved time-only requirement and was not applied.
+- [ ] Manual check: download the dashboard reports and confirm time-only timestamp cells.
+
+---
+
+## Department rejection email (2026-11-06)
+
+- [x] Approved: notify the original invitation recipient when their registration is
+      rejected by the department, including the rejection reason and next steps.
+- [x] After the department-scoped pending-to-rejected update succeeds, the action
+      looks up `invitations.email` using the saved request's invitation ID. It never
+      uses the form's visitor email. Repeated/already-decided requests do not send.
+- [x] `registrationRejectedTemplate`: escaped department and reason, preserved line
+      breaks, contact-department guidance and a new-invitation requirement. No staff links.
+- [x] Email/recipient lookup failures preserve rejection and return a success warning;
+      the department row displays that warning and closes the rejection dialog.
+- [x] Two template tests pass, including HTML escaping and visitor-facing next steps.
+      TypeScript and Biome pass; no anti-slop findings on added lines.
+- [ ] Manual check: reject an invited test registration; original invitation recipient
+      receives the notice even if the form's email differs. No real emails sent in tests.
+
+---
+
 ## Passport photograph row layout (2026-11-06)
 
 - [x] Requirements text uses the existing red `text-destructive` token.

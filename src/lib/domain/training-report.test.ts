@@ -47,9 +47,9 @@ test("completed training and current workflow stage remain distinct", () => {
     "Security",
     "Yes",
     "No",
-    completedAt.toISOString(),
+    "10:00:00",
     "Trainer One",
-    completedAt.toISOString(),
+    "10:00:00",
     "Training",
     "Security",
     "Induction completed",
@@ -109,7 +109,7 @@ test("multiple historical records still produce one row per cycle using newest-f
   );
 
   assert.equal(extra.length, 0);
-  assert.equal(row[7], completedAt.toISOString());
+  assert.equal(row[7], "10:00:00");
   assert.equal(row[8], "Trainer One");
 });
 
@@ -144,7 +144,7 @@ test("exempted Training is explicit without fabricated induction completion or c
     "Training School",
     "Training School: Existing induction verified",
     "Stakeholder One (GMM)",
-    completedAt.toISOString(),
+    "10:00:00",
   ]);
 });
 

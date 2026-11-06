@@ -1,3 +1,4 @@
+import { reportTimestamp } from "@/lib/domain/report-timestamp";
 import {
   ACCESS_PURPOSE_LABELS,
   WORKFLOW_STATE_LABELS,
@@ -107,9 +108,9 @@ export function trainingReportRows(
       labelFor(WORKFLOW_STATE_LABELS, cycle.workflowState),
       induction ? (induction.generalSiteInduction ? "Yes" : "No") : "",
       induction ? (induction.otherInductions ? "Yes" : "No") : "",
-      induction?.completedAt.toISOString() ?? "",
+      reportTimestamp(induction?.completedAt),
       audit?.completedBy ?? "",
-      audit?.performedAt.toISOString() ?? "",
+      reportTimestamp(audit?.performedAt),
       audit ? labelFor(WORKFLOW_STATE_LABELS, audit.fromState) : "",
       audit ? labelFor(WORKFLOW_STATE_LABELS, audit.toState) : "",
       audit?.comments ?? "",

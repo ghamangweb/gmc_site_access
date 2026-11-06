@@ -8,6 +8,17 @@ import type { RegistrationType } from "@/lib/domain/types";
 
 export type InvitationRow = typeof invitations.$inferSelect;
 
+export async function getInvitationEmail(
+  invitationId: string,
+): Promise<string | null> {
+  const [invitation] = await db
+    .select({ email: invitations.email })
+    .from(invitations)
+    .where(eq(invitations.id, invitationId));
+
+  return invitation?.email ?? null;
+}
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }

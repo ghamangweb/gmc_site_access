@@ -132,6 +132,19 @@ export function departmentInvitationTemplate(opts: {
   };
 }
 
+export function registrationRejectedTemplate(opts: {
+  department: string;
+  reason: string;
+}): MessageTemplate {
+  const department = escapeHtml(opts.department);
+  const reason = escapeHtml(opts.reason).replace(/\r?\n/g, "<br>");
+
+  return {
+    subject: subject("Registration Not Approved"),
+    html: `${HELLO}<p>Your site-access registration for Ghana Manganese Company (GMC) has been declined by the ${department} department.</p><p>Reason provided: ${reason}</p><p>Please contact the department that invited you if you need further information. A new invitation is required to submit another registration.</p>`,
+  };
+}
+
 export function registrationSubmittedTemplate(opts: {
   visitorName?: string;
   companyName?: string;
