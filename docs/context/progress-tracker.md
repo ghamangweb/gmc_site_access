@@ -1,5 +1,11 @@
 # Progress Tracker
 
+## Remove report authorship statement (2026-11-09)
+
+- [x] Removed the shared AI authorship note from report previews and DOCX/PDF downloads.
+- [x] Prompt explicitly excludes AI authorship statements and calculation commentary.
+- [x] TypeScript, focused Biome/Oxlint checks and 20 existing report tests pass.
+
 ## AI report "AI working" styling (2026-11-09)
 
 - [x] Sparkles marks the Generate Report trigger, dialog title and the preview's AI note;

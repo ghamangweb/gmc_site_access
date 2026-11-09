@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react";
 import { type ReactElement, useId } from "react";
 
 import {
@@ -41,10 +40,6 @@ export function WorkflowReportPreview({
           <time dateTime={statistics.generatedAt}>{content.generated}</time>
         </p>
         <p className="text-sm text-muted-foreground">{content.scope}</p>
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Sparkles aria-hidden="true" className="size-3.5 text-primary" />
-          {content.aiNote}
-        </p>
       </header>
 
       <section aria-labelledby={`${id}-summary`} className="space-y-2">

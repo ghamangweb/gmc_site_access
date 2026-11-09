@@ -156,12 +156,6 @@ function definition(content: ReportDocument, logo: ReportLogo | null) {
       { text: `Generated ${content.generated}`, style: "muted" },
       { text: content.scope, style: "muted", margin: [0, 2, 0, 0] },
       {
-        text: content.aiNote,
-        style: "muted",
-        italics: true,
-        margin: [0, 0, 0, 8],
-      },
-      {
         canvas: [
           {
             type: "line",

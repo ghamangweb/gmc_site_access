@@ -2685,8 +2685,8 @@ underline, tables with a primary header row and alternating muted rows, footer
 
 **AI indicators and "AI working" state (2026-11-09):** AI-generated content is marked with
 lucide `Sparkles` in `text-primary`: the dashboard "Generate Report" trigger (outline button),
-the dialog title, and an "AI note" line (`text-xs text-muted-foreground`, `size-3.5` icon)
-at the foot of the preview header. DOCX/PDF carry the same note under the scope line.
+and the dialog title. Report previews and DOCX/PDF downloads omit the AI authorship note
+at the user's request (2026-11-09).
 While generating, the footer Generate button has **no spinner and no `loading` prop**: it keeps
 full opacity (`aria-disabled` + `aria-busy` + `pointer-events-none`), the Sparkles icon uses
 `animate-pulse`, and the label is `AiShimmerText` ("Generating..."). The dialog body shows
