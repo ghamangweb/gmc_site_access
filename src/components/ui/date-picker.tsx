@@ -2,6 +2,7 @@
 
 import { format, isValid, parseISO } from "date-fns";
 import { CalendarIcon } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -33,6 +34,7 @@ export function DatePicker({
   minDate,
   maxDate,
 }: DatePickerProps) {
+  const [open, setOpen] = useState(false);
   const parsed = value ? parseISO(value) : undefined;
   const selected = parsed && isValid(parsed) ? parsed : undefined;
   const min = minDate ? parseISO(minDate) : undefined;
@@ -43,7 +45,7 @@ export function DatePicker({
   ];
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -65,7 +67,11 @@ export function DatePicker({
           selected={selected}
           defaultMonth={selected ?? min}
           disabled={bounds.length > 0 ? bounds : undefined}
-          onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
+          onSelect={(date) => {
+            onChange(date ? format(date, "yyyy-MM-dd") : "");
+
+            if (date) setOpen(false);
+          }}
         />
       </PopoverContent>
     </Popover>
