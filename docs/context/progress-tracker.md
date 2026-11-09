@@ -1,5 +1,63 @@
 # Progress Tracker
 
+## AI report "AI working" styling (2026-11-09)
+
+- [x] Sparkles marks the Generate Report trigger, dialog title and the preview's AI note;
+      DOCX/PDF include the same "Written by AI…" note.
+- [x] Generating: no spinner/loading state. Pulsing Sparkles + shimmering "Generating..."
+      on the button; `AiReportProgress` card with stepped status and shimmer bars.
+- [x] New `--animate-shimmer` token in `globals.css`; reduced-motion respected.
+- [x] TypeScript, Biome, anti-slop and 238 tests pass.
+- [ ] Manual check in light and dark mode: generate a report and watch the working state.
+
+---
+
+## Create Engagement flash fix (2026-11-09)
+
+- [x] Cause: on a submission's "Edit submission" form, Create Engagement set the local
+      "Engagement created" card (blue View Engagement + red Cancel Engagement). The action's
+      refresh then made `/reception/new?requestId=` redirect to the Engagement, so the card
+      showed only briefly.
+- [x] Fix: when converting a submission, `ReceptionForm` uploads pending files, shows the
+      "Engagement created" toast and pushes to the Engagement page, like
+      `RegistrationCompletionForm`. New Registration (no submission) keeps the card.
+- [x] TypeScript and Biome pass; anti-slop findings in the file are pre-existing.
+- [ ] Manual check: Edit submission → Create Engagement goes straight to the record.
+
+---
+
+## Most recent records first (2026-11-09)
+
+- [x] Hospital/Training/Security awaiting queues (`listEngagementsForLayer`) now sort by
+      creation date, newest first; Approvals awaiting tab by request date, newest first;
+      System Admin delegation requests newest first. History lists were already newest first.
+- [x] Kept on purpose: Hospital awaiting reviews stay soonest-due first (a schedule, so
+      overdue reviews remain at the top).
+- [x] TypeScript, Biome and 238 tests pass.
+- [ ] Manual check: confirm the newest record is at the top of each queue.
+
+---
+
+## AI report content audit + DOCX/PDF downloads (2026-11-09)
+
+- [x] Audit: the "code calculates, AI explains, show both" approach and the prompt are sound
+      and unchanged. Gaps were the input data: no time dimension, no previous-period
+      comparison, Approvals had no rejections, and the statistics table was flat with a
+      repeated Unit column.
+- [x] Period activity (completions, median hours in stage, stakeholder rejections) and
+      current queue (now, >3 days, >7 days) from the audit tables for all five workflows.
+- [x] Previous equal-length period comparison (total + period activity); null when empty.
+- [x] Preview statistics grouped with Share and Previous period columns; Unit column removed.
+- [x] Report dialog: Generate Report until generated, then Download DOCX + Download PDF.
+      Client-side `docx` + `pdfmake` (approved), loaded on click, GMC-branded layout.
+- [x] DatePicker closes on selecting a date (all date fields).
+- [x] Queries verified read-only against the dev database for all workflows. Sample DOCX
+      and PDF rendered and visually checked. 238 tests, TypeScript, Biome and anti-slop
+      pass on the changed files.
+- [ ] Manual check: generate each workflow's report in the browser and download both files.
+
+---
+
 ## Report timestamps without dates (2026-11-06)
 
 - [x] Updated format at user request: UTC `HH:mm:ss` (for example `14:30:12`),
@@ -379,6 +437,11 @@
 - [ ] Decide: a review row becomes the "latest clearance", so it restarts Training's 90-day
       validity clock and is what Training/Security see; an Unfit review does not stop Training
       from signing off induction (stage is untouched by design)
+- [x] Early reviews allowed with a warning (2026-11-06): recording a review before its Next
+      Review Date shows a `status-warning` banner ("This review is scheduled for … You are
+      recording it early."); the server does not block it, since a worsening condition must be
+      reviewable to Unfit at once
+- [ ] Manual check: early review shows the banner; due/overdue/undated review does not
 
 ## Hospital: "Cleared By" on recorded clearances (2026-11-04)
 
@@ -1476,6 +1539,32 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
       hidden for Guests). Register badges: Revocation Requested (warning), Revoked (danger)
 - [x] Reception row action is now "Request Revocation" and only appears for `Active` access
       (it used to appear for everything *not* Completed/Cancelled, i.e. records with no access yet)
+- [x] Reception row menu gains "Request Approval" (2026-11-06): enabled for `AtReception` records
+      with no request standing (never asked, or rejected); same action and toasts as the record
+      page. `requestStakeholderApprovalAction` now also revalidates `/dashboard/reception`
+- [ ] Manual check: request from the queue on a new record → toast, item greys out; on a
+      rejected record → re-requests and the Approval Rejected badge clears; missing documents →
+      error toast
+- [x] Row menus gain "Request Delegated Approval" (reason dialog) for any `AtReception` record; the
+      Rejected tab's "Review" button becomes a View · Request Approval · Request Delegated Approval
+      menu (`RejectedRowActions`). Shared `approval-request-actions.tsx`
+- [ ] Manual check: delegated request from both tabs notifies stakeholders + System Admin; a
+      re-request from the Rejected tab removes the row from that tab
+- [x] System Admin dashboard is tabbed (2026-11-06): Staff Users (default) · Delegation Requests ·
+      Active Delegations on `/dashboard/system-admin/users`; `/delegations` redirects to
+      its tab; admin actions revalidate the dashboard; tables split into `staff-users-table.tsx` and
+      `delegation-tables.tsx`
+- [ ] Manual check: landing shows the three tabs; tabs switch with the skeleton; granting moves a
+      record to Active Delegations, revoking moves it back; the delegated-approval email link opens
+      the Delegation Requests tab
+- [x] Delegation requests are saved (2026-11-06): new `engagements.delegation_requested_at`,
+      `delegation_requested_by` (FK `staff_users`), `delegation_request_reason` (encrypted).
+      Migration `0034_delegation_requests.sql`. **Written, NOT applied**. `requestDelegatedApproval`
+      stamps them (refused once a delegate is granted); a revoke, stakeholder approval or rejection
+      clears them, so Reception asks again. Delegation Requests tab shows only these
+- [ ] **Apply `bun run db:migrate` (0034), dev then production**
+- [ ] Manual check: only requested records appear; grant moves to Active; revoke removes it from
+      both tabs; an approval or rejection removes the request
 - [x] Migration `0024` adds `termination_requests.requested_at`; applied to the dev DB.
       `ACCESS_STATE_LABELS` added ("Terminated" shows as "Revoked")
 - [x] `tsc --noEmit`, `biome check src/`, `bun run build` clean

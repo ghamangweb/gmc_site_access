@@ -499,9 +499,8 @@ export async function listEngagementsForLayer(
       .from(engagements)
       .innerJoin(persons, eq(engagements.personId, persons.id))
       .where(where)
-      // Oldest first: a layer queue is worked front to back, unlike the
-      // Reception list where the newest record is the interesting one.
-      .orderBy(engagements.createdAt)
+      // Newest first, like every other record list.
+      .orderBy(desc(engagements.createdAt))
       .limit(pageSize)
       .offset(pageOffset(page, pageSize)),
     db
@@ -835,8 +834,8 @@ export async function listEngagementsAwaitingApproval(
       .from(engagements)
       .innerJoin(persons, eq(engagements.personId, persons.id))
       .where(where)
-      // Longest-waiting first: the queue is a to-do list.
-      .orderBy(engagements.approvalRequestedAt)
+      // Most recent request first, like every other record list.
+      .orderBy(desc(engagements.approvalRequestedAt))
       .limit(pageSize)
       .offset(pageOffset(page, pageSize)),
     db
@@ -1548,6 +1547,9 @@ async function applyApprovalDecision(
         delegationGrantedBy: null,
         delegationGrantedAt: null,
         delegationReason: null,
+        delegationRequestedAt: null,
+        delegationRequestedBy: null,
+        delegationRequestReason: null,
       })
       // Conditional, so a rejection that commits first wins: this then
       // matches nothing and the approval insert above rolls back with it.
@@ -1735,6 +1737,9 @@ export async function rejectStakeholderApproval(
         delegationGrantedBy: null,
         delegationGrantedAt: null,
         delegationReason: null,
+        delegationRequestedAt: null,
+        delegationRequestedBy: null,
+        delegationRequestReason: null,
       })
       .where(
         and(
@@ -1790,9 +1795,13 @@ export async function rejectStakeholderApproval(
   return { rejection, receptionists, departmentHead };
 }
 
+// Saved on the record, not just announced: the request is what lists the
+// engagement in the System Admin's Delegation Requests tab. Asking again
+// before a grant just replaces the reason and time.
 export async function requestDelegatedApproval(
   engagementId: string,
   reason: string,
+  requestedBy: string,
 ): Promise<{ recipients: StaffUser[] }> {
   const engagement = await getEngagementById(engagementId);
   if (!engagement) {
@@ -1800,6 +1809,33 @@ export async function requestDelegatedApproval(
   }
   if (engagement.workflowState !== "AtReception") {
     throw new Error("Engagement is not awaiting Reception approval");
+  }
+  if (engagement.delegatedApproverId) {
+    throw new Error("A delegated approver has already been granted");
+  }
+
+  // Conditional, so a grant or a stakeholder decision that lands in between
+  // isn't overwritten with a fresh request.
+  const [updated] = await db
+    .update(engagements)
+    .set({
+      delegationRequestedAt: new Date(),
+      delegationRequestedBy: requestedBy,
+      delegationRequestReason: reason,
+    })
+    .where(
+      and(
+        eq(engagements.id, engagementId),
+        eq(engagements.workflowState, "AtReception"),
+        isNull(engagements.delegatedApproverId),
+      ),
+    )
+    .returning({ id: engagements.id });
+
+  if (!updated) {
+    throw new Error(
+      "This record changed while you were requesting. Refresh and try again",
+    );
   }
 
   const recipients = await getStakeholdersAndSystemAdmins();
@@ -1866,6 +1902,11 @@ export async function revokeDelegatedApproval(
       delegationGrantedBy: null,
       delegationGrantedAt: null,
       delegationReason: null,
+      // Reception has to ask again: a revoked grant leaves no standing
+      // request behind in the System Admin's Delegation Requests tab.
+      delegationRequestedAt: null,
+      delegationRequestedBy: null,
+      delegationRequestReason: null,
     })
     .where(eq(engagements.id, engagementId));
 }

@@ -1,92 +1,81 @@
-import { UsersRound } from "lucide-react";
-import Link from "next/link";
-
-import { UserRow } from "@/app/dashboard/system-admin/users/user-row";
-import { PageHeader } from "@/components/layout/page-header";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { listStaffUsersWithPendingRequests } from "@/lib/services/auth-service";
+  ActiveDelegationTable,
+  DelegationRequestsTable,
+} from "@/app/dashboard/system-admin/delegations/delegation-tables";
+import {
+  ACTIVE_COLUMNS,
+  REQUEST_COLUMNS,
+} from "@/app/dashboard/system-admin/delegations/skeleton-columns";
+import { USER_COLUMNS } from "@/app/dashboard/system-admin/users/skeleton-columns";
+import { StaffUsersTable } from "@/app/dashboard/system-admin/users/staff-users-table";
+import { PageHeader } from "@/components/layout/page-header";
+import { TableSkeleton } from "@/components/layout/page-skeletons";
+import {
+  QueuePending,
+  QueueTransitionProvider,
+} from "@/components/layout/queue-transition";
+import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { requireSystemAdmin } from "@/lib/auth/guards";
 
-export default async function AdminUsersPage() {
-  const { users, pendingRequests } = await listStaffUsersWithPendingRequests();
+// The System Admin dashboard: every admin table on one page, one at a time,
+// chosen by `view` like the workflow queues. Staff Users is the default.
+// `/dashboard/system-admin/delegations` redirects to the Delegation Requests tab.
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const session = await requireSystemAdmin();
+  const { view } = await searchParams;
+  const activeView = view === "requests" || view === "active" ? view : "users";
 
-  const isPending = (staffUserId: string) =>
-    pendingRequests.some((n) => n.requesterStaffUserId === staffUserId);
+  const firstName = session.displayName?.split(" ")[0] ?? "there";
 
-  const getRequestedRole = (staffUserId: string) =>
-    pendingRequests.find((n) => n.requesterStaffUserId === staffUserId)
-      ?.requestedRole ?? null;
+  const views = [
+    {
+      label: "Staff Users",
+      value: "users",
+      href: "/dashboard/system-admin/users",
+    },
+    {
+      label: "Delegation Requests",
+      value: "requests",
+      href: "/dashboard/system-admin/users?view=requests",
+    },
+    {
+      label: "Active Delegations",
+      value: "active",
+      href: "/dashboard/system-admin/users?view=active",
+    },
+  ];
 
-  const getRequestedDepartment = (staffUserId: string) =>
-    pendingRequests.find((n) => n.requesterStaffUserId === staffUserId)
-      ?.requestedDepartment ?? null;
-
-  // Pending requests first (they need action), deactivated users last (they
-  // need none).
-  const sortedUsers = [...users].sort((a, b) => {
-    const deactivatedA = a.deactivatedAt ? 1 : 0;
-    const deactivatedB = b.deactivatedAt ? 1 : 0;
-
-    if (deactivatedA !== deactivatedB) {
-      return deactivatedA - deactivatedB;
-    }
-
-    return (isPending(b.id) ? 1 : 0) - (isPending(a.id) ? 1 : 0);
-  });
+  const fallbackColumns =
+    activeView === "requests"
+      ? REQUEST_COLUMNS
+      : activeView === "active"
+        ? ACTIVE_COLUMNS
+        : USER_COLUMNS;
 
   return (
-    <div>
-      <PageHeader
-        title="Staff Users"
-        subtitle="Provision access and manage PINs for GMC staff."
-        actions={
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/system-admin/delegations">
-              Delegated Approvals
-            </Link>
-          </Button>
-        }
-      />
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        {sortedUsers.length === 0 ? (
-          <EmptyState
-            icon={UsersRound}
-            title="No staff users yet"
-            description="Provisioned GMC staff will appear here."
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>System Role</TableHead>
-                <TableHead>Workflow Roles</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedUsers.map((user) => (
-                <UserRow
-                  key={user.id}
-                  user={user}
-                  isPending={isPending(user.id)}
-                  requestedRole={getRequestedRole(user.id)}
-                  requestedDepartment={getRequestedDepartment(user.id)}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        )}
+    <QueueTransitionProvider>
+      <div>
+        <PageHeader
+          title={`Welcome back, ${firstName}!`}
+          subtitle="Here, you'll manage staff access and delegated approvals."
+        />
+
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <QueueViewTabs views={views} activeView={activeView} />
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <QueuePending fallback={<TableSkeleton columns={fallbackColumns} />}>
+            {activeView === "users" && <StaffUsersTable />}
+            {activeView === "requests" && <DelegationRequestsTable />}
+            {activeView === "active" && <ActiveDelegationTable />}
+          </QueuePending>
+        </div>
       </div>
-    </div>
+    </QueueTransitionProvider>
   );
 }

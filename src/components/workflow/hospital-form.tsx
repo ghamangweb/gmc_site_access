@@ -1,6 +1,6 @@
 "use client";
 
-import { addDays, format } from "date-fns";
+import { addDays, format, parseISO } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
   HOSPITAL_CLEARANCE_LABELS,
   type HospitalClearanceStatus,
 } from "@/lib/domain/types";
+import { formatQueueDate } from "@/lib/utils";
 
 // What each outcome does to the engagement, per project-overview.md. Spelled
 // out because the three are not interchangeable: one advances the visitor,
@@ -56,6 +57,9 @@ type HospitalFormProps = {
   /** Set when reviewing a Fit with Conditions clearance from the recorded
    * tab: submits a review of that clearance instead of a new clearance. */
   reviewOfClearanceId?: string;
+  /** YYYY-MM-DD. Set only when the review being recorded is ahead of the
+   * date the doctor scheduled — early reviews are allowed, just flagged. */
+  earlyReviewDate?: string;
 };
 
 export function HospitalForm({
@@ -63,6 +67,7 @@ export function HospitalForm({
   latestClearance,
   readOnly,
   reviewOfClearanceId,
+  earlyReviewDate,
 }: HospitalFormProps) {
   const router = useRouter();
   const [status, setStatus] = useState<HospitalClearanceStatus | "">("");
@@ -127,6 +132,14 @@ export function HospitalForm({
       <h2 className="text-lg font-semibold text-foreground mb-4">
         {isReview ? "Record Review" : "Hospital Clearance"}
       </h2>
+
+      {isReview && earlyReviewDate && (
+        <div className="mb-4 rounded-md px-4 py-3 text-sm bg-status-warning-bg text-status-warning-fg">
+          This review is scheduled for{" "}
+          {formatQueueDate(parseISO(earlyReviewDate))}. You are recording it
+          early.
+        </div>
+      )}
 
       {latestClearance && (
         <p className="mb-4 text-xs text-muted-foreground">

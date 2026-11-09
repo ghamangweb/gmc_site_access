@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { ReceptionRow } from "@/app/dashboard/(workflow)/reception/reception-row";
 import { RegistrationRequestRow } from "@/app/dashboard/(workflow)/reception/registration-request-row";
+import { RejectedRowActions } from "@/app/dashboard/(workflow)/reception/rejected-row-actions";
 import {
   ENGAGEMENT_COLUMNS,
   REJECTED_COLUMNS,
@@ -323,6 +324,15 @@ export default async function ReceptionQueuePage({
                             engagement.workflowState === "AtReception" &&
                             engagement.approvalRejectedAt !== null
                           }
+                          // A rejection clears `approvalRequestedAt`, so this
+                          // covers both never-asked and rejected records.
+                          canRequestApproval={
+                            engagement.workflowState === "AtReception" &&
+                            engagement.approvalRequestedAt === null
+                          }
+                          canRequestDelegated={
+                            engagement.workflowState === "AtReception"
+                          }
                           attention={pickAttention(
                             engagement.accessState === "TerminationRequested" &&
                               danger("Revocation requested"),
@@ -370,7 +380,7 @@ export default async function ReceptionQueuePage({
                       <TableHead>Rejected By</TableHead>
                       <TableHead>Reason</TableHead>
                       <TableHead>Rejected</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -405,13 +415,10 @@ export default async function ReceptionQueuePage({
                             : "-"}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button asChild size="sm">
-                            <Link
-                              href={`/dashboard/reception/${engagement.id}`}
-                            >
-                              Review
-                            </Link>
-                          </Button>
+                          <RejectedRowActions
+                            engagementId={engagement.id}
+                            canManage={canManage}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}

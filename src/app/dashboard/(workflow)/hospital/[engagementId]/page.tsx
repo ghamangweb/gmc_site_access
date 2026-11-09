@@ -5,7 +5,7 @@ import { HospitalForm } from "@/components/workflow/hospital-form";
 import { HospitalHandoff } from "@/components/workflow/hospital-handoff";
 import { WorkflowExemptionsSummary } from "@/components/workflow/workflow-exemptions-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
-import type { HospitalClearanceStatus } from "@/lib/domain/types";
+import { type HospitalClearanceStatus, isoToday } from "@/lib/domain/types";
 import {
   getEngagementDetail,
   getHospitalClearanceForEngagement,
@@ -78,6 +78,11 @@ export default async function HospitalDetailPage({
               engagementId={engagementId}
               readOnly={!isHospitalStaff}
               reviewOfClearanceId={reviewed.id}
+              earlyReviewDate={
+                reviewed.nextReviewDate && reviewed.nextReviewDate > isoToday()
+                  ? reviewed.nextReviewDate
+                  : undefined
+              }
             />
           ) : (
             <p className="text-muted-foreground text-sm">

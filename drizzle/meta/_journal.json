@@ -239,6 +239,13 @@
       "when": 1793868234701,
       "tag": "0033_clearance_status_index",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793985896765,
+      "tag": "0034_delegation_requests",
+      "breakpoints": true
     }
   ]
 }
