@@ -144,6 +144,21 @@
   --radius: var(--radius);
 }
 
+/* AI report generation: a highlight sweeping across text or a placeholder bar.
+   Pair with a 200%-wide gradient background (`bg-size-[200%_100%]`). */
+@theme {
+  --animate-shimmer: shimmer 2.2s linear infinite;
+
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+}
+
 /* Tailwind v4 defaults bare `border` to currentColor; shadcn components are
    generated assuming it resolves to the border token instead. */
 @layer base {

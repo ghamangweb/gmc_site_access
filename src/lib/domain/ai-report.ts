@@ -11,6 +11,15 @@ The input identifies the workflow, reporting period, generation
 time, record selection rules, metric definitions and statistics.
 Follow those definitions exactly.
 
+Each metric belongs to a group. "Dashboard tabs" and "Current
+status" describe records created in the period, using statuses at
+generation. "Period activity" counts work done during the period,
+regardless of creation date, and is not part of the total. "Current
+queue" is a snapshot at generation, not limited to the period.
+When a comparison is supplied, it covers the preceding period of
+equal length. Compare only the total and the period activity metrics
+it contains, quoting both values rather than calculating changes.
+
 Scope definitions, metric definitions and dataLimitations in the
 input are internal context for interpreting the figures. Do not
 copy them into the report or describe unavailable information.
@@ -109,8 +118,18 @@ const periodSchema = z
     message: "The report end date must not precede the start date.",
   });
 
+export const REPORT_METRIC_GROUPS = [
+  "Dashboard tabs",
+  "Current status",
+  "Period activity",
+  "Current queue",
+] as const;
+
+export type ReportMetricGroup = (typeof REPORT_METRIC_GROUPS)[number];
+
 const metricSchema = z.strictObject({
   name: z.string().trim().min(1).max(120),
+  group: z.enum(REPORT_METRIC_GROUPS).optional(),
   definition: z.string().trim().min(1).max(500),
   value: z.number().nonnegative().nullable(),
   unit: z.string().trim().min(1).max(60),
@@ -160,6 +179,8 @@ export const aiReportSchema = z.strictObject({
 export type AiReportData = z.infer<typeof aiReportDataSchema>;
 
 export type AiReportWorkflow = AiReportData["workflow"];
+
+export type ReportMetric = AiReportData["metrics"][number];
 
 export type AiReportPeriod = AiReportData["period"];
 

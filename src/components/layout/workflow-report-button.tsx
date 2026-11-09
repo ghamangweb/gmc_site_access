@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { Download, Sparkles } from "lucide-react";
 import { type ReactElement, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,6 +15,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AiReportProgress,
+  AiShimmerText,
+} from "@/components/workflow/ai-report-progress";
 import { WorkflowReportPreview } from "@/components/workflow/workflow-report-preview";
 import {
   type AiReportWorkflow,
@@ -23,10 +27,13 @@ import {
   type GeneratedAiReport,
 } from "@/lib/domain/ai-report";
 import { AI_REPORT_TIMEOUT_MESSAGE } from "@/lib/domain/ai-report-error";
+import { reportDocument, reportFileName } from "@/lib/domain/report-document";
 import { isoToday } from "@/lib/domain/types";
 import { WORKFLOW_REPORT_PRESENTATION } from "@/lib/domain/workflow-report-presentation";
 
 type WorkflowReportButtonProps = { workflow: AiReportWorkflow };
+
+type ReportFormat = "docx" | "pdf";
 
 export function WorkflowReportButton({
   workflow,
@@ -39,6 +46,8 @@ export function WorkflowReportButton({
 
   const [generatedReport, setGeneratedReport] =
     useState<GeneratedAiReport | null>(null);
+
+  const [downloading, setDownloading] = useState<ReportFormat | null>(null);
 
   const requestPending = useRef(false);
   const today = isoToday();
@@ -121,11 +130,41 @@ export function WorkflowReportButton({
     }
   }
 
+  async function handleDownload(format: ReportFormat): Promise<void> {
+    if (!generatedReport || downloading) return;
+
+    setDownloading(format);
+
+    try {
+      // Loaded on demand so the document libraries stay out of the dashboard bundle.
+      const [{ loadReportLogo, saveReportFile }, builder] = await Promise.all([
+        import("@/lib/report-document-style"),
+        format === "docx"
+          ? import("@/lib/report-docx").then((module) => module.buildReportDocx)
+          : import("@/lib/report-pdf").then((module) => module.buildReportPdf),
+      ]);
+
+      const blob = await builder(
+        reportDocument(generatedReport),
+        await loadReportLogo(),
+      );
+
+      saveReportFile(blob, reportFileName(generatedReport.statistics, format));
+    } catch (error) {
+      console.error("[workflow-report-download]", error);
+      toast.error(
+        `Couldn't create the ${format.toUpperCase()} file. Please try again.`,
+      );
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" variant="outline" className="h-11">
-          <FileText aria-hidden="true" />
+          <Sparkles aria-hidden="true" className="text-primary" />
           Generate Report
         </Button>
       </DialogTrigger>
@@ -134,7 +173,10 @@ export function WorkflowReportButton({
         showCloseButton={!generating}
       >
         <DialogHeader>
-          <DialogTitle>Generate {presentation.title} Report</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles aria-hidden="true" className="size-5 text-primary" />
+            Generate {presentation.title} Report
+          </DialogTitle>
           <DialogDescription>{presentation.description}</DialogDescription>
         </DialogHeader>
 
@@ -174,13 +216,19 @@ export function WorkflowReportButton({
           </fieldset>
         </div>
 
-        <output className="block text-sm text-muted-foreground">
+        <output
+          className={
+            generating ? "sr-only" : "block text-sm text-muted-foreground"
+          }
+        >
           {generating
-            ? "Generating your report. Please wait."
+            ? "AI is generating your report. Please wait."
             : generatedReport
-              ? "Report generated. Review the summary alongside the recorded statistics."
+              ? "Report generated with AI. Review the summary alongside the recorded statistics."
               : presentation.dateNote}
         </output>
+
+        {generating && <AiReportProgress />}
 
         {generatedReport && <WorkflowReportPreview result={generatedReport} />}
 
@@ -193,14 +241,57 @@ export function WorkflowReportButton({
           >
             Close
           </Button>
-          <Button
-            type="button"
-            loading={generating}
-            disabled={!validPeriod}
-            onClick={handleGenerate}
-          >
-            {generating ? "Generating..." : "Generate Report"}
-          </Button>
+          {generatedReport ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                loading={downloading === "docx"}
+                disabled={downloading !== null}
+                onClick={() => handleDownload("docx")}
+              >
+                {downloading !== "docx" && <Download aria-hidden="true" />}
+                Download DOCX
+              </Button>
+              <Button
+                type="button"
+                loading={downloading === "pdf"}
+                disabled={downloading !== null}
+                onClick={() => handleDownload("pdf")}
+              >
+                {downloading !== "pdf" && <Download aria-hidden="true" />}
+                Download PDF
+              </Button>
+            </>
+          ) : (
+            // No spinner while generating: the sparkles pulse and the label
+            // shimmers, so it reads as the AI working. handleGenerate already
+            // ignores repeat clicks; `disabled` would dim it to half opacity.
+            <Button
+              type="button"
+              disabled={!validPeriod}
+              aria-busy={generating || undefined}
+              aria-disabled={generating || undefined}
+              className={generating ? "pointer-events-none" : undefined}
+              onClick={handleGenerate}
+            >
+              <Sparkles
+                aria-hidden="true"
+                className={
+                  generating
+                    ? "animate-pulse motion-reduce:animate-none"
+                    : undefined
+                }
+              />
+              {generating ? (
+                <AiShimmerText className="from-primary-foreground/60 via-primary-foreground to-primary-foreground/60">
+                  Generating...
+                </AiShimmerText>
+              ) : (
+                "Generate Report"
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

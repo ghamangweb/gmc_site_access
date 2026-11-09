@@ -3,6 +3,7 @@ import {
   type AiReportPeriod,
   type AiReportWorkflow,
   aiReportDataSchema,
+  type ReportMetricGroup,
 } from "@/lib/domain/ai-report";
 import { APPROVALS_REPORT_HEADERS } from "@/lib/domain/approvals-report";
 import { HOSPITAL_REPORT_HEADERS } from "@/lib/domain/hospital-report";
@@ -23,6 +24,7 @@ type ExportRecord = Parameters<ReportSheetSpec<string>["include"]>[0];
 
 type ReportCount = {
   name: string;
+  group: ReportMetricGroup;
   definition: string;
   include: (row: ExportRecord) => boolean;
 };
@@ -42,6 +44,7 @@ function categoryCounts(
 ): ReportCount[] {
   return values.map((value) => ({
     name: `${prefix}: ${value}`,
+    group: "Current status" as const,
     definition: `Export entries whose ${column} is ${value}. These are current export classifications, not events during the selected dates.`,
     include: (row: ExportRecord): boolean => row[column] === value,
   }));
@@ -133,6 +136,7 @@ export function workflowAiReportData(
   const counters: ReportCount[] = [
     ...definition.tabs.map((tab) => ({
       name: tab.name,
+      group: "Dashboard tabs" as const,
       definition: `Export entries included in the ${tab.name} dashboard tab. Tab counts may overlap and must not be added together.`,
       include: tab.include,
     })),
@@ -170,6 +174,7 @@ export function workflowAiReportData(
     totalRecords: rows.length,
     metrics: counters.map((counter, index) => ({
       name: counter.name,
+      group: counter.group,
       definition: counter.definition,
       value: values[index],
       unit: definition.unit,
@@ -179,7 +184,7 @@ export function workflowAiReportData(
       definition.countingNote,
       "The date range selects creation cohorts, not the dates of approvals, clearances, inductions or card activations. Recorded events for selected engagements may fall outside the selected dates.",
       "Metrics may overlap or cover only part of the total; do not sum them into a new total or infer missing categories.",
-      "Statuses are current at generation. Historical period-end snapshots, processing times, service targets and previous-period comparisons are not supplied.",
+      "Dashboard tab and current status counts reflect statuses at generation, not historical period-end snapshots. Service targets are not supplied.",
       "Only fixed-label aggregate counts are provided to the AI. Personal details and free-text comments from export rows are excluded.",
     ],
   });
