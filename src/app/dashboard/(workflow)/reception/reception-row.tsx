@@ -25,6 +25,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DelegatedApprovalDialog,
+  useRequestApproval,
+} from "@/components/workflow/approval-request-actions";
 import { NameWithAttention } from "@/components/workflow/attention-dot";
 import { RecordStatusBadge } from "@/components/workflow/record-status-badge";
 import type { Attention } from "@/lib/domain/attention";
@@ -47,6 +51,10 @@ type ReceptionRowProps = {
   cardExpiry: string | undefined;
   /** A stakeholder rejected it and Reception has not asked again. */
   approvalRejected: boolean;
+  /** At Reception with no request standing — never asked, or rejected. */
+  canRequestApproval: boolean;
+  /** At Reception at all: delegation is for a request nobody can answer. */
+  canRequestDelegated: boolean;
   /** The row's attention dot, worked out by the page. */
   attention: Attention | undefined;
   canManage: boolean;
@@ -60,12 +68,16 @@ export function ReceptionRow({
   accessState,
   cardExpiry,
   approvalRejected,
+  canRequestApproval,
+  canRequestDelegated,
   attention,
   canManage,
 }: ReceptionRowProps) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [delegateOpen, setDelegateOpen] = useState(false);
+  const { requestApproval, isRequesting } = useRequestApproval(engagementId);
 
   // Only live access can be revoked. Anything still moving through the
   // workflow is cancelled instead, and an expired or already-revoked card has
@@ -136,6 +148,22 @@ export function ReceptionRow({
               </DropdownMenuItem>
               {canManage && (
                 <DropdownMenuItem
+                  disabled={!canRequestApproval || isRequesting}
+                  onSelect={requestApproval}
+                >
+                  Request Approval
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <DropdownMenuItem
+                  disabled={!canRequestDelegated}
+                  onSelect={() => setDelegateOpen(true)}
+                >
+                  Request Delegated Approval
+                </DropdownMenuItem>
+              )}
+              {canManage && (
+                <DropdownMenuItem
                   disabled={!eligibleForTermination}
                   onSelect={() => setOpen(true)}
                 >
@@ -146,6 +174,12 @@ export function ReceptionRow({
           </DropdownMenu>
         </TableCell>
       </TableRow>
+
+      <DelegatedApprovalDialog
+        engagementId={engagementId}
+        open={delegateOpen}
+        onOpenChange={setDelegateOpen}
+      />
 
       <Dialog
         open={open}

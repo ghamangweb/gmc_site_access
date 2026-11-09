@@ -467,6 +467,17 @@ export function ReceptionForm({
         toast.warning(result.warning);
       }
       await uploadPendingFiles(result.engagementId);
+
+      // A converted submission's page redirects to its Engagement once the
+      // action refreshes it, so the "created" card would only flash. Go
+      // straight there instead, as the completion form does.
+      if (registrationRequestId) {
+        toast.success("Engagement created");
+        router.push(`/dashboard/reception/${result.engagementId}`);
+
+        return;
+      }
+
       setCreated({ id: result.engagementId, fullName: values.fullName });
     });
   }

@@ -109,7 +109,7 @@ export async function grantDelegatedApprovalAction(
         })
       : true;
 
-    revalidatePath("/dashboard/system-admin/delegations");
+    revalidatePath("/dashboard/system-admin/users");
     return emailSent
       ? { success: true }
       : {
@@ -134,7 +134,7 @@ export async function revokeDelegatedApprovalAction(
   try {
     await requireSystemAdmin();
     await revokeDelegatedApproval(engagementId);
-    revalidatePath("/dashboard/system-admin/delegations");
+    revalidatePath("/dashboard/system-admin/users");
     return { success: true };
   } catch (error) {
     console.error("[actions/admin]", error);

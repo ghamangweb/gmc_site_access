@@ -1,5 +1,63 @@
 # Progress Tracker
 
+## AI report "AI working" styling (2026-11-09)
+
+- [x] Sparkles marks the Generate Report trigger, dialog title and the preview's AI note;
+      DOCX/PDF include the same "Written by AI…" note.
+- [x] Generating: no spinner/loading state. Pulsing Sparkles + shimmering "Generating..."
+      on the button; `AiReportProgress` card with stepped status and shimmer bars.
+- [x] New `--animate-shimmer` token in `globals.css`; reduced-motion respected.
+- [x] TypeScript, Biome, anti-slop and 238 tests pass.
+- [ ] Manual check in light and dark mode: generate a report and watch the working state.
+
+---
+
+## Create Engagement flash fix (2026-11-09)
+
+- [x] Cause: on a submission's "Edit submission" form, Create Engagement set the local
+      "Engagement created" card (blue View Engagement + red Cancel Engagement). The action's
+      refresh then made `/reception/new?requestId=` redirect to the Engagement, so the card
+      showed only briefly.
+- [x] Fix: when converting a submission, `ReceptionForm` uploads pending files, shows the
+      "Engagement created" toast and pushes to the Engagement page, like
+      `RegistrationCompletionForm`. New Registration (no submission) keeps the card.
+- [x] TypeScript and Biome pass; anti-slop findings in the file are pre-existing.
+- [ ] Manual check: Edit submission → Create Engagement goes straight to the record.
+
+---
+
+## Most recent records first (2026-11-09)
+
+- [x] Hospital/Training/Security awaiting queues (`listEngagementsForLayer`) now sort by
+      creation date, newest first; Approvals awaiting tab by request date, newest first;
+      System Admin delegation requests newest first. History lists were already newest first.
+- [x] Kept on purpose: Hospital awaiting reviews stay soonest-due first (a schedule, so
+      overdue reviews remain at the top).
+- [x] TypeScript, Biome and 238 tests pass.
+- [ ] Manual check: confirm the newest record is at the top of each queue.
+
+---
+
+## AI report content audit + DOCX/PDF downloads (2026-11-09)
+
+- [x] Audit: the "code calculates, AI explains, show both" approach and the prompt are sound
+      and unchanged. Gaps were the input data: no time dimension, no previous-period
+      comparison, Approvals had no rejections, and the statistics table was flat with a
+      repeated Unit column.
+- [x] Period activity (completions, median hours in stage, stakeholder rejections) and
+      current queue (now, >3 days, >7 days) from the audit tables for all five workflows.
+- [x] Previous equal-length period comparison (total + period activity); null when empty.
+- [x] Preview statistics grouped with Share and Previous period columns; Unit column removed.
+- [x] Report dialog: Generate Report until generated, then Download DOCX + Download PDF.
+      Client-side `docx` + `pdfmake` (approved), loaded on click, GMC-branded layout.
+- [x] DatePicker closes on selecting a date (all date fields).
+- [x] Queries verified read-only against the dev database for all workflows. Sample DOCX
+      and PDF rendered and visually checked. 238 tests, TypeScript, Biome and anti-slop
+      pass on the changed files.
+- [ ] Manual check: generate each workflow's report in the browser and download both files.
+
+---
+
 ## Report timestamps without dates (2026-11-06)
 
 - [x] Updated format at user request: UTC `HH:mm:ss` (for example `14:30:12`),
@@ -379,6 +437,11 @@
 - [ ] Decide: a review row becomes the "latest clearance", so it restarts Training's 90-day
       validity clock and is what Training/Security see; an Unfit review does not stop Training
       from signing off induction (stage is untouched by design)
+- [x] Early reviews allowed with a warning (2026-11-06): recording a review before its Next
+      Review Date shows a `status-warning` banner ("This review is scheduled for … You are
+      recording it early."); the server does not block it, since a worsening condition must be
+      reviewable to Unfit at once
+- [ ] Manual check: early review shows the banner; due/overdue/undated review does not
 
 ## Hospital: "Cleared By" on recorded clearances (2026-11-04)
 
@@ -1476,6 +1539,32 @@ revokes. (Original plan: Reception → System Admin approves → IT revokes.)
       hidden for Guests). Register badges: Revocation Requested (warning), Revoked (danger)
 - [x] Reception row action is now "Request Revocation" and only appears for `Active` access
       (it used to appear for everything *not* Completed/Cancelled, i.e. records with no access yet)
+- [x] Reception row menu gains "Request Approval" (2026-11-06): enabled for `AtReception` records
+      with no request standing (never asked, or rejected); same action and toasts as the record
+      page. `requestStakeholderApprovalAction` now also revalidates `/dashboard/reception`
+- [ ] Manual check: request from the queue on a new record → toast, item greys out; on a
+      rejected record → re-requests and the Approval Rejected badge clears; missing documents →
+      error toast
+- [x] Row menus gain "Request Delegated Approval" (reason dialog) for any `AtReception` record; the
+      Rejected tab's "Review" button becomes a View · Request Approval · Request Delegated Approval
+      menu (`RejectedRowActions`). Shared `approval-request-actions.tsx`
+- [ ] Manual check: delegated request from both tabs notifies stakeholders + System Admin; a
+      re-request from the Rejected tab removes the row from that tab
+- [x] System Admin dashboard is tabbed (2026-11-06): Staff Users (default) · Delegation Requests ·
+      Active Delegations on `/dashboard/system-admin/users`; `/delegations` redirects to
+      its tab; admin actions revalidate the dashboard; tables split into `staff-users-table.tsx` and
+      `delegation-tables.tsx`
+- [ ] Manual check: landing shows the three tabs; tabs switch with the skeleton; granting moves a
+      record to Active Delegations, revoking moves it back; the delegated-approval email link opens
+      the Delegation Requests tab
+- [x] Delegation requests are saved (2026-11-06): new `engagements.delegation_requested_at`,
+      `delegation_requested_by` (FK `staff_users`), `delegation_request_reason` (encrypted).
+      Migration `0034_delegation_requests.sql`. **Written, NOT applied**. `requestDelegatedApproval`
+      stamps them (refused once a delegate is granted); a revoke, stakeholder approval or rejection
+      clears them, so Reception asks again. Delegation Requests tab shows only these
+- [ ] **Apply `bun run db:migrate` (0034), dev then production**
+- [ ] Manual check: only requested records appear; grant moves to Active; revoke removes it from
+      both tabs; an approval or rejection removes the request
 - [x] Migration `0024` adds `termination_requests.requested_at`; applied to the dev DB.
       `ACCESS_STATE_LABELS` added ("Terminated" shows as "Revoked")
 - [x] `tsc --noEmit`, `biome check src/`, `bun run build` clean
@@ -1921,3 +2010,172 @@ Dashboard + email for each audience; each email links to a page that audience ca
 ## Slice 10 — Async Email 🔲
 
 *Not started.*
+
+---
+
+## Manual AI reports — Gemini prompt and helper (2026-11-08)
+
+- [x] User approved the report prompt and a server-side Gemini helper as this step.
+- [x] `lib/domain/ai-report.ts`: approved summary/analysis prompt, strict aggregate input
+      and structured output schemas, JSON parsing and a fewer-than-650-word limit.
+- [x] `lib/services/ai-report-service.ts`: server-only SDK call, environment-based key/model,
+      60-second timeout, no automatic retries, completion/empty-output checks and safe errors.
+- [x] Focused validation tests pass without credentials or network requests.
+- [ ] Workflow aggregate queries, permission-checked endpoint, button/preview and email await
+      separate user approval. No live Gemini call or email has been made in this step.
+
+## Manual AI reports — Reception statistics (2026-11-08)
+
+- [x] User approved the Reception statistics builder as the next step.
+- [x] `lib/services/reception-ai-report-service.ts`: one grouped, read-only query over
+      engagements created within the inclusive selected UTC dates, capped at generation time.
+      Selects only workflow state and count; no visitor identity or encrypted fields are loaded.
+- [x] `lib/domain/reception-ai-report.ts`: total engagements and mutually exclusive current
+      stage counts, including Completed/Cancelled and zero-count stages. Unknown states count
+      under a generic Other category; raw state text is not sent to Gemini.
+- [x] Scope/limitations explicitly exclude registration submissions and older engagements,
+      historical stage snapshots, active-access claims and unsupported overdue/comparison metrics.
+- [x] Eleven focused tests pass, including existing prompt validation and new date/total tests.
+- [ ] No live database or Gemini request executed. The protected endpoint, UI and email still
+      await separate approval; the endpoint must enforce Reception write access.
+
+## Manual AI reports — Reception endpoint (2026-11-08)
+
+- [x] User approved connecting the Reception statistics builder and Gemini through a
+      protected endpoint. `POST /api/reports/reception` now accepts `{ start, end }` JSON.
+- [x] Requires `requireWriteAccess("Receptionist")` (active provisioned staff, confirmed
+      PIN, matching workflow role, non-Guest) before invoking report services. Requires a
+      matching Origin and JSON content type; rejects malformed, invalid or extra input fields.
+- [x] `generateReceptionAiReport` orchestrates the aggregate query and approved Gemini
+      helper. Returns `{ success: true, data: { statistics, report } }`; statistics remain
+      authoritative alongside the generated executive summary and analysis.
+- [x] All responses are non-cacheable. Expected request failures use 400/403/415; generation
+      failures use a safe 500 message without logging raw database/SDK error details.
+- [x] Existing Excel GET export preserved. All 32 report API tests and 11 report-domain tests
+      pass; TypeScript, Biome and Oxlint checks pass for changed code.
+- [ ] Live database/Gemini generation remains unverified. No email sent. Generate Report
+      button, date selection and preview await the next separate approval.
+
+## Manual AI reports — Reception button and preview (2026-11-08)
+
+- [x] User approved the Generate Report button, date-range selection and on-screen preview.
+- [x] `ReceptionReportButton` added next to New Registration in PageHeader actions, gated
+      by the existing `canManage`. Existing Export Data stays in the queue toolbar.
+- [x] Existing Dialog/DatePicker/Button primitives; month-to-date default in UTC, inclusive
+      dates, reversed/future selections prevented by picker bounds. Generation uses the
+      protected POST endpoint with a 90-second client timeout, strict response validation,
+      loading feedback and a ref to prevent duplicate requests. Dates/closing disabled pending.
+- [x] `ReceptionReportPreview`: reporting scope/date/time, executive summary, authoritative
+      totals/stage counts, findings, workload, actions and combined data limitations. Generated
+      text is escaped React text. Changing dates clears the preview; reopening retains it.
+- [x] Shared response schemas added to `lib/domain/ai-report.ts`. Sixteen focused tests pass,
+      including response validation, unavailable metrics and HTML-like output escaping.
+- [x] TypeScript checks pass. Visual patterns captured in `ui-registry.md` via imprint.
+- [x] Biome/Oxlint pass for changed files; `bun run build` completes successfully, including
+      production compilation, TypeScript, static-page generation and route collection.
+- [ ] User browser verification: open Reception as a non-Guest Receptionist, click Generate
+      Report, select dates, generate, and check the summary/counts or actionable error feedback.
+- [ ] Live Gemini/database generation and email delivery remain unverified. Email delivery
+      awaits the next separate approval. No dev server started or running server fetched.
+
+## Manual AI reports — All workflow backends (2026-11-08)
+
+*Supersedes the Reception-only statistics scope above. User clarified that reporting must
+cover the same five workflows as the existing exports and approved this backend step.*
+
+- [x] Protected POST generation on `/api/reports/reception`, `/hospital`, `/training`,
+      `/security`, `/approvals`. Existing Excel GET handlers keep their prior behavior.
+- [x] `lib/ai-report-request.ts`: shared same-origin/JSON/date validation and authorization.
+      Reception/Hospital/Training/Security use their existing write-role guards. Approvals
+      mirrors its export: stakeholders get the full scope; delegates get only pending
+      assignments or approvals signed by their authenticated staff ID. Guests/Users denied.
+- [x] `workflow-ai-report-service.ts` reuses the existing export readers with optional SQL
+      creation-date filters. UTC start is inclusive, next-day midnight exclusive, capped at
+      generation time. Unconverted Reception submissions use their own creation date;
+      engagement/cycle/decision rows use their parent engagement's creation date.
+- [x] `workflow-ai-report.ts` reuses export tab predicates and fixed status labels. Only
+      aggregate counts/definitions reach Gemini; raw identities, medical comments, reasons
+      and other export text stay on the server. Hospital by-pass exclusions, historical
+      decisions/cycles, effective access and delegate visibility inherit export behavior.
+- [x] Definitions explicitly distinguish entries/cycles from people, explain overlapping
+      metrics and warn against treating creation cohorts as events during the date range.
+- [x] Reception now includes unconverted approved submissions, converted/other engagements,
+      standing rejections and stage counts. Its existing preview labels use Total records/
+      Metric/Records; the dialog no longer says submissions are excluded.
+- [x] 67 report API tests and 25 focused domain/SQL/preview tests pass. TypeScript and focused
+      lint/format checks pass. No live database/Gemini calls or email sends performed.
+- [x] Production build succeeds for all five endpoints, including compilation, TypeScript,
+      static-page generation and route collection.
+- [ ] Next approval: shared Generate Report button and preview on all five dashboards.
+      Email delivery remains a later separately approved step.
+
+## Manual AI reports — Shared UI on all workflows (2026-11-08)
+
+- [x] User approved a shared Generate Report button/preview across the five export dashboards.
+- [x] `WorkflowReportButton` now sits immediately before Export Data on Reception, Hospital,
+      Training School, Security and Approvals, inside each export button's existing permission
+      condition. Reception's header returns to New Registration only.
+- [x] One shared dialog selects dates and calls the workflow-specific POST endpoint. Retains
+      loading feedback, duplicate-request prevention, date validation, 90-second timeout and
+      safe response handling. Also rejects mismatched workflow/date responses.
+- [x] `WorkflowReportPreview` uses the returned workflow for its title and total label and
+      displays a Unit column. Hospital entries and Training cycles cannot be mislabeled as
+      people/engagement totals. All report sections and scope/limitations remain visible.
+- [x] Presentation text centralised in `lib/domain/workflow-report-presentation.ts`; existing
+      Reception component names are compatibility wrappers. Shared patterns imprinted in registry.
+- [x] 25 focused response/count/preview tests pass, including a rendering case for every
+      workflow, non-unique counting notes and escaped AI text. TypeScript and Biome/Oxlint pass.
+- [x] Production build succeeds for the shared UI across all dashboards, including
+      compilation, TypeScript, static-page generation and route collection.
+- [ ] Browser verification by user: each authorized dashboard shows Generate Report beside
+      Export Data; choose dates, generate and verify the workflow title, totals/units and summary.
+- [ ] Live Gemini/database generation remains unverified. No dev server started or running
+      server fetched. Email delivery awaits the next separate user approval.
+
+## AI report failure diagnosis and approved LOW/timeout fix (2026-11-08)
+
+- [x] User reported generic generation failures. Local Next logs show Gemini ApiError on
+      Approvals and Security; direct read-only export/aggregate checks pass for all five workflows.
+- [x] Encrypted key/model load correctly. Google's model metadata confirms configured
+      `gemini-3.8-flash` supports content generation. No secrets or visitor records printed.
+- [x] Original synthetic request failed around 59 seconds with HTTP 504 DEADLINE_EXCEEDED.
+      LOW reasoning completed an empty synthetic report in 37 seconds and passed validation.
+- [x] User approved LOW reasoning for Gemini 3 plus clear timeout feedback. Implemented
+      in the existing helper; other models omit the unsupported thinking-level option.
+      Added typed timeout errors, safe SDK HTTP-status diagnostics, HTTP 504 propagation
+      through every endpoint and the same clear message for client timeout/abort.
+- [x] 79 SDK/report API tests pass, including real SDK serialization for Gemini 3/simple
+      and prefixed model IDs, compatibility with Gemini 2.5, timeout mapping and all workflow
+      authorization/export regressions. TypeScript and focused Biome/Oxlint checks pass.
+- [x] Live follow-up: six-record synthetic report on 3.8 still timed out; a longer diagnostic
+      request returned explicit HTTP 503 high demand. LOW alone has not reliably resolved this.
+- [x] Available model IDs checked using Google metadata. Same updated production helper
+      with `gemini-3.5-flash-lite` generated and validated the six-record synthetic report
+      in 2.6 seconds. This was a process-local override only; no saved model change.
+- [x] User approved switching encrypted `GEMINI_MODEL` to tested `gemini-3.5-flash-lite`.
+      Applied using `dotenvx set` with `--no-native --no-create`; verified encryption retained.
+- [x] Actual helper loaded the saved model (no process-local override) and generated/validated
+      a six-record synthetic Security report in 3.2 seconds, including executive summary/findings.
+- [ ] User should restart the running development server, refresh and test Generate Report.
+      Browser verification remains pending; email delivery is still a later step.
+- [x] No dev server started or running server fetched; logs read from disk. Diagnostic model
+      calls used only synthetic data, and no email was sent.
+
+## Formal AI reports without limitations (2026-11-08)
+
+- [x] User explicitly requested updating AI_REPORT_INSTRUCTIONS for formal reports, with
+      no data limitations or unnecessary commentary. Implemented directly within this scope.
+- [x] Prompt now targets concise management-ready prose under 500 words: brief executive
+      summary, up to three distinct findings, optional distinct workload analysis and only
+      evidence-based actions. Forbids conversational/methodological commentary, repeated
+      figures and missing-data discussion; retains factual, unit and workflow safety rules.
+- [x] Removed dataLimitations from the strict generated-output schema and word-count parser.
+      Input definitions remain internal context. Empty workload analysis is permitted.
+- [x] Shared preview removes its own appended limitations, shortens header scope and hides
+      empty findings/workload/actions rather than printing filler placeholders. Applies to all
+      five workflows. Updated fixtures and regression coverage for the revised output contract.
+- [x] 79 SDK/API tests and 33 domain/SQL/preview tests pass. TypeScript and focused lint/format
+      checks pass. Live synthetic Security report generated and validated in 1.8 seconds with
+      four output fields, no limitations and no repeated workload paragraph.
+- [ ] User should refresh and generate a new report to see the revised wording. No dev server
+      started, no running server fetched and no real visitor data sent in live verification.

@@ -17,6 +17,7 @@ import {
 } from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { TrainingExportButton } from "@/components/layout/training-export-button";
+import { WorkflowReportButton } from "@/components/layout/workflow-report-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -140,7 +141,12 @@ export default async function TrainingQueuePage({
             />
             <QueueSearch searchParam="q" pageParam="page" />
             {/* Last in the toolbar, after filter and search. */}
-            {session.systemRole !== "Guest" && <TrainingExportButton />}
+            {session.systemRole !== "Guest" && (
+              <>
+                <WorkflowReportButton workflow="Training" />
+                <TrainingExportButton />
+              </>
+            )}
           </div>
         </div>
 

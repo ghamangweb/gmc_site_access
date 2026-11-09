@@ -23,6 +23,7 @@ import {
   QueueTransitionProvider,
 } from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { WorkflowReportButton } from "@/components/layout/workflow-report-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -195,7 +196,12 @@ export default async function HospitalQueuePage({
             )}
             <QueueSearch searchParam="q" pageParam="page" />
             {/* Last in the toolbar, after filter and search. */}
-            {session.systemRole !== "Guest" && <HospitalExportButton />}
+            {session.systemRole !== "Guest" && (
+              <>
+                <WorkflowReportButton workflow="Hospital" />
+                <HospitalExportButton />
+              </>
+            )}
           </div>
         </div>
 

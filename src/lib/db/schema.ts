@@ -87,6 +87,13 @@ export const engagements = pgTable(
     delegationGrantedBy: uuid().references(() => staffUsers.id),
     delegationGrantedAt: timestamp({ withTimezone: true }),
     delegationReason: encryptedText(),
+    // Reception's request for a delegated approver. It is what puts the record
+    // in the System Admin's Delegation Requests tab; a grant takes it out
+    // (the request stays as history), and a revoke, a stakeholder approval or
+    // a rejection clears it, so Reception has to ask again.
+    delegationRequestedAt: timestamp({ withTimezone: true }),
+    delegationRequestedBy: uuid().references(() => staffUsers.id),
+    delegationRequestReason: encryptedText(),
   },
   (table) => [
     // Only one non-terminal (active) engagement per person at a time —

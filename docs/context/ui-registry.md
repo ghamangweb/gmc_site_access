@@ -1002,7 +1002,54 @@ gated on the same `canRequestApproval` condition as the approval actions
 ### ReceptionRow (row actions + Request Termination)
 
 File: `src/app/dashboard/(workflow)/reception/reception-row.tsx`
-Last updated: 2026-07-23
+Last updated: 2026-11-06
+
+**Request Approval item (2026-11-06):** menu order is View · Request Approval · Request
+Revocation. Request Approval (`canManage` only) calls `requestStakeholderApprovalAction` with the
+Stakeholder Approval panel's toasts, no dialog. Enabled only when the page's `canRequestApproval`
+holds (`AtReception` and `approvalRequestedAt === null`, which covers never-asked and rejected,
+since a rejection clears it); otherwise `disabled`, like Request Revocation. Delegated approval
+stays on the record page (needs a reason dialog).
+**Updated same day:** menu is now View · Request Approval · Request Delegated Approval · Request
+Revocation. Delegated is enabled for any `AtReception` record (`canRequestDelegated`, the record
+page's own rule — delegation is for a request nobody answers, so it isn't tied to Request Approval's
+rule). Both come from `src/components/workflow/approval-request-actions.tsx`: `useRequestApproval`
+(action + toasts) and `DelegatedApprovalDialog` (controlled; same copy as the Stakeholder Approval
+panel's dialog, resets its reason on close).
+
+### System Admin dashboard (tabs)
+
+File: `src/app/dashboard/system-admin/users/page.tsx`
+Last updated: 2026-11-06
+
+The admin landing page holds every admin table as `QueueViewTabs`, like the workflow queues:
+"Staff Users" (default, bare href) · "Delegation Requests" (`?view=requests`) · "Active
+Delegations" (`?view=active`). Header is Reception's pattern: "Welcome back, {firstName}!" + "Here,
+you'll manage staff access and delegated approvals." (the old "Delegated Approvals" header button is
+gone). One queue card (`overflow-hidden rounded-xl border border-border bg-card`) wraps
+`QueuePending` (fallback = the active tab's columns) inside `QueueTransitionProvider`; no toolbar, no
+pagination. Tables are async Server Components that fetch their own data: `StaffUsersTable`
+(`users/staff-users-table.tsx`), `DelegationRequestsTable` / `ActiveDelegationTable`
+(`delegations/delegation-tables.tsx`). Columns in `users/skeleton-columns.ts` and
+`delegations/skeleton-columns.ts`; `users/loading.tsx` is `QueuePageSkeleton tabs={3}` with the
+toolbar and pagination off. `/dashboard/system-admin/delegations` now only redirects to the matching
+tab (kept for the delegated-approval email link); admin actions revalidate `/dashboard/system-admin/users`.
+
+**Delegation Requests (2026-11-06):** lists only records with `delegationRequestedAt` set and no
+`delegatedApproverId`, newest first (2026-11-09). Columns Visitor · Reason (`max-w-xs whitespace-normal`) ·
+Requested By · Requested (`formatQueueDate`, muted) · Actions ("Grant"). `GrantDelegationRow`'s
+dialog defaults to the requesting receptionist and the request's reason, both editable.
+
+### RejectedRowActions
+
+File: `src/app/dashboard/(workflow)/reception/rejected-row-actions.tsx`
+Last updated: 2026-11-06
+
+Rejected tab's Actions cell, replacing the "Review" `Button size="sm"`: the standard row menu
+(ghost `size-8` icon trigger + `MoreVerticalIcon`, `align="end"`) with View · Request Approval ·
+Request Delegated Approval. The last two are `canManage` only and always enabled (a rejected record
+is `AtReception` with `approvalRequestedAt` cleared). Header is now "Actions"; `REJECTED_COLUMNS`
+skeleton uses `cell: "menu"`.
 
 **Whole-row navigation (2026-07-23):** Previously only the Name cell was a
 `Link` to the engagement detail page — every other cell (passport no., access
@@ -1745,6 +1792,10 @@ review-specific consequence text, and submits `submitHospitalReviewAction`. In b
 Conditions reveals an optional "Next Review Date" `DatePicker` with `minDate` = tomorrow (optional since 2026-11-05).
 `HospitalHandoff` adds a "Next Review Date" field (same label/value styles as comments) when set.
 `DatePicker` gained optional `minDate` (YYYY-MM-DD → `disabled={{ before }}`); existing callers unchanged.
+Optional `earlyReviewDate` (review mode only, set by the page when the reviewed clearance's
+`nextReviewDate` > today): a `rounded-md px-4 py-3 text-sm bg-status-warning-bg text-status-warning-fg`
+banner above "Last recorded" — same banner style as `TrainingForm`'s clearance-age warning. Warns only;
+the form stays enabled.
 
 **Awaiting Review tab (2026-11-04).** Third `QueueViewTabs` entry between Awaiting Clearance and
 Recorded Clearances (`?view=review`), with a count pill (`countAwaitingHospitalReviews`) shown on
@@ -2503,3 +2554,148 @@ All bell text comes from `notice.*` in `src/lib/domain/notification-messages.ts`
 names and ISO dates only. Write new notices there, in the same style: "{Name} has …" / "{Name}'s
 … has been …", one sentence, optional "Please …" for the action. Never inline a message string in
 a service.
+
+### Manual AI reports — preparation (2026-11-08)
+
+The approved Gemini prompt and server-only helper are implemented. No UI components or
+visual patterns were added in this step. The report button and preview await user approval.
+
+### Manual AI reports — Reception statistics (2026-11-08)
+
+Reception statistics now use inclusive UTC creation dates and current workflow states.
+They count engagements only; submissions are excluded. No UI components were added.
+The future preview must retain these scope definitions and show authoritative totals.
+
+### Manual AI reports — Reception endpoint (2026-11-08)
+
+`POST /api/reports/reception` accepts JSON `{ start, end }` from the same origin and
+returns `{ success: true, data: { statistics, report } }`. It requires Reception write
+access. Dates are inclusive UTC creation dates. Responses use `Cache-Control: no-store`.
+No UI added yet; button/date selection/preview remain pending approval. The existing GET
+Excel download is preserved.
+
+### ReceptionReportButton and ReceptionReportPreview (2026-11-08)
+
+The Reception-specific files now delegate to the shared workflow report components below.
+All dashboards use the shared implementation directly; its current placement is beside Export Data.
+
+Files: `src/components/layout/reception-report-button.tsx`,
+`src/components/workflow/reception-report-preview.tsx`.
+
+| Property | Pattern |
+| --- | --- |
+| Trigger | Shared outline `Button`, decorative Lucide `FileText`; beside New Registration in PageHeader's `flex items-center gap-2` actions |
+| Dialog | Existing `DialogContent`, `bg-background`, `border`, `rounded-lg`, `p-6`; scrolls within the viewport |
+| Preview surface | `bg-card border border-border rounded-xl p-6`; no nested cards or custom shadow |
+| Title | `text-lg font-semibold text-foreground` |
+| Section heading | `text-sm font-semibold text-foreground` |
+| Body | `text-sm leading-6 text-foreground`, `whitespace-pre-wrap break-words` for generated paragraphs |
+| Secondary text | `text-sm text-muted-foreground`; timestamps/ownership use `text-xs text-muted-foreground` |
+| Date legends | `mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground` inside semantic fieldsets |
+| Spacing | Dialog `gap-4`; preview `space-y-6`, sections `space-y-2`/`space-y-3` |
+| Statistics | Existing shadcn `Table`; right-aligned counts use `tabular-nums` |
+| Interactive states | Inherited shared Button/DatePicker hover, focus, disabled and loading states |
+
+**Pattern notes:** Visible only under Reception's existing `canManage`. Reuses DatePicker,
+defaults to month-to-date in UTC, caps dates at today and prevents reversed selections.
+Generate calls the protected endpoint; a ref prevents duplicate requests and controls/closing
+are disabled while pending. Status uses semantic `output`; errors/success use Sonner.
+Changing dates clears the prior preview; closing/reopening preserves it until dates change.
+Preview includes recorded totals, export-based metrics, executive summary, findings, workload,
+recommendations and combined authoritative/AI limitations. Dates display as `dd MMM yyyy`;
+generation time is explicit UTC. Generated text is rendered as escaped React text, never HTML.
+No email action or new download format was added in this step.
+
+### AI reporting backend expanded to all workflows (2026-11-08)
+
+All five existing `/api/reports/{workflow}` routes now support protected POST generation
+with `{ start, end }`. Response shape remains `{ success: true, data: { statistics, report } }`.
+Counts follow each export's rows/tabs and permission scope, including Approvals delegates.
+Dates select creation cohorts; the report includes explicit counting and date definitions.
+Reception now includes unconverted approved submissions. Its existing preview uses
+Total records / Metric / Records, and its dialog no longer claims submissions are excluded.
+Hospital totals count entries and Training totals count cycles, not unique people. The future
+shared preview must retain metric units/counting notes and support overlapping tab counts.
+No new visual patterns. Buttons on the other four dashboards await the next user approval.
+
+### WorkflowReportButton and WorkflowReportPreview (2026-11-08)
+
+Files: `src/components/layout/workflow-report-button.tsx`,
+`src/components/workflow/workflow-report-preview.tsx`.
+
+| Property | Shared pattern |
+| --- | --- |
+| Trigger | Outline `Button`, `h-11`, decorative `FileText`; immediately before Export Data in each queue toolbar |
+| Dialog | Existing Dialog surface/border/radius and `p-6`; `gap-4`, bounded scrolling; no custom colors/shadow |
+| Preview | `bg-card border border-border rounded-xl p-6 space-y-6` |
+| Title | `text-lg font-semibold text-foreground` |
+| Section headings | `text-sm font-semibold text-foreground` |
+| Body | `text-sm leading-6 text-foreground`, generated text uses `whitespace-pre-wrap break-words` |
+| Secondary | `text-sm text-muted-foreground`; timestamps/ownership use `text-xs text-muted-foreground` |
+| Form labels | Fieldset legends, `mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground` |
+| Statistics | Shared Table with Metric / Count / Unit columns; right-aligned `tabular-nums` counts |
+| Interaction | Inherited Button/DatePicker hover/focus/disabled states; spinner and Generating... while pending |
+
+**Pattern notes:** All five dashboards show Generate Report inside the exact condition used
+for Export Data (Reception `canManage`; other pages' existing non-Guest export visibility,
+with their normal page authorization). Reception's header keeps New Registration only.
+The workflow prop selects its endpoint, dialog title, scope note, result title and total label.
+Presentation text lives in `lib/domain/workflow-report-presentation.ts`. Hospital totals are
+report entries, Training workflow cycles, Security engagements and Approvals approval records.
+Each metric retains its own unit. Counting definitions remain internal; the preview shows a
+concise creation-period description rather than a limitations section (revised 2026-11-08).
+The dialog preserves date validation, duplicate prevention, loading feedback, escaped text,
+and Sonner errors. It rejects responses for a different workflow or date range.
+Reception-specific component names are thin compatibility wrappers; reuse the shared components
+for any further UI changes. Email delivery is not part of this approved step.
+
+**Timeout feedback (2026-11-08):** Server-side Gemini deadline errors and client timeout/abort
+errors now use the existing Sonner error toast with "Report generation took too long. Please
+try again." Status 504 is retained by every workflow endpoint. No visual styles changed.
+
+**Verified runtime model (2026-11-08):** User approved `gemini-3.5-flash-lite` in the encrypted
+development environment after 3.8 Flash returned deadline/high-demand errors. The saved
+configuration generated a validated synthetic Security report in 3.2 seconds. An existing
+server needs to reload the changed environment; browser verification remains with the user.
+
+**Formal report presentation (2026-11-08):** User requested formal, concise reports without
+data limitations or unnecessary content. The limitations section is removed from both the
+AI output contract and shared preview. Header scope is one concise creation-period statement.
+Key findings, workload analysis and recommended actions render only when populated; empty
+placeholder messages are removed. Existing typography, surfaces, spacing and metric units
+are unchanged. Input counting definitions remain internal accuracy context.
+
+**Grouped statistics and DOCX/PDF downloads (2026-11-09):** "Recorded statistics" is now
+grouped in a fixed order: Dashboard tabs, Current status, Period activity, Current queue.
+Each group has an uppercase `text-xs font-medium tracking-wide text-muted-foreground` title,
+a one-line `text-xs text-muted-foreground` note, and its own `Table`. Columns: Metric, This
+period, Share (cohort groups only, `% of total`), Previous period (period activity only, when
+a comparison exists). The repeated Unit column is gone; hours show as "31.4 hours". The total
+line adds the previous total in `text-muted-foreground`. Grouping and formatting live in
+`lib/domain/report-document.ts`, which the preview, DOCX and PDF all read.
+Dialog footer: Close + Generate Report until a report exists, then Close + Download DOCX
+(outline) + Download PDF (default), each with a `Download` icon and Button `loading` while
+building. Changing either date clears the report, so Generate Report returns. Files are built
+client-side (`lib/report-docx.ts`, `lib/report-pdf.ts`, loaded on click) and named
+`<workflow>-report-<start>-to-<end>.<ext>`. Document layout: GMC logo, organisation line,
+title, period, generated time, scope, primary rule, blue section headings with a hairline
+underline, tables with a primary header row and alternating muted rows, footer
+"GMC Site Access · Internal management report · Page X of Y". Document colours come from
+`REPORT_DOCUMENT_PALETTE` (light-theme token copy) in `lib/report-document-style.ts`.
+
+**AI indicators and "AI working" state (2026-11-09):** AI-generated content is marked with
+lucide `Sparkles` in `text-primary`: the dashboard "Generate Report" trigger (outline button),
+the dialog title, and an "AI note" line (`text-xs text-muted-foreground`, `size-3.5` icon)
+at the foot of the preview header. DOCX/PDF carry the same note under the scope line.
+While generating, the footer Generate button has **no spinner and no `loading` prop**: it keeps
+full opacity (`aria-disabled` + `aria-busy` + `pointer-events-none`), the Sparkles icon uses
+`animate-pulse`, and the label is `AiShimmerText` ("Generating..."). The dialog body shows
+`AiReportProgress` (`components/workflow/ai-report-progress.tsx`): a card with a pulsing
+Sparkles icon, a shimmering status line stepping through "Collecting the recorded
+statistics" → "Analysing the figures with AI" → "Writing the report" every 2.5 s (stops on
+the last), and four shimmer bars (`from-muted via-primary/15 to-muted`). The status text is
+also announced through the existing `<output>` (visually hidden while generating).
+Shimmer = `animate-shimmer bg-linear-to-r bg-size-[200%_100%]` (+ `bg-clip-text
+text-transparent` for text); the `--animate-shimmer` token and keyframes live in
+`globals.css`. Every animation has `motion-reduce:animate-none`. Reuse these for any future
+AI feature instead of a spinner.

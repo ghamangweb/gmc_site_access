@@ -17,6 +17,7 @@ import {
   QueueTransitionProvider,
 } from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
+import { WorkflowReportButton } from "@/components/layout/workflow-report-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   Table,
@@ -212,7 +213,12 @@ export default async function ApprovalsQueuePage({
             />
             <QueueSearch searchParam="q" pageParam="page" />
             {/* Last in the toolbar, after filter and search. */}
-            {session.systemRole !== "Guest" && <ApprovalsExportButton />}
+            {session.systemRole !== "Guest" && (
+              <>
+                <WorkflowReportButton workflow="Approvals" />
+                <ApprovalsExportButton />
+              </>
+            )}
           </div>
         </div>
 

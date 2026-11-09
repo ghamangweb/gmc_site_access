@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { formatQueueDate } from "@/lib/utils";
 
 type Receptionist = { id: string; displayName: string };
 
@@ -30,18 +31,31 @@ type GrantDelegationRowProps = {
   engagementId: string;
   personName: string;
   receptionists: Receptionist[];
+  /** Reception's request: shown in the row, and the dialog's defaults. */
+  requestReason: string;
+  requestedById: string | null;
+  requestedByName: string;
+  requestedAt: Date;
 };
 
 export function GrantDelegationRow({
   engagementId,
   personName,
   receptionists,
+  requestReason,
+  requestedById,
+  requestedByName,
+  requestedAt,
 }: GrantDelegationRowProps) {
   const [open, setOpen] = useState(false);
+  // The receptionist who asked is the usual delegate, and their reason the
+  // usual grant reason; the System Admin can change either.
   const [receptionistId, setReceptionistId] = useState(
-    receptionists[0]?.id ?? "",
+    receptionists.find((r) => r.id === requestedById)?.id ??
+      receptionists[0]?.id ??
+      "",
   );
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(requestReason);
   const [isPending, startTransition] = useTransition();
 
   function handleGrant() {
@@ -67,6 +81,13 @@ export function GrantDelegationRow({
   return (
     <TableRow>
       <TableCell>{personName}</TableCell>
+      <TableCell className="max-w-xs whitespace-normal">
+        {requestReason || "-"}
+      </TableCell>
+      <TableCell>{requestedByName}</TableCell>
+      <TableCell className="text-muted-foreground">
+        {formatQueueDate(requestedAt)}
+      </TableCell>
       <TableCell className="text-right">
         <Button
           size="sm"

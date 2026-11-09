@@ -242,6 +242,8 @@ export async function requestStakeholderApprovalAction(
       }
     }
 
+    // The queue too: its row menu can request approval as well.
+    revalidatePath("/dashboard/reception");
     revalidatePath(`/dashboard/reception/${engagementId}`);
     revalidatePath("/dashboard/approvals");
 
@@ -544,7 +546,11 @@ export async function requestDelegatedApprovalAction(
       return { success: false, error: "Reason is required" };
     }
 
-    const { recipients } = await requestDelegatedApproval(engagementId, reason);
+    const { recipients } = await requestDelegatedApproval(
+      engagementId,
+      reason,
+      session.staffUserId,
+    );
     const detail = await getEngagementDetail(engagementId);
 
     let allSent = true;
@@ -563,6 +569,8 @@ export async function requestDelegatedApprovalAction(
     }
 
     revalidatePath(`/dashboard/reception/${engagementId}`);
+    // The System Admin dashboard's Delegation Requests tab lists it now.
+    revalidatePath("/dashboard/system-admin/users");
     return allSent
       ? { success: true }
       : {

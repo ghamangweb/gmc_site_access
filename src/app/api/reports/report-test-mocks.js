@@ -6,6 +6,11 @@ export const requirePinConfirmed = mock();
 export const exportTrainingRows = mock(async () => []);
 export const exportSecurityRows = mock(async () => []);
 export const exportReceptionRows = mock(async () => []);
+
+export const generateReceptionAiReport = mock();
+
+export const generateWorkflowAiReport = mock();
+
 export const exportHospitalRows = mock(async () => []);
 export const exportApprovalsRows = mock(async () => []);
 export const countEngagementsAwaitingApproval = mock(async () => 0);
@@ -26,6 +31,15 @@ mock.module("@/lib/auth/guards", () => ({
   requireWriteAccess,
   requirePinConfirmed,
 }));
+
+mock.module("@/lib/services/reception-ai-report-service", () => ({
+  generateReceptionAiReport,
+}));
+
+mock.module("@/lib/services/workflow-ai-report-service", () => ({
+  generateWorkflowAiReport,
+}));
+
 mock.module("@/lib/services/workflow-service", () => ({
   exportTrainingRows,
   exportSecurityRows,

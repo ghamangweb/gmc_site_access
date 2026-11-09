@@ -26,5 +26,5 @@ export const REJECTED_COLUMNS: SkeletonColumn[] = [
   { header: "Rejected By", cell: "text" },
   { header: "Reason", cell: "long" },
   { header: "Rejected", cell: "date" },
-  { header: "Action", cell: "button", align: "right" },
+  { header: "Actions", cell: "menu", align: "right" },
 ];

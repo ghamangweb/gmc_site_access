@@ -305,3 +305,92 @@ Provenance (source repo, upstream commit if known, intentional deviations):
 Findings in actual project code are **not** auto-fixed by the install —
 see `progress-tracker.md`/ask the user before running any bulk fix pass.
 ---
+
+## Gemini reports (`@google/genai`)
+
+- User installed SDK 3.x. It requires Node.js 22 or later; local Node is 26.x.
+- Import the SDK only in the server-only `src/lib/services/ai-report-service.ts`.
+- Read `GEMINI_API_KEY` and `GEMINI_MODEL` from the encrypted environment at invocation;
+  never use a `NEXT_PUBLIC_` key or log credentials, request data or raw SDK errors.
+- `generateAiReport` accepts strict aggregate statistics, not raw visitor records. Callers
+  must authorize the workflow and prepare non-identifying metrics before invoking it.
+- Approved instructions and Zod schemas live in `src/lib/domain/ai-report.ts`. Supply the
+  output schema through `responseJsonSchema` with `responseMimeType: "application/json"`.
+- Validate generated JSON, require a completed response, and enforce the word limit.
+  Schema validation does not establish factual accuracy; display server-calculated metrics
+  alongside the analysis and escape generated text when building email HTML.
+- Requests use a 60-second timeout and one attempt. Gemini 3 model IDs (including
+  `models/`-prefixed IDs) explicitly use `ThinkingLevel.LOW`; older models omit this setting.
+- Google HTTP 504 and SDK/browser timeout/abort errors become the safe message "Report
+  generation took too long. Please try again." The endpoint preserves HTTP 504 instead of
+  replacing it with a generic 500. SDK logs include only error class and HTTP status.
+- Reception generation is now exposed through `POST /api/reports/reception` with a strict
+  `{ start, end }` body, same-origin JSON requests and Reception write access. Its service
+  returns both authoritative `statistics` and the structured AI `report`. Do not accept
+  caller-supplied statistics, prompts, models or recipient emails through this endpoint.
+- API contract tests replace services through the existing shared Bun report fixture;
+  they do not execute database queries, call Gemini or send emails.
+- Generation POSTs now exist for all five export workflows via `lib/ai-report-request.ts`;
+  route-selected workflows, models, prompts and delegate scope are never accepted from JSON.
+  Approvals delegates are restricted to their authenticated pending/signed export scope.
+- `workflow-ai-report-service.ts` reuses existing export readers with an optional
+  `ReportCreationWindow`. Existing GET exports omit this window and stay unfiltered.
+  Selected dates apply to engagement creation (or unconverted submission creation at
+  Reception), not clearance/approval/activation dates. Preserve this definition in the UI.
+- Export readers load their usual data server-side. `workflow-ai-report.ts` serializes only
+  fixed-label tab/status counts for Gemini; never forward rows, names, medical comments,
+  document details or reasons. Reuse export tab predicates instead of duplicating them.
+- Totals count export rows: Hospital entries and Training cycles can repeat a person.
+  Tab/outcome metrics can overlap. Keep these definitions in the AI input; the preview
+  retains metric units and a concise creation-period description without a limitations section.
+- Live diagnosis (2026-11-08): configured `gemini-3.8-flash` returned deadline errors and
+  explicit HTTP 503 high-demand responses. LOW completed an empty report in 37 seconds,
+  but a six-record synthetic report still hit the deadline. The same updated helper with
+  `gemini-3.5-flash-lite` generated and validated that synthetic report in 2.6 seconds.
+  User subsequently approved switching the saved `GEMINI_MODEL` to
+  `gemini-3.5-flash-lite`. Applied with `dotenvx set ... --no-native --no-create`;
+  the stored value remains encrypted. The actual helper using this saved configuration
+  generated and validated a six-record synthetic Security report in 3.2 seconds.
+  Restart an already-running server after this environment change. No real visitor data
+  was sent during either verification.
+- Report content audit fixes (2026-11-09): metrics carry a `group` (Dashboard tabs, Current
+  status, Period activity, Current queue). `services/report-activity-service.ts` reads
+  `workflow_transitions`, `stakeholder_approvals` and `stakeholder_rejections` for activity
+  during the period (completions, median hours in stage, stakeholder rejections for Reception
+  and Approvals) and the current queue with >3/>7-day ageing. Stage entry is the latest
+  transition into the stage, falling back to engagement creation. Approvals delegates stay
+  scoped to their own decisions and assigned requests. `comparison` is now filled for the
+  preceding equal-length period with the total and period activity only (current statuses of an
+  older cohort aren't comparable), and is null when that period has no data. Queries run
+  sequentially because `client` may be a transaction. The prompt gained one paragraph on
+  groups and comparisons; nothing else in it changed.
+- Formal report revision (2026-11-08): AI output now has four fields: executiveSummary,
+  keyFindings, workloadAnalysis and recommendedActions. It has no dataLimitations field.
+  Input dataLimitations remain internal interpretation context and must not be copied into
+  prose. The prompt targets under 500 words, avoids repeated figures and conversational/
+  methodological commentary, and permits empty workload analysis when no distinct supported
+  observation exists. The parser retains its 650-word safety cap. Empty output sections are hidden.
+
+## Report documents (`docx` v9, `pdfmake` v0.3) — added 2026-11-09
+
+User-approved for the AI report's Download DOCX / Download PDF buttons.
+- **Client only, loaded on click.** `workflow-report-button.tsx` dynamically imports
+  `lib/report-docx.ts` / `lib/report-pdf.ts`; never import them statically from a page or
+  component, or both libraries land in the dashboard bundle.
+- Both builders take the `ReportDocument` from `lib/domain/report-document.ts`; the preview
+  uses the same model. Change layout content there, not per format.
+- They render the report already on screen. Never call Gemini again for a download: the
+  wording would differ from what the user reviewed.
+- Colours: Word/PDF can't read CSS variables, so `REPORT_DOCUMENT_PALETTE` in
+  `lib/report-document-style.ts` is the only place holding the light-theme hex values. Keep
+  it in step with `ui-tokens.md`.
+- pdfmake: import `pdfmake/build/pdfmake` and register
+  `pdfmake/build/standard-fonts/Helvetica` with `addFontContainer` (avoids the 850 KB Roboto
+  vfs). Set `defaultStyle.font: "Helvetica"`. 0.3 has no types; `src/lib/pdfmake.d.ts`
+  declares the subset used. `getBlob()` returns a Promise.
+- pdfmake images: pass the logo as a **JPEG** data URL. Transparent PNGs stalled pdfmake's
+  PNG decoder (tested under Bun, even at 480 px); JPEG renders in ~0.2 s. `loadReportLogo`
+  scales `public/logo_whitebg.png` to 480 px on a white canvas and returns PNG bytes for DOCX
+  and a JPEG data URL for PDF. A failed logo load returns null and the report still downloads.
+- docx: tables use fixed DXA column widths (`columnWidths` + cell `width`); AUTOFIT gave
+  equal-width columns in Word/LibreOffice. `Packer.toBlob` in the browser.

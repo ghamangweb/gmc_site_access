@@ -1,3 +1,4 @@
+import { handleAiReportRequest } from "@/lib/ai-report-request";
 import { requireWriteAccess } from "@/lib/auth/guards";
 import { buildReportSheets, TRAINING_SHEETS } from "@/lib/domain/report-sheets";
 import { TRAINING_REPORT_HEADERS } from "@/lib/domain/training-report";
@@ -43,4 +44,8 @@ export async function GET(_request: Request): Promise<Response> {
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }
+}
+
+export function POST(request: Request): Promise<Response> {
+  return handleAiReportRequest(request, "Training");
 }
