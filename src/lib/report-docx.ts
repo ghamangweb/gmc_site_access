@@ -274,9 +274,7 @@ function header(content: ReportDocument, logo: ReportLogo | null): Paragraph[] {
           space: 8,
         },
       },
-      children: [
-        text(content.aiNote, { size: SMALL, color: PALETTE.mutedForeground }),
-      ],
+      children: [],
     }),
   ];
 }

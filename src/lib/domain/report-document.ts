@@ -30,7 +30,6 @@ export type ReportDocument = {
   period: string;
   generated: string;
   scope: string;
-  aiNote: string;
   totalLabel: string;
   total: string;
   previousTotal: string | null;
@@ -144,8 +143,6 @@ export function reportDocument(result: GeneratedAiReport): ReportDocument {
         ? "Submissions and engagements created during the selected period."
         : "Engagements created during the selected period."
     } Statuses reflect the time of generation.`,
-    aiNote:
-      "Written by AI from the recorded statistics below. The figures are calculated by the system.",
     totalLabel: presentation.totalLabel,
     total: count(statistics.totalRecords),
     previousTotal: statistics.comparison

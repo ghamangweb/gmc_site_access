@@ -99,6 +99,8 @@ Do not include a data limitations section, methodological notes,
 technical details, disclaimers or commentary about missing data,
 unavailable comparisons or the report-generation process. Simply
 omit claims that the supplied figures do not support.
+Do not include AI authorship statements or explanations of how the
+system calculates the figures.
 
 Use only as much detail as the figures justify. Keep the entire
 report under 500 words.
