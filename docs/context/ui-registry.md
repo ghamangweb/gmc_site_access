@@ -2503,3 +2503,113 @@ All bell text comes from `notice.*` in `src/lib/domain/notification-messages.ts`
 names and ISO dates only. Write new notices there, in the same style: "{Name} has …" / "{Name}'s
 … has been …", one sentence, optional "Please …" for the action. Never inline a message string in
 a service.
+
+### Manual AI reports — preparation (2026-11-08)
+
+The approved Gemini prompt and server-only helper are implemented. No UI components or
+visual patterns were added in this step. The report button and preview await user approval.
+
+### Manual AI reports — Reception statistics (2026-11-08)
+
+Reception statistics now use inclusive UTC creation dates and current workflow states.
+They count engagements only; submissions are excluded. No UI components were added.
+The future preview must retain these scope definitions and show authoritative totals.
+
+### Manual AI reports — Reception endpoint (2026-11-08)
+
+`POST /api/reports/reception` accepts JSON `{ start, end }` from the same origin and
+returns `{ success: true, data: { statistics, report } }`. It requires Reception write
+access. Dates are inclusive UTC creation dates. Responses use `Cache-Control: no-store`.
+No UI added yet; button/date selection/preview remain pending approval. The existing GET
+Excel download is preserved.
+
+### ReceptionReportButton and ReceptionReportPreview (2026-11-08)
+
+The Reception-specific files now delegate to the shared workflow report components below.
+All dashboards use the shared implementation directly; its current placement is beside Export Data.
+
+Files: `src/components/layout/reception-report-button.tsx`,
+`src/components/workflow/reception-report-preview.tsx`.
+
+| Property | Pattern |
+| --- | --- |
+| Trigger | Shared outline `Button`, decorative Lucide `FileText`; beside New Registration in PageHeader's `flex items-center gap-2` actions |
+| Dialog | Existing `DialogContent`, `bg-background`, `border`, `rounded-lg`, `p-6`; scrolls within the viewport |
+| Preview surface | `bg-card border border-border rounded-xl p-6`; no nested cards or custom shadow |
+| Title | `text-lg font-semibold text-foreground` |
+| Section heading | `text-sm font-semibold text-foreground` |
+| Body | `text-sm leading-6 text-foreground`, `whitespace-pre-wrap break-words` for generated paragraphs |
+| Secondary text | `text-sm text-muted-foreground`; timestamps/ownership use `text-xs text-muted-foreground` |
+| Date legends | `mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground` inside semantic fieldsets |
+| Spacing | Dialog `gap-4`; preview `space-y-6`, sections `space-y-2`/`space-y-3` |
+| Statistics | Existing shadcn `Table`; right-aligned counts use `tabular-nums` |
+| Interactive states | Inherited shared Button/DatePicker hover, focus, disabled and loading states |
+
+**Pattern notes:** Visible only under Reception's existing `canManage`. Reuses DatePicker,
+defaults to month-to-date in UTC, caps dates at today and prevents reversed selections.
+Generate calls the protected endpoint; a ref prevents duplicate requests and controls/closing
+are disabled while pending. Status uses semantic `output`; errors/success use Sonner.
+Changing dates clears the prior preview; closing/reopening preserves it until dates change.
+Preview includes recorded totals, export-based metrics, executive summary, findings, workload,
+recommendations and combined authoritative/AI limitations. Dates display as `dd MMM yyyy`;
+generation time is explicit UTC. Generated text is rendered as escaped React text, never HTML.
+No email action or new download format was added in this step.
+
+### AI reporting backend expanded to all workflows (2026-11-08)
+
+All five existing `/api/reports/{workflow}` routes now support protected POST generation
+with `{ start, end }`. Response shape remains `{ success: true, data: { statistics, report } }`.
+Counts follow each export's rows/tabs and permission scope, including Approvals delegates.
+Dates select creation cohorts; the report includes explicit counting and date definitions.
+Reception now includes unconverted approved submissions. Its existing preview uses
+Total records / Metric / Records, and its dialog no longer claims submissions are excluded.
+Hospital totals count entries and Training totals count cycles, not unique people. The future
+shared preview must retain metric units/counting notes and support overlapping tab counts.
+No new visual patterns. Buttons on the other four dashboards await the next user approval.
+
+### WorkflowReportButton and WorkflowReportPreview (2026-11-08)
+
+Files: `src/components/layout/workflow-report-button.tsx`,
+`src/components/workflow/workflow-report-preview.tsx`.
+
+| Property | Shared pattern |
+| --- | --- |
+| Trigger | Outline `Button`, `h-11`, decorative `FileText`; immediately before Export Data in each queue toolbar |
+| Dialog | Existing Dialog surface/border/radius and `p-6`; `gap-4`, bounded scrolling; no custom colors/shadow |
+| Preview | `bg-card border border-border rounded-xl p-6 space-y-6` |
+| Title | `text-lg font-semibold text-foreground` |
+| Section headings | `text-sm font-semibold text-foreground` |
+| Body | `text-sm leading-6 text-foreground`, generated text uses `whitespace-pre-wrap break-words` |
+| Secondary | `text-sm text-muted-foreground`; timestamps/ownership use `text-xs text-muted-foreground` |
+| Form labels | Fieldset legends, `mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground` |
+| Statistics | Shared Table with Metric / Count / Unit columns; right-aligned `tabular-nums` counts |
+| Interaction | Inherited Button/DatePicker hover/focus/disabled states; spinner and Generating... while pending |
+
+**Pattern notes:** All five dashboards show Generate Report inside the exact condition used
+for Export Data (Reception `canManage`; other pages' existing non-Guest export visibility,
+with their normal page authorization). Reception's header keeps New Registration only.
+The workflow prop selects its endpoint, dialog title, scope note, result title and total label.
+Presentation text lives in `lib/domain/workflow-report-presentation.ts`. Hospital totals are
+report entries, Training workflow cycles, Security engagements and Approvals approval records.
+Each metric retains its own unit. Counting definitions remain internal; the preview shows a
+concise creation-period description rather than a limitations section (revised 2026-11-08).
+The dialog preserves date validation, duplicate prevention, loading feedback, escaped text,
+and Sonner errors. It rejects responses for a different workflow or date range.
+Reception-specific component names are thin compatibility wrappers; reuse the shared components
+for any further UI changes. Email delivery is not part of this approved step.
+
+**Timeout feedback (2026-11-08):** Server-side Gemini deadline errors and client timeout/abort
+errors now use the existing Sonner error toast with "Report generation took too long. Please
+try again." Status 504 is retained by every workflow endpoint. No visual styles changed.
+
+**Verified runtime model (2026-11-08):** User approved `gemini-3.5-flash-lite` in the encrypted
+development environment after 3.8 Flash returned deadline/high-demand errors. The saved
+configuration generated a validated synthetic Security report in 3.2 seconds. An existing
+server needs to reload the changed environment; browser verification remains with the user.
+
+**Formal report presentation (2026-11-08):** User requested formal, concise reports without
+data limitations or unnecessary content. The limitations section is removed from both the
+AI output contract and shared preview. Header scope is one concise creation-period statement.
+Key findings, workload analysis and recommended actions render only when populated; empty
+placeholder messages are removed. Existing typography, surfaces, spacing and metric units
+are unchanged. Input counting definitions remain internal accuracy context.

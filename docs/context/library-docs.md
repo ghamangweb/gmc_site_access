@@ -305,3 +305,57 @@ Provenance (source repo, upstream commit if known, intentional deviations):
 Findings in actual project code are **not** auto-fixed by the install —
 see `progress-tracker.md`/ask the user before running any bulk fix pass.
 ---
+
+## Gemini reports (`@google/genai`)
+
+- User installed SDK 3.x. It requires Node.js 22 or later; local Node is 26.x.
+- Import the SDK only in the server-only `src/lib/services/ai-report-service.ts`.
+- Read `GEMINI_API_KEY` and `GEMINI_MODEL` from the encrypted environment at invocation;
+  never use a `NEXT_PUBLIC_` key or log credentials, request data or raw SDK errors.
+- `generateAiReport` accepts strict aggregate statistics, not raw visitor records. Callers
+  must authorize the workflow and prepare non-identifying metrics before invoking it.
+- Approved instructions and Zod schemas live in `src/lib/domain/ai-report.ts`. Supply the
+  output schema through `responseJsonSchema` with `responseMimeType: "application/json"`.
+- Validate generated JSON, require a completed response, and enforce the word limit.
+  Schema validation does not establish factual accuracy; display server-calculated metrics
+  alongside the analysis and escape generated text when building email HTML.
+- Requests use a 60-second timeout and one attempt. Gemini 3 model IDs (including
+  `models/`-prefixed IDs) explicitly use `ThinkingLevel.LOW`; older models omit this setting.
+- Google HTTP 504 and SDK/browser timeout/abort errors become the safe message "Report
+  generation took too long. Please try again." The endpoint preserves HTTP 504 instead of
+  replacing it with a generic 500. SDK logs include only error class and HTTP status.
+- Reception generation is now exposed through `POST /api/reports/reception` with a strict
+  `{ start, end }` body, same-origin JSON requests and Reception write access. Its service
+  returns both authoritative `statistics` and the structured AI `report`. Do not accept
+  caller-supplied statistics, prompts, models or recipient emails through this endpoint.
+- API contract tests replace services through the existing shared Bun report fixture;
+  they do not execute database queries, call Gemini or send emails.
+- Generation POSTs now exist for all five export workflows via `lib/ai-report-request.ts`;
+  route-selected workflows, models, prompts and delegate scope are never accepted from JSON.
+  Approvals delegates are restricted to their authenticated pending/signed export scope.
+- `workflow-ai-report-service.ts` reuses existing export readers with an optional
+  `ReportCreationWindow`. Existing GET exports omit this window and stay unfiltered.
+  Selected dates apply to engagement creation (or unconverted submission creation at
+  Reception), not clearance/approval/activation dates. Preserve this definition in the UI.
+- Export readers load their usual data server-side. `workflow-ai-report.ts` serializes only
+  fixed-label tab/status counts for Gemini; never forward rows, names, medical comments,
+  document details or reasons. Reuse export tab predicates instead of duplicating them.
+- Totals count export rows: Hospital entries and Training cycles can repeat a person.
+  Tab/outcome metrics can overlap. Keep these definitions in the AI input; the preview
+  retains metric units and a concise creation-period description without a limitations section.
+- Live diagnosis (2026-11-08): configured `gemini-3.8-flash` returned deadline errors and
+  explicit HTTP 503 high-demand responses. LOW completed an empty report in 37 seconds,
+  but a six-record synthetic report still hit the deadline. The same updated helper with
+  `gemini-3.5-flash-lite` generated and validated that synthetic report in 2.6 seconds.
+  User subsequently approved switching the saved `GEMINI_MODEL` to
+  `gemini-3.5-flash-lite`. Applied with `dotenvx set ... --no-native --no-create`;
+  the stored value remains encrypted. The actual helper using this saved configuration
+  generated and validated a six-record synthetic Security report in 3.2 seconds.
+  Restart an already-running server after this environment change. No real visitor data
+  was sent during either verification.
+- Formal report revision (2026-11-08): AI output now has four fields: executiveSummary,
+  keyFindings, workloadAnalysis and recommendedActions. It has no dataLimitations field.
+  Input dataLimitations remain internal interpretation context and must not be copied into
+  prose. The prompt targets under 500 words, avoids repeated figures and conversational/
+  methodological commentary, and permits empty workload analysis when no distinct supported
+  observation exists. The parser retains its 650-word safety cap. Empty output sections are hidden.

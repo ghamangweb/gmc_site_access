@@ -1,3 +1,4 @@
+import { handleAiReportRequest } from "@/lib/ai-report-request";
 import { requirePinConfirmed } from "@/lib/auth/guards";
 import { APPROVALS_REPORT_HEADERS } from "@/lib/domain/approvals-report";
 import {
@@ -72,4 +73,8 @@ export async function GET(_request: Request): Promise<Response> {
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }
+}
+
+export function POST(request: Request): Promise<Response> {
+  return handleAiReportRequest(request, "Approvals");
 }

@@ -68,6 +68,7 @@ import {
   RECEPTION_REPORT_HEADERS,
   receptionReportRows,
 } from "@/lib/domain/reception-report";
+import type { ReportCreationWindow } from "@/lib/domain/report-creation-window";
 import {
   SECURITY_REPORT_HEADERS,
   securityReportRows,
@@ -109,6 +110,7 @@ import {
   type WorkflowExemptionMessage,
   workflowExemptionNotification,
 } from "@/lib/domain/workflow-exemptions";
+import { reportCreationCondition } from "@/lib/report-query";
 import type { StaffUser } from "@/lib/services/auth-service";
 import {
   getDocumentsForEngagement,
@@ -3092,6 +3094,7 @@ export async function listRecentInductions(
 export async function exportApprovalsRows(
   delegatedApproverId?: string,
   client: DbClient = db,
+  window?: ReportCreationWindow,
 ): Promise<string[][]> {
   const batchSize = 500;
 
@@ -3123,23 +3126,26 @@ export async function exportApprovalsRows(
             eq(stakeholderApprovals.engagementId, engagements.id),
           )
           .where(
-            or(
-              and(
-                eq(engagements.workflowState, "AtReception"),
-                isNotNull(engagements.approvalRequestedAt),
-                isNull(stakeholderApprovals.id),
-                delegatedApproverId
-                  ? eq(engagements.delegatedApproverId, delegatedApproverId)
-                  : undefined,
-              ),
-              and(
-                isNotNull(stakeholderApprovals.id),
-                delegatedApproverId
-                  ? eq(
-                      stakeholderApprovals.approverStaffUserId,
-                      delegatedApproverId,
-                    )
-                  : undefined,
+            and(
+              reportCreationCondition(engagements.createdAt, window),
+              or(
+                and(
+                  eq(engagements.workflowState, "AtReception"),
+                  isNotNull(engagements.approvalRequestedAt),
+                  isNull(stakeholderApprovals.id),
+                  delegatedApproverId
+                    ? eq(engagements.delegatedApproverId, delegatedApproverId)
+                    : undefined,
+                ),
+                and(
+                  isNotNull(stakeholderApprovals.id),
+                  delegatedApproverId
+                    ? eq(
+                        stakeholderApprovals.approverStaffUserId,
+                        delegatedApproverId,
+                      )
+                    : undefined,
+                ),
               ),
             ),
           )
@@ -3249,6 +3255,7 @@ export async function exportApprovalsCsv(
 
 export async function exportHospitalRows(
   client: DbClient = db,
+  window?: ReportCreationWindow,
 ): Promise<string[][]> {
   const batchSize = 500;
 
@@ -3273,7 +3280,10 @@ export async function exportHospitalRows(
           .from(workflowCycles)
           .innerJoin(
             engagements,
-            eq(workflowCycles.engagementId, engagements.id),
+            and(
+              eq(workflowCycles.engagementId, engagements.id),
+              reportCreationCondition(engagements.createdAt, window),
+            ),
           )
           .innerJoin(persons, eq(engagements.personId, persons.id))
           .where(
@@ -3393,6 +3403,7 @@ export async function exportHospitalCsv(
 
 export async function exportReceptionRows(
   client: DbClient = db,
+  window?: ReportCreationWindow,
 ): Promise<string[][]> {
   const batchSize = 500;
 
@@ -3409,6 +3420,7 @@ export async function exportReceptionRows(
             and(
               eq(registrationRequests.status, "Approved"),
               isNull(registrationRequests.engagementId),
+              reportCreationCondition(registrationRequests.createdAt, window),
             ),
           )
           .orderBy(registrationRequests.id)
@@ -3459,6 +3471,7 @@ export async function exportReceptionRows(
           })
           .from(engagements)
           .innerJoin(persons, eq(engagements.personId, persons.id))
+          .where(reportCreationCondition(engagements.createdAt, window))
           .orderBy(engagements.id)
           .limit(batchSize)
           .offset(offset);
@@ -3575,6 +3588,7 @@ export async function exportReceptionCsv(
 
 export async function exportSecurityRows(
   client: DbClient = db,
+  window?: ReportCreationWindow,
 ): Promise<string[][]> {
   const batchSize = 500;
 
@@ -3590,7 +3604,13 @@ export async function exportSecurityRows(
             passport: persons.passportNo,
           })
           .from(engagements)
-          .innerJoin(persons, eq(engagements.personId, persons.id))
+          .innerJoin(
+            persons,
+            and(
+              eq(engagements.personId, persons.id),
+              reportCreationCondition(engagements.createdAt, window),
+            ),
+          )
           .where(
             or(
               and(
@@ -3762,6 +3782,7 @@ export async function exportSecurityCsv(
 
 export async function exportTrainingRows(
   client: DbClient = db,
+  window?: ReportCreationWindow,
 ): Promise<string[][]> {
   const batchSize = 500;
 
@@ -3783,7 +3804,10 @@ export async function exportTrainingRows(
           .from(workflowCycles)
           .innerJoin(
             engagements,
-            eq(workflowCycles.engagementId, engagements.id),
+            and(
+              eq(workflowCycles.engagementId, engagements.id),
+              reportCreationCondition(engagements.createdAt, window),
+            ),
           )
           .innerJoin(persons, eq(engagements.personId, persons.id))
           .where(

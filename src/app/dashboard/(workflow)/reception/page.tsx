@@ -20,6 +20,7 @@ import {
 } from "@/components/layout/queue-transition";
 import { QueueViewTabs } from "@/components/layout/queue-view-tabs";
 import { ReceptionExportButton } from "@/components/layout/reception-export-button";
+import { WorkflowReportButton } from "@/components/layout/workflow-report-button";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -206,7 +207,12 @@ export default async function ReceptionQueuePage({
             )}
             <QueueSearch searchParam="q" pageParam="page" />
             {/* Last in the toolbar, after filter and search. */}
-            {canManage && <ReceptionExportButton />}
+            {canManage && (
+              <>
+                <WorkflowReportButton workflow="Reception" />
+                <ReceptionExportButton />
+              </>
+            )}
           </div>
         </div>
 
