@@ -1252,15 +1252,23 @@ Files: `src/app/dashboard/(workflow)/department/invite-form.tsx`,
 Last updated: 2026-10-09
 
 **Pattern notes:**
-`InviteForm` is a one-field `<form action={handleSubmit}>` (plain `Input` +
-`Label`, no react-hook-form — same "one field doesn't justify RHF" call as
-`hospital-form.tsx`), wrapped in a `useTransition` client component exactly
-like `RequestAccessForm` (not `SubmitButton`, since `useTransition` already
-tracks pending state — per this file's own `Button loading` note, reach for
-`SubmitButton` only when there's no surrounding `useTransition`). Resets via
-a `formRef` on success instead of `useState` + conditional unmount, since the
-form stays visible after a send (unlike `RequestAccessForm`, which replaces
-itself with a static "submitted" message once).
+`InviteForm` uses a single email-tag field within `<form action={handleSubmit}>`
+(updated 2026-11-10). The wrapping field uses `border-input`, `bg-background`,
+`rounded-md`, `p-2`, `gap-2` and `focus-within:ring-1 focus-within:ring-ring`,
+matching the shared Input. Tags use secondary `Badge` with ghost icon `Button`
+removal controls, labelled with the email address. A borderless shared `Input`
+inside the field accepts the next address. Enter or the outline **Add more**
+button validates the draft and converts it to a removable tag. Sending also
+includes a valid draft without requiring an extra Add more click. `gap-4`
+separates the field and actions; `gap-2` separates labels and feedback. The primary **Send Invitation(s)** button uses
+`useTransition` and `Button loading`; all controls are disabled while sending.
+Each address calls the existing invitation action with the shared registration
+type. Invalid and duplicate addresses are rejected before adding or sending.
+Successful tags clear; failed tags remain with address-specific
+`text-xs text-destructive` feedback in a polite live region. Email delivery
+warnings for created invitations appear in a semantic `output` using
+`text-sm text-muted-foreground`, separate from retryable failures. An uncertain
+network result asks the sender to check Invitations before retrying.
 
 `InvitationRow` follows the Reception queue's row-actions pattern exactly:
 ghost icon `Button` + `MoreHorizontalIcon` + `DropdownMenu align="end"`, one
