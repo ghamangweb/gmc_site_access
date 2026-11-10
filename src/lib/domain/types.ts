@@ -11,8 +11,18 @@ export type WorkflowRole =
 
 export const GMC_LIAISON_DEPARTMENTS = [
   "Mining",
+  "Mine Planning",
   "Mine Maintenance (EME)",
   "Carbonate Plant",
+  "Supply Chain",
+  "Survey",
+  "Geology",
+  "Electricals",
+  "Port Operations",
+  "Finance",
+  "Mechanical",
+  "Business Improvement",
+  "Civil",
   "Assay Lab",
   "Information Technology",
   "Human Capital",
