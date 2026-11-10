@@ -2185,3 +2185,19 @@ cover the same five workflows as the existing exports and approved this backend 
       four output fields, no limitations and no repeated workload paragraph.
 - [ ] User should refresh and generate a new report to see the revised wording. No dev server
       started, no running server fetched and no real visitor data sent in live verification.
+
+## Department Head: multiple invitation recipients (2026-11-10)
+
+- [x] User selected email tags instead of separate email rows. One wrapping field contains
+      removable tags and an email input. Enter or Add more validates and adds an address;
+      Send also includes a valid unfinished draft. The selected Local/Foreign type is shared.
+- [x] Reuses the existing permission-checked invitation action for each address, keeping
+      individual invitation links, emails and audit records. Duplicate addresses in a send
+      are rejected; all form controls are disabled while sending.
+- [x] Successful tags clear and failed tags remain with individual errors. Created invitations
+      whose email failed have separate address-specific warnings. Uncertain network results
+      ask the sender to check Invitations before retrying. UI patterns captured in registry.
+- [x] TypeScript (`tsc --noEmit`), focused Biome/Oxlint checks and `git diff --check` pass.
+- [ ] Browser verification: add tags using Enter/Add more, remove tags, reject invalid/duplicate
+      addresses, send with a draft still typed, check individual invitations and error feedback.
+      No live emails sent.
