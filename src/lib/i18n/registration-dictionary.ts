@@ -15,6 +15,25 @@ export type RegistrationLocale = "en" | "zh";
 // Stored values are never translated — "Male", "Work Visa" and "Work" go to
 // the database exactly as they always did. Only the display text changes.
 const ZH_ENTRIES = {
+  Status: "身份",
+  "Visitor (Local)": "访客（本地）",
+  "Third Party Contractor": "第三方承包商",
+  "Student Field Trip": "学生实地参观",
+  "School Name": "学校名称",
+  "Number of Students Visiting": "来访学生人数",
+  "Student list": "学生名单",
+  "Upload one CSV or Excel (.xls or .xlsx) student list, up to 16 MB.":
+    "请上传一份 CSV 或 Excel（.xls 或 .xlsx）学生名单，最大 16 MB。",
+  "Enter the school name": "请输入学校名称",
+  "School name must be 200 characters or fewer": "学校名称不得超过200个字符",
+  "Enter a positive whole number of students": "请输入大于零的学生人数整数",
+  "Choose a CSV or Excel (.xls or .xlsx) student list":
+    "请选择 CSV 或 Excel（.xls 或 .xlsx）学生名单",
+  "Choose a non-empty student list up to 16 MB":
+    "请选择不为空且不超过16 MB的学生名单",
+  "A valid local registration invitation is required": "需要有效的本地登记邀请",
+  "Enter the school name and a positive whole number of students":
+    "请输入学校名称和大于零的学生人数整数",
   // --- Page chrome -------------------------------------------------------
   "Ghana Manganese Company Mine Site Access Registration":
     "加纳锰业公司矿区准入登记",
@@ -121,12 +140,11 @@ const ZH_ENTRIES = {
 
   // --- Document uploads --------------------------------------------------
   "Passport photograph": "护照照片",
-  "35 × 45 mm portrait frame. White backgrounds accepted.":
-    "35 × 45 毫米竖版相框，可使用白色背景照片。",
+  "35 × 45 mm, white background.": "35 × 45 毫米，白色背景。",
   "Choose a JPEG, PNG or WebP passport photograph":
     "请选择 JPEG、PNG 或 WebP 格式的护照照片",
-  "35:45 portrait ratio, at least 350 × 450 pixels. Plain white or near-white background. JPEG, PNG or WebP, up to 16 MB.":
-    "宽高比为 35:45，至少 350 × 450 像素。使用纯白色或近白色背景。支持 JPEG、PNG 或 WebP，文件不超过 16 MB。",
+  "White background, min. 350 × 450 px (35:45). JPG/PNG/WebP, max 16 MB.":
+    "白色背景，至少350 × 450像素（35:45）。JPG/PNG/WebP，最大16 MB。",
   "Passport photograph must be 16 MB or smaller": "护照照片文件不得超过 16 MB",
   "Passport photograph must be at least 350 × 450 pixels":
     "护照照片至少应为 350 × 450 像素",

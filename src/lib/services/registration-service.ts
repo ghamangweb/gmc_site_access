@@ -27,6 +27,10 @@ import {
 } from "@/lib/domain/phone-numbers";
 import { RegistrationError } from "@/lib/domain/registration-error";
 import {
+  STUDENT_FIELD_TRIP,
+  studentFieldTripSchema,
+} from "@/lib/domain/student-field-trip";
+import {
   type AccessPurpose,
   type ApplicableDocType,
   DOCUMENT_LABELS,
@@ -80,6 +84,8 @@ export type LocalRegistrationFormInput = {
   departureDate: string;
   registrationData: {
     employmentStatus: string;
+    schoolName?: string;
+    studentCount?: number;
     telephoneOnSite: string;
     companyName: string;
     contactNameMonthly: string;
@@ -137,10 +143,32 @@ export async function createRegistrationRequest(
   // payload because it decides whether a visa document is compulsory at all.
   const submittedVisaType =
     "receptionData" in formData ? formData.receptionData.visaType : undefined;
+
+  const details =
+    "receptionData" in formData
+      ? formData.receptionData
+      : formData.registrationData;
+
+  const fieldTrip =
+    invitation.registrationType === "Local" &&
+    details.employmentStatus === STUDENT_FIELD_TRIP;
+
+  const schoolDetails = fieldTrip
+    ? studentFieldTripSchema.safeParse(details)
+    : null;
+
+  if (schoolDetails && !schoolDetails.success) {
+    throw new RegistrationError(
+      "submit_failed",
+      "Enter the school name and a positive whole number of students",
+    );
+  }
+
   const missing = await getMissingRegistrationDocTypes(
     invitation.id,
     invitation.registrationType,
     submittedVisaType,
+    details.employmentStatus,
   );
 
   if (missing.length > 0) {
@@ -162,6 +190,12 @@ export async function createRegistrationRequest(
           ...formData,
           receptionData: {
             ...formData.receptionData,
+            schoolName: schoolDetails?.success
+              ? schoolDetails.data.schoolName
+              : undefined,
+            studentCount: schoolDetails?.success
+              ? schoolDetails.data.studentCount
+              : undefined,
             gmcLiaisonPerson: invitation.issuerName,
             gmcLiaisonDept: invitation.department,
           },
@@ -170,6 +204,12 @@ export async function createRegistrationRequest(
           ...formData,
           registrationData: {
             ...formData.registrationData,
+            schoolName: schoolDetails?.success
+              ? schoolDetails.data.schoolName
+              : undefined,
+            studentCount: schoolDetails?.success
+              ? schoolDetails.data.studentCount
+              : undefined,
             gmcLiaisonPerson: invitation.issuerName,
           },
         };
@@ -572,6 +612,8 @@ export function buildEngagementInput(
     departureDate: submitted.departureDate,
     receptionData: {
       employmentStatus: details.employmentStatus,
+      schoolName: details.schoolName,
+      studentCount: details.studentCount,
       telephoneOnSite: details.telephoneOnSite,
       companyName: details.companyName,
       contactNameMonthly: details.contactNameMonthly,

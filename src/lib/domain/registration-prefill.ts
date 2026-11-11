@@ -29,6 +29,8 @@ const personSchema = z
 const detailsSchema = z
   .object({
     employmentStatus: optionalText,
+    schoolName: optionalText,
+    studentCount: z.number().int().positive().optional().catch(undefined),
     telephoneOnSite: optionalText,
     companyName: optionalText,
     contactNameMonthly: optionalText,
@@ -125,6 +127,8 @@ export function registrationRequestToFormValues(
   assign(values, "arrivalDate", parsed.data.arrivalDate);
   assign(values, "departureDate", parsed.data.departureDate);
   assign(values, "employmentStatus", details.employmentStatus);
+  assign(values, "schoolName", details.schoolName);
+  assign(values, "studentCount", details.studentCount);
   assign(values, "telephoneOnSite", details.telephoneOnSite);
   assign(values, "companyName", details.companyName);
   assign(values, "contactNameMonthly", details.contactNameMonthly);

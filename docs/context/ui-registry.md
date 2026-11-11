@@ -701,7 +701,7 @@ for typed) instead of rendering inert controls.
 
 ### DocumentSelector
 
-**Registration passport photograph (2026-11-06):** Local and Foreign forms offer
+**Registration passport photograph (updated 2026-11-11):** Only Foreign forms offer
 `passport_photo` as an optional document. Its row follows the other documents:
 label on the left, upload/view/remove controls aligned to the right. Requirements
 use the full row width underneath (`w-full text-xs text-destructive`, red) instead
@@ -1286,6 +1286,38 @@ for the auth role-selector's small-set-of-named-options case, not a plain two-wa
 `InvitationRow`/the page's table gained a `Type` column showing it.
 
 ### ReceptionForm `publicToken` mode / LocalRegistrationForm (2026-10-09)
+
+Local Access Details label (2026-11-10): the `reasonForRequest` textarea is
+labelled **Purpose of Visit**, including the local registration details preview.
+The public form uses the existing translation for that label.
+
+Passport photograph guidance (2026-11-10): shared `DocumentSelector` helper
+text uses `text-xs text-muted-foreground` on both Local and Foreign forms.
+Copy is compact: "White background, min. 350 × 450 px (35:45). JPG/PNG/WebP,
+max 16 MB." Staff upload guidance is "35 × 45 mm, white background."
+
+Student field trips (2026-11-10): Local Status offers only **Visitor (Local)**,
+**Third Party Contractor** and **Student Field Trip**. Employee, Contractor and
+Visitor(Expatriate) are not offered on the Local form. The last choice reveals a
+separate standard `Card` (`p-6`, `gap-4`, `text-lg font-semibold text-foreground`
+heading) after Visitor Details. The Local dropdown label is **Status**.
+Student Field Trip hides Company Details in both the form and staff preview,
+and skips all company validation, including company email and phone. Other
+statuses keep the existing company requirements. Hidden company values are
+cleared from the submitted payload. Its School Name and
+Number of Students Visiting use the existing form fields in
+`grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4`; the required student-list uploader
+uses `DocumentSelector`, followed by `text-xs text-muted-foreground` format/size
+help. The uploader accepts one CSV/XLS/XLSX file up to 16 MB through its own
+local-invitation-authorized UploadThing route. Employment Status is disabled
+while a document operation is busy, so an active upload cannot be hidden.
+
+The read-only details preview shows the school and count in a matching card.
+Student-list attachments render their name and an outline small Download
+student list button instead of entering the PDF/image canvas preview. The
+existing authenticated download route still applies; Security hides the
+download action and retains its server-side download restriction. The list
+remains one group attachment and is not parsed into individual registrations.
 
 Files: `src/components/workflow/reception-form.tsx` (`publicToken` prop),
 `src/components/workflow/local-registration-form.tsx` (new)

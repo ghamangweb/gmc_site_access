@@ -2201,3 +2201,58 @@ cover the same five workflows as the existing exports and approved this backend 
 - [ ] Browser verification: add tags using Enter/Add more, remove tags, reject invalid/duplicate
       addresses, send with a draft still typed, check individual invitations and error feedback.
       No live emails sent.
+
+## Local registration: remove passport photograph (2026-11-11)
+
+- [x] Removed passport photograph from the shared Local registration document policy.
+      The local form no longer offers it, and the public upload middleware rejects new
+      Local passport photograph uploads using the same policy. Foreign registration
+      and Security photograph uploads retain their existing behavior. Existing stored
+      photographs are preserved.
+- [x] Eight document-policy/student-field-trip tests, TypeScript, focused Biome checks
+      and `git diff --check` pass.
+- [ ] User browser check: open a Local invitation and confirm Document Uploads has no
+      passport photograph row. No development server started or running server fetched.
+
+## Local registration: Purpose of Visit label (2026-11-10)
+
+- [x] Renamed Reason for Request to Purpose of Visit in the local form's Access Details
+      and local registration details preview. Reuses the existing translated label.
+      The stored field and validation stay the same.
+
+## Local registration: student field trips (2026-11-10)
+
+- [x] Local Status now offers only Visitor (Local), Third Party Contractor and Student
+      Field Trip. Removed Employee, Contractor and Visitor(Expatriate) from that dropdown.
+
+- [x] Passport photograph description restored to muted text on both Local and Foreign
+      forms through the shared DocumentSelector.
+- [x] Photograph description shortened on both forms, including its Chinese translation.
+
+- [x] Follow-up: Local Employment Status label is now Status. Student Field Trip hides
+      Company Details and skips its validation; hidden company values are not submitted.
+      Staff preview also hides Company Details for this status. Other statuses retain it.
+
+- [x] User approved one group registration with an attached student list. Added Visitor
+      (Local), Third Party Contractor and Student Field Trip to Local Employment Status.
+- [x] Student Field Trip reveals required School Name, positive whole-number student count
+      and one CSV/XLS/XLSX attachment, up to 16 MB. Both client and server validate school
+      details; registration submission requires the student list only for this local status.
+- [x] Reuses invitation-owned document storage and protected downloads. The dedicated
+      `registrationStudentList` UploadThing route requires a valid Local invitation and
+      validates filename, MIME type and size. Other upload routes cannot create a student list.
+      Student lists are excluded from Reception's applicable-document checkboxes.
+- [x] School/count metadata survives prefill, engagement conversion and Reception edits;
+      staff previews show it alongside the student-list download. Security downloads remain
+      disabled. No new database columns, migration, dependencies or individual student records.
+- [x] Switching away from Student Field Trip omits school/count from submission. An existing
+      uploaded list stays visible in Document Uploads for removal. Public Chinese labels and
+      validation messages added, visual patterns imprinted in ui-registry.md.
+- [x] All 128 domain tests pass, covering field-trip validation, file limits/types, conditional
+      document requirements, metadata prefill and existing registration/workflow behavior.
+- [x] TypeScript and production build pass, including the UploadThing route and all pages.
+      Biome/diff checks pass. Existing strict Oxlint findings in older form/service code remain;
+      findings on added or modified lines were checked separately and corrected.
+- [ ] User browser check: choose each new option, enter school/count, upload and replace a list,
+      submit and verify staff preview/download. Live uploads/database writes remain untested;
+      the attachment is retained as supplied, without parsing or comparing its rows to the count.
