@@ -120,6 +120,8 @@ const receptionFormSchema = z
     emergencyContactName: z.string().min(1, "Required"),
     emergencyContactPhone: phoneFieldSchema,
     employmentStatus: z.string().min(1, "Required"),
+    schoolName: z.string().optional(),
+    studentCount: z.number().int().positive().optional(),
     accessPurpose: z.enum(["Work", "WorkMine", "Visit", "VisitMine"]),
     arrivalDate: z.string().min(1, "Required"),
     departureDate: z.string().min(1, "Required"),
@@ -391,6 +393,8 @@ export function ReceptionForm({
         departureDate: values.departureDate,
         receptionData: {
           employmentStatus: rest.employmentStatus,
+          schoolName: rest.schoolName,
+          studentCount: rest.studentCount,
           telephoneOnSite: rest.telephoneOnSite,
           companyName: rest.companyName,
           contactNameMonthly: rest.contactNameMonthly,
@@ -577,7 +581,16 @@ export function ReceptionForm({
               control={form.control}
               name="employmentStatus"
               label="Employment Status"
-              options={["Employee", "Contractor", "Visitor(Expatriate)"]}
+              options={Array.from(
+                new Set([
+                  "Employee",
+                  "Contractor",
+                  "Visitor(Expatriate)",
+                  ...(defaultValues?.employmentStatus
+                    ? [defaultValues.employmentStatus]
+                    : []),
+                ]),
+              )}
               disabled={disabled}
             />
             <TextField

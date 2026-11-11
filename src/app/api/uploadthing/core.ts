@@ -3,6 +3,7 @@ import { UploadThingError } from "uploadthing/server";
 import { z } from "zod";
 
 import { requireWriteAccess } from "@/lib/auth/guards";
+import { getStudentListFileError } from "@/lib/domain/student-field-trip";
 import { DOC_TYPES, getRegistrationDocTypes } from "@/lib/domain/types";
 import {
   getDocTypeOwnerRole,
@@ -24,6 +25,50 @@ const DOCUMENT_FILE_CONFIG = {
 } as const;
 
 export const uploadRouter = {
+  registrationStudentList: f({ blob: { maxFileSize: "16MB", maxFileCount: 1 } })
+    .input(
+      z.object({
+        token: z.string().min(1),
+        docType: z.literal("student_list"),
+      }),
+    )
+    .middleware(async ({ input, files }) => {
+      const invitation = await validateInvitationToken(input.token);
+
+      if (!invitation || invitation.registrationType !== "Local") {
+        throw new UploadThingError(
+          "A valid local registration invitation is required",
+        );
+      }
+
+      for (const file of files) {
+        const error = getStudentListFileError(file);
+
+        if (error) throw new UploadThingError(error);
+      }
+
+      const existing = await getDocumentsForInvitation(invitation.id);
+
+      if (existing.some((document) => document.docType === "student_list")) {
+        throw new UploadThingError(
+          "That document is already uploaded. Remove it first",
+        );
+      }
+
+      return { invitationId: invitation.id };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      const document = await recordUploadedDocument({
+        invitationId: metadata.invitationId,
+        docType: "student_list",
+        fileKey: file.key,
+        fileUrl: file.ufsUrl,
+        fileName: file.name,
+        contentType: file.type,
+      });
+
+      return { documentId: document.id, validationError: null };
+    }),
   // Public, unauthenticated: authorization is the invitation token itself. A
   // valid, unrevoked, unconsumed token may attach documents to its own
   // invitation and nothing else — the same contract the old
@@ -42,6 +87,7 @@ export const uploadRouter = {
       // Only the types this registration type asks for, so a token can't be
       // used to push arbitrary documents (e.g. a hospital form) into storage.
       if (
+        input.docType === "student_list" ||
         !getRegistrationDocTypes(invitation.registrationType).includes(
           input.docType,
         )
@@ -95,6 +141,12 @@ export const uploadRouter = {
       }),
     )
     .middleware(async ({ input }) => {
+      if (input.docType === "student_list") {
+        throw new UploadThingError(
+          "Student lists are uploaded through the local registration form",
+        );
+      }
+
       const ownerRole = getDocTypeOwnerRole(input.docType);
 
       if (!ownerRole) {

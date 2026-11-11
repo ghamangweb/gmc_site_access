@@ -99,6 +99,7 @@ export default async function SecurityDetailPage({
         <ReceptionDetailsPreview
           values={previewValues}
           documentsTitle="Documents"
+          allowStudentListDownload={false}
           documents={documents}
         />
         {documents.length === 0 && (

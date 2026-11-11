@@ -153,6 +153,7 @@ export const DOC_TYPES = [
   "training_clearance_form",
   "biometric_image",
   "passport_photo",
+  "student_list",
 ] as const;
 
 export type DocType = (typeof DOC_TYPES)[number];
@@ -171,7 +172,10 @@ const LAYER_OWNED_DOC_TYPES = [
 export type LayerOwnedDocType = (typeof LAYER_OWNED_DOC_TYPES)[number];
 
 // What Reception can require of a visitor.
-export type ApplicableDocType = Exclude<DocType, LayerOwnedDocType>;
+export type ApplicableDocType = Exclude<
+  DocType,
+  LayerOwnedDocType | "student_list"
+>;
 
 // Whether a stored `documents.doc_type` (plain text) is something Reception
 // can require of a visitor.
@@ -183,7 +187,11 @@ export function isApplicableDocType(
   const known: readonly string[] = DOC_TYPES;
   const layerOwned: readonly string[] = LAYER_OWNED_DOC_TYPES;
 
-  return known.includes(docType) && !layerOwned.includes(docType);
+  return (
+    known.includes(docType) &&
+    !layerOwned.includes(docType) &&
+    docType !== "student_list"
+  );
 }
 
 export const DOCUMENT_LABELS: Record<DocType, string> = {
@@ -199,6 +207,7 @@ export const DOCUMENT_LABELS: Record<DocType, string> = {
   training_clearance_form: "Clearance form",
   biometric_image: "Biometric capture",
   passport_photo: "Passport photograph",
+  student_list: "Student list",
 };
 
 // Which documents a visitor must upload during registration, by
@@ -228,7 +237,7 @@ export const REGISTRATION_OPTIONAL_DOCUMENT_TYPES: Record<
     "assignment_letter",
     "insurance_proof",
   ],
-  Local: ["passport_photo", "assignment_letter", "insurance_proof"],
+  Local: ["assignment_letter", "insurance_proof", "student_list"],
 };
 
 // A visitor collecting their visa at the airport has no visa document to
@@ -237,8 +246,16 @@ export const REGISTRATION_OPTIONAL_DOCUMENT_TYPES: Record<
 export function getRequiredRegistrationDocTypes(
   registrationType: RegistrationType,
   visaType?: VisaType,
+  employmentStatus?: string,
 ): DocType[] {
   const required = REGISTRATION_DOCUMENT_TYPES[registrationType];
+
+  if (
+    registrationType === "Local" &&
+    employmentStatus === "Student Field Trip"
+  ) {
+    return [...required, "student_list"];
+  }
 
   if (registrationType === "Foreign" && visaType === "Visa on Arrival") {
     return required.filter((docType) => docType !== "valid_visa");
@@ -362,6 +379,8 @@ export const HOSPITAL_CLEARANCE_LABELS: Record<
 
 export type ReceptionData = {
   employmentStatus: string;
+  schoolName?: string;
+  studentCount?: number;
   telephoneOnSite: string;
   companyName: string;
   contactNameMonthly: string;

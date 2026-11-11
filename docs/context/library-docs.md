@@ -81,6 +81,11 @@ handler:
   and no duplicate of the same type already attached.
 - `engagementDocument` — staff. Derives the required workflow role from the doc type via
   `getDocTypeOwnerRole` and calls `requireWriteAccess`.
+- `registrationStudentList` — valid Local invitation only. One file up to 16 MB using
+  UploadThing's `blob` category to support CSV/Excel MIME variations; middleware and client
+  explicitly check CSV/XLS/XLSX extensions, permitted MIME types, and non-empty size. Saves
+  `student_list` through the existing invitation document flow. The normal image/PDF upload
+  routes reject this doc type. Files remain attachments; spreadsheet contents are not imported.
 
 Throw `UploadThingError` from middleware to reject — its message is what reaches the client's
 `onUploadError`, and the public form translates it. The DB row is written in

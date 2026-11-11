@@ -146,6 +146,9 @@ export async function EngagementDetail({
       values={defaultValues}
       showAdministration
       documentsTitle="Documents"
+      allowStudentListDownload={
+        !session.workflowRoles.includes("SecurityStaff")
+      }
       documents={documents}
     />
   );

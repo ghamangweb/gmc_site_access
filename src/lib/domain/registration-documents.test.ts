@@ -5,11 +5,11 @@ import {
   getRequiredRegistrationDocTypes,
 } from "./types";
 
-test("local and foreign registration offer passport photographs without requiring them", () => {
+test("only foreign registration offers optional passport photographs", () => {
+  assert.ok(!getRegistrationDocTypes("Local").includes("passport_photo"));
+  assert.ok(getRegistrationDocTypes("Foreign").includes("passport_photo"));
+
   for (const registrationType of ["Local", "Foreign"] as const) {
-    assert.ok(
-      getRegistrationDocTypes(registrationType).includes("passport_photo"),
-    );
     assert.ok(
       !getRequiredRegistrationDocTypes(registrationType).includes(
         "passport_photo",

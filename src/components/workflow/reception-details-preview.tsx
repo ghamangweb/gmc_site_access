@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DocumentPreview } from "@/components/workflow/document-preview";
 import type { ReceptionFormValues } from "@/components/workflow/reception-form";
+import { STUDENT_FIELD_TRIP } from "@/lib/domain/student-field-trip";
 import { ACCESS_PURPOSE_LABELS } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 
@@ -26,6 +27,7 @@ type ReceptionDetailsPreviewProps = {
   // Previewed in-app from /api/documents/:id/file — no URL is handed to the
   // page, so there is nothing here to sign.
   documents: Document[];
+  allowStudentListDownload?: boolean;
 };
 
 function text(value: string | undefined): string {
@@ -43,6 +45,7 @@ export function ReceptionDetailsPreview({
   showAdministration = false,
   documentsTitle = "Documents Supplied",
   documents,
+  allowStudentListDownload = true,
 }: ReceptionDetailsPreviewProps) {
   const isLocal = registrationType === "Local";
 
@@ -77,7 +80,11 @@ export function ReceptionDetailsPreview({
             value={text(values.telephoneOnSite)}
           />
           <Field
-            label="Employment Status"
+            label={
+              isLocal || values.employmentStatus === STUDENT_FIELD_TRIP
+                ? "Status"
+                : "Employment Status"
+            }
             value={text(values.employmentStatus)}
           />
           <Field
@@ -95,27 +102,44 @@ export function ReceptionDetailsPreview({
         </div>
       </Card>
 
-      <Card className="flex flex-col gap-4 p-6">
-        <h2 className="text-lg font-semibold text-foreground">
-          Company Details
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Company Name" value={text(values.companyName)} />
-          <Field
-            label="Contact (Monthly Reporting)"
-            value={text(values.contactNameMonthly)}
-          />
-          <Field label="Contact Email" value={text(values.contactEmail)} />
-          <Field
-            label="Emergency Contact (Company)"
-            value={text(values.companyEmergencyName)}
-          />
-          <Field
-            label="Emergency Tel. (Company)"
-            value={text(values.companyEmergencyTel)}
-          />
-        </div>
-      </Card>
+      {values.employmentStatus === STUDENT_FIELD_TRIP && (
+        <Card className="flex flex-col gap-4 p-6">
+          <h2 className="text-lg font-semibold text-foreground">
+            Student Field Trip
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="School Name" value={text(values.schoolName)} />
+            <Field
+              label="Number of Students Visiting"
+              value={values.studentCount?.toString() ?? "-"}
+            />
+          </div>
+        </Card>
+      )}
+
+      {values.employmentStatus !== STUDENT_FIELD_TRIP && (
+        <Card className="flex flex-col gap-4 p-6">
+          <h2 className="text-lg font-semibold text-foreground">
+            Company Details
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Company Name" value={text(values.companyName)} />
+            <Field
+              label="Contact (Monthly Reporting)"
+              value={text(values.contactNameMonthly)}
+            />
+            <Field label="Contact Email" value={text(values.contactEmail)} />
+            <Field
+              label="Emergency Contact (Company)"
+              value={text(values.companyEmergencyName)}
+            />
+            <Field
+              label="Emergency Tel. (Company)"
+              value={text(values.companyEmergencyTel)}
+            />
+          </div>
+        </Card>
+      )}
 
       <Card className="flex flex-col gap-4 p-6">
         <h2 className="text-lg font-semibold text-foreground">
@@ -138,7 +162,7 @@ export function ReceptionDetailsPreview({
           )}
           <div className="sm:col-span-2 lg:col-span-3">
             <Field
-              label="Reason for Request"
+              label={isLocal ? "Purpose of Visit" : "Reason for Request"}
               value={text(values.reasonForRequest)}
             />
           </div>
@@ -261,7 +285,11 @@ export function ReceptionDetailsPreview({
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] justify-items-center gap-6 pt-2">
             {documents.map((document) => (
-              <DocumentPreview key={document.id} document={document} />
+              <DocumentPreview
+                key={document.id}
+                document={document}
+                allowDownload={allowStudentListDownload}
+              />
             ))}
           </div>
         )}

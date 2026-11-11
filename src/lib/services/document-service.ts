@@ -34,6 +34,7 @@ const DOC_TYPE_OWNERS: Record<DocType, WorkflowRole> = {
   training_clearance_form: "TrainingStaff",
   biometric_image: "SecurityStaff",
   passport_photo: "SecurityStaff",
+  student_list: "Receptionist",
 };
 
 export function getDocTypeOwnerRole(docType: string): WorkflowRole | undefined {
@@ -85,7 +86,10 @@ export async function recordUploadedDocument(
     workflowCycleId = cycle?.id;
   }
 
-  const pageCount = await countUploadedPages(input.fileKey, input.contentType);
+  const pageCount =
+    input.docType === "student_list"
+      ? null
+      : await countUploadedPages(input.fileKey, input.contentType);
 
   const [document] = await db
     .insert(documents)
@@ -149,13 +153,16 @@ export async function getMissingRegistrationDocTypes(
   invitationId: string,
   registrationType: RegistrationType,
   visaType?: VisaType,
+  employmentStatus?: string,
 ): Promise<DocType[]> {
   const uploaded = await getDocumentsForInvitation(invitationId);
   const uploadedTypes = new Set(uploaded.map((doc) => doc.docType));
 
-  return getRequiredRegistrationDocTypes(registrationType, visaType).filter(
-    (docType) => !uploadedTypes.has(docType),
-  );
+  return getRequiredRegistrationDocTypes(
+    registrationType,
+    visaType,
+    employmentStatus,
+  ).filter((docType) => !uploadedTypes.has(docType));
 }
 
 export async function getDocumentsForEngagement(

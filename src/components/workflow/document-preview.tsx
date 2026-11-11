@@ -2,6 +2,7 @@
 
 import { EyeIcon } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 import {
   Dialog,
@@ -39,7 +40,13 @@ const LEAVES = [
   "translate-x-[15px] delay-150 group-hover:translate-x-[19px] group-hover:rotate-[6deg]",
 ] as const;
 
-export function DocumentPreview({ document }: { document: Document }) {
+export function DocumentPreview({
+  document,
+  allowDownload = true,
+}: {
+  document: Document;
+  allowDownload?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   // SAFETY: `doc_type` is a text column, but every row is written by the file
@@ -54,6 +61,24 @@ export function DocumentPreview({ document }: { document: Document }) {
     0,
     Math.min(Math.max((document.pageCount ?? 1) - 1, 0), LEAVES.length),
   );
+
+  if (document.docType === "student_list") {
+    return (
+      <div className="flex flex-col gap-2 text-sm">
+        <span className="font-medium text-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">
+          {document.fileName}
+        </span>
+        {allowDownload && (
+          <Button asChild variant="outline" size="sm" className="w-fit">
+            <a href={`/api/documents/${document.id}/download`}>
+              Download student list
+            </a>
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

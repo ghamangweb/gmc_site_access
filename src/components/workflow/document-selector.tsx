@@ -9,6 +9,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRegistrationLanguage } from "@/components/workflow/registration-language-provider";
+import {
+  getStudentListFileError,
+  STUDENT_LIST_ACCEPT,
+} from "@/lib/domain/student-field-trip";
 import { DOCUMENT_LABELS, type DocType } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 import { useUploadThing } from "@/lib/uploadthing/client";
@@ -160,11 +164,11 @@ export function DocumentSelector({
                 />
               ))}
             {docType === "passport_photo" && isApplicable && (
-              <p className="w-full text-xs text-destructive">
+              <p className="w-full text-xs text-muted-foreground">
                 {t(
                   invitationToken
-                    ? "35:45 portrait ratio, at least 350 × 450 pixels. Plain white or near-white background. JPEG, PNG or WebP, up to 16 MB."
-                    : "35 × 45 mm portrait frame. White backgrounds accepted.",
+                    ? "White background, min. 350 × 450 px (35:45). JPG/PNG/WebP, max 16 MB."
+                    : "35 × 45 mm, white background.",
                 )}
               </p>
             )}
@@ -333,7 +337,11 @@ function UploadSlot({
   // Bytes go straight from the browser to UploadThing — they never pass
   // through this app's server.
   const { startUpload, isUploading } = useUploadThing(
-    invitationToken ? "registrationDocument" : "engagementDocument",
+    invitationToken
+      ? docType === "student_list"
+        ? "registrationStudentList"
+        : "registrationDocument"
+      : "engagementDocument",
     {
       onClientUploadComplete: (files) => {
         const result = files[0]?.serverData;
@@ -365,6 +373,17 @@ function UploadSlot({
   ): Promise<void> {
     const file = e.target.files?.[0];
     if (!file || isValidating || isUploading) return;
+
+    if (docType === "student_list") {
+      const error = getStudentListFileError(file);
+
+      if (error) {
+        toast.error(t(error));
+        clearInput();
+
+        return;
+      }
+    }
 
     if (
       docType === "passport_photo" &&
@@ -486,9 +505,11 @@ function UploadSlot({
         ref={inputRef}
         type="file"
         accept={
-          docType === "passport_photo"
-            ? "image/jpeg,image/png,image/webp"
-            : "application/pdf,image/*"
+          docType === "student_list"
+            ? STUDENT_LIST_ACCEPT
+            : docType === "passport_photo"
+              ? "image/jpeg,image/png,image/webp"
+              : "application/pdf,image/*"
         }
         className="hidden"
         onChange={handleFile}

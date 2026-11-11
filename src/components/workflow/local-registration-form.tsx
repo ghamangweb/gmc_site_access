@@ -38,10 +38,15 @@ import {
   isSamePhoneNumber,
 } from "@/lib/domain/phone-numbers";
 import {
+  LOCAL_EMPLOYMENT_STATUSES,
+  STUDENT_FIELD_TRIP,
+  studentFieldTripSchema,
+} from "@/lib/domain/student-field-trip";
+import {
   DOCUMENT_LABELS,
   type DocType,
   getRegistrationDocTypes,
-  REGISTRATION_DOCUMENT_TYPES,
+  getRequiredRegistrationDocTypes,
 } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 import { toUpperCase } from "@/lib/utils";
@@ -95,14 +100,16 @@ const localFormSchema = z
     emergencyContactName: z.string().min(1, "Required"),
     emergencyContactPhone: phoneFieldSchema,
     employmentStatus: z.string().min(1, "Required"),
+    schoolName: z.string(),
+    studentCount: z.string(),
     accessPurpose: z.enum(["Work", "WorkMine", "Visit", "VisitMine"]),
     arrivalDate: z.string().min(1, "Required"),
     departureDate: z.string().min(1, "Required"),
-    companyName: z.string().min(1, "Required"),
-    contactNameMonthly: z.string().min(1, "Required"),
-    contactEmail: z.union([z.literal(""), z.email("Enter a valid email")]),
-    companyEmergencyName: z.string().min(1, "Required"),
-    companyEmergencyTel: phoneFieldSchema,
+    companyName: z.string(),
+    contactNameMonthly: z.string(),
+    contactEmail: z.string(),
+    companyEmergencyName: z.string(),
+    companyEmergencyTel: z.string(),
     gmcLiaisonPerson: z.string().min(1, "Required"),
     reasonForRequest: z.string().min(1, "Required"),
     airportPickup: z.boolean(),
@@ -120,6 +127,49 @@ const localFormSchema = z
     itineraryAttached: z.boolean(),
     inflightUpdated: z.boolean(),
     remarks: z.string(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.employmentStatus !== STUDENT_FIELD_TRIP) {
+      const company = z
+        .object({
+          companyName: z.string().min(1, "Required"),
+          contactNameMonthly: z.string().min(1, "Required"),
+          contactEmail: z.union([
+            z.literal(""),
+            z.email("Enter a valid email"),
+          ]),
+          companyEmergencyName: z.string().min(1, "Required"),
+          companyEmergencyTel: phoneFieldSchema,
+        })
+        .safeParse(values);
+
+      if (!company.success) {
+        for (const issue of company.error.issues) {
+          ctx.addIssue({
+            code: "custom",
+            path: issue.path,
+            message: issue.message,
+          });
+        }
+      }
+    }
+
+    if (values.employmentStatus !== STUDENT_FIELD_TRIP) return;
+
+    const result = studentFieldTripSchema.safeParse({
+      schoolName: values.schoolName,
+      studentCount: Number(values.studentCount),
+    });
+
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        ctx.addIssue({
+          code: "custom",
+          path: issue.path,
+          message: issue.message,
+        });
+      }
+    }
   })
   .refine(
     (values) => !isSamePhoneNumber(values.phone, values.emergencyContactPhone),
@@ -139,6 +189,8 @@ const DEFAULT_VALUES: LocalFormValues = {
   emergencyContactName: "",
   emergencyContactPhone: "",
   employmentStatus: "",
+  schoolName: "",
+  studentCount: "",
   accessPurpose: "Work",
   arrivalDate: "",
   departureDate: "",
@@ -202,14 +254,25 @@ export function LocalRegistrationForm({
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
   });
 
+  const employmentStatus = form.watch("employmentStatus");
+  const isStudentFieldTrip = employmentStatus === STUDENT_FIELD_TRIP;
+
+  const requiredDocTypes = getRequiredRegistrationDocTypes(
+    "Local",
+    undefined,
+    employmentStatus,
+  );
+
   // Mirrors the server-side guard in `createRegistrationRequest` so the
   // visitor sees what's outstanding before clicking submit.
-  const missingRequiredDocs = REGISTRATION_DOCUMENT_TYPES.Local.filter(
+  const missingRequiredDocs = requiredDocTypes.filter(
     (docType) => !uploadedDocuments.some((doc) => doc.docType === docType),
   );
 
   function onSubmit(values: LocalFormValues) {
     if (documentBusy) return;
+
+    const studentFieldTrip = values.employmentStatus === STUDENT_FIELD_TRIP;
 
     startTransition(async () => {
       const payload = {
@@ -228,12 +291,26 @@ export function LocalRegistrationForm({
         departureDate: values.departureDate,
         registrationData: {
           employmentStatus: values.employmentStatus,
+          schoolName:
+            values.employmentStatus === STUDENT_FIELD_TRIP
+              ? values.schoolName.trim()
+              : undefined,
+          studentCount:
+            values.employmentStatus === STUDENT_FIELD_TRIP
+              ? Number(values.studentCount)
+              : undefined,
           telephoneOnSite: values.telephoneOnSite,
-          companyName: values.companyName,
-          contactNameMonthly: values.contactNameMonthly,
-          contactEmail: values.contactEmail || undefined,
-          companyEmergencyName: values.companyEmergencyName,
-          companyEmergencyTel: values.companyEmergencyTel,
+          companyName: studentFieldTrip ? "" : values.companyName,
+          contactNameMonthly: studentFieldTrip ? "" : values.contactNameMonthly,
+          contactEmail: studentFieldTrip
+            ? undefined
+            : values.contactEmail || undefined,
+          companyEmergencyName: studentFieldTrip
+            ? ""
+            : values.companyEmergencyName,
+          companyEmergencyTel: studentFieldTrip
+            ? ""
+            : values.companyEmergencyTel,
           gmcLiaisonPerson: values.gmcLiaisonPerson,
           reasonForRequest: values.reasonForRequest,
           airportPickup: values.airportPickup,
@@ -284,9 +361,9 @@ export function LocalRegistrationForm({
             <SelectField
               control={form.control}
               name="employmentStatus"
-              label="Employment Status"
-              options={["Employee", "Contractor", "Visitor(Expatriate)"]}
-              disabled={isPending}
+              label="Status"
+              options={LOCAL_EMPLOYMENT_STATUSES}
+              disabled={isPending || documentBusy}
             />
             <TextField
               control={form.control}
@@ -366,51 +443,91 @@ export function LocalRegistrationForm({
           </div>
         </Card>
 
-        <Card className="flex flex-col gap-4 p-6">
-          <h2 className="text-lg font-semibold text-foreground">
-            {t("Company Details")}
-          </h2>
-          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+        {isStudentFieldTrip && (
+          <Card className="flex flex-col gap-4 p-6">
+            <h2 className="text-lg font-semibold text-foreground">
+              {t("Student Field Trip")}
+            </h2>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
               <TextField
                 control={form.control}
-                name="companyName"
-                label="Company Name"
-                casing="title"
+                name="schoolName"
+                label="School Name"
+                disabled={isPending}
+              />
+              <TextField
+                control={form.control}
+                name="studentCount"
+                label="Number of Students Visiting"
+                type="number"
+                casing="none"
                 disabled={isPending}
               />
             </div>
-            <TextField
-              control={form.control}
-              name="contactNameMonthly"
-              label="Contact Name (Monthly Reporting)"
-              casing="title"
+            <DocumentSelector
+              invitationToken={token}
+              mode="required"
+              docTypes={["student_list"]}
+              requiredDocTypes={["student_list"]}
+              uploadedDocuments={uploadedDocuments}
+              onDocumentBusyChange={handleDocumentBusyChange}
               disabled={isPending}
             />
-            <TextField
-              control={form.control}
-              name="contactEmail"
-              label="Contact Email Address"
-              type="email"
-              casing="none"
-              disabled={isPending}
-              required={false}
-            />
-            <TextField
-              control={form.control}
-              name="companyEmergencyName"
-              label="Emergency Contact Name (Company)"
-              casing="title"
-              disabled={isPending}
-            />
-            <PhoneField
-              control={form.control}
-              name="companyEmergencyTel"
-              label="Emergency Tel. (Company)"
-              disabled={isPending}
-            />
-          </div>
-        </Card>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Upload one CSV or Excel (.xls or .xlsx) student list, up to 16 MB.",
+              )}
+            </p>
+          </Card>
+        )}
+
+        {!isStudentFieldTrip && (
+          <Card className="flex flex-col gap-4 p-6">
+            <h2 className="text-lg font-semibold text-foreground">
+              {t("Company Details")}
+            </h2>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <TextField
+                  control={form.control}
+                  name="companyName"
+                  label="Company Name"
+                  casing="title"
+                  disabled={isPending}
+                />
+              </div>
+              <TextField
+                control={form.control}
+                name="contactNameMonthly"
+                label="Contact Name (Monthly Reporting)"
+                casing="title"
+                disabled={isPending}
+              />
+              <TextField
+                control={form.control}
+                name="contactEmail"
+                label="Contact Email Address"
+                type="email"
+                casing="none"
+                disabled={isPending}
+                required={false}
+              />
+              <TextField
+                control={form.control}
+                name="companyEmergencyName"
+                label="Emergency Contact Name (Company)"
+                casing="title"
+                disabled={isPending}
+              />
+              <PhoneField
+                control={form.control}
+                name="companyEmergencyTel"
+                label="Emergency Tel. (Company)"
+                disabled={isPending}
+              />
+            </div>
+          </Card>
+        )}
 
         <Card className="flex flex-col gap-4 p-6">
           <h2 className="text-lg font-semibold text-foreground">
@@ -440,7 +557,7 @@ export function LocalRegistrationForm({
               <TextAreaField
                 control={form.control}
                 name="reasonForRequest"
-                label="Reason for Request"
+                label="Purpose of Visit"
                 disabled={isPending}
               />
             </div>
@@ -529,8 +646,15 @@ export function LocalRegistrationForm({
           <DocumentSelector
             invitationToken={token}
             mode="required"
-            docTypes={getRegistrationDocTypes("Local")}
-            requiredDocTypes={REGISTRATION_DOCUMENT_TYPES.Local}
+            docTypes={getRegistrationDocTypes("Local").filter(
+              (docType) =>
+                docType !== "student_list" ||
+                (!isStudentFieldTrip &&
+                  uploadedDocuments.some(
+                    (document) => document.docType === "student_list",
+                  )),
+            )}
+            requiredDocTypes={requiredDocTypes}
             uploadedDocuments={uploadedDocuments}
             onDocumentBusyChange={handleDocumentBusyChange}
             disabled={isPending}
