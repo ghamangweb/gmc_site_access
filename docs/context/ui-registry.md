@@ -2256,7 +2256,9 @@ was needed. Any pre-existing jsonb row still holding `"Other"` no longer matches
 `VisitMine`) never changed, only their visitor/staff-facing wording — `Visit` → "Familiarization
 Visit", `VisitMine` → "Require Mine Tour" (`Work` was "Coming to work", relabelled again on
 2026-10-11 to "Require mine site access" — `local-registration-form.tsx`'s own
-`optionLabels` copy still reads "Coming to work" and was again left out of scope). Added
+`optionLabels` copy still reads "Coming to work" and was again left out of scope). **2026-11-11:**
+the local form now uses `ACCESS_PURPOSE_LABELS` too (label "Nature of Visit"), and `VisitMine`
+reads "Familiarization Visit (Require Mine Tour)". Added
 `ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string>` next to the type in
 `lib/domain/types.ts` as the single source for this wording, rather than letting each
 display site (the Foreign form's `Select`, the Reception queue table, Hospital's

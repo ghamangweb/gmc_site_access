@@ -166,6 +166,7 @@ const receptionFormSchema = z
         "mincom_letter",
         "work_residence_permit",
         "ghana_card",
+        "ghana_card_back",
         "assignment_letter",
         "insurance_proof",
       ]),

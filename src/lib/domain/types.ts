@@ -75,7 +75,7 @@ export const ACCESS_PURPOSE_LABELS: Record<AccessPurpose, string> = {
   Work: "Require mine site access",
   WorkMine: "Require mine site access to work",
   Visit: "Familiarization Visit (no mine site access)",
-  VisitMine: "Require Mine Tour",
+  VisitMine: "Familiarization Visit (Require Mine Tour)",
 };
 
 export type WorkflowState =
@@ -146,6 +146,7 @@ export const DOC_TYPES = [
   "mincom_letter",
   "work_residence_permit",
   "ghana_card",
+  "ghana_card_back",
   "assignment_letter",
   "insurance_proof",
   "induction_declaration_form",
@@ -200,6 +201,7 @@ export const DOCUMENT_LABELS: Record<DocType, string> = {
   mincom_letter: "MINCOM letter of approval",
   work_residence_permit: "Work or residence permit",
   ghana_card: "Ghana Card",
+  ghana_card_back: "Ghana Card (back)",
   assignment_letter: "Letter of assignment / contract",
   insurance_proof: "Proof of medical/travel insurance",
   induction_declaration_form: "Induction declaration form",
@@ -207,7 +209,7 @@ export const DOCUMENT_LABELS: Record<DocType, string> = {
   training_clearance_form: "Clearance form",
   biometric_image: "Biometric capture",
   passport_photo: "Passport photograph",
-  student_list: "Student list",
+  student_list: "List of persons visiting",
 };
 
 // Which documents a visitor must upload during registration, by
@@ -237,7 +239,14 @@ export const REGISTRATION_OPTIONAL_DOCUMENT_TYPES: Record<
     "assignment_letter",
     "insurance_proof",
   ],
-  Local: ["assignment_letter", "insurance_proof", "student_list"],
+  // `ghana_card_back` is only offered (and required) for a field trip's
+  // coordinator, who uploads the card front and back separately.
+  Local: [
+    "ghana_card_back",
+    "assignment_letter",
+    "insurance_proof",
+    "student_list",
+  ],
 };
 
 // A visitor collecting their visa at the airport has no visa document to
@@ -254,7 +263,7 @@ export function getRequiredRegistrationDocTypes(
     registrationType === "Local" &&
     employmentStatus === "Student Field Trip"
   ) {
-    return [...required, "student_list"];
+    return [...required, "ghana_card_back", "student_list"];
   }
 
   if (registrationType === "Foreign" && visaType === "Visa on Arrival") {
