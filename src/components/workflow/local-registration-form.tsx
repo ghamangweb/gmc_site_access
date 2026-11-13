@@ -43,6 +43,7 @@ import {
   studentFieldTripSchema,
 } from "@/lib/domain/student-field-trip";
 import {
+  ACCESS_PURPOSE_LABELS,
   DOCUMENT_LABELS,
   type DocType,
   getRegistrationDocTypes,
@@ -50,6 +51,19 @@ import {
 } from "@/lib/domain/types";
 import type { Document } from "@/lib/services/document-service";
 import { toUpperCase } from "@/lib/utils";
+
+const FIELD_TRIP_ACCESS_LEVEL = "Visitor Access";
+
+// A field trip is always a familiarization visit, never work.
+const FIELD_TRIP_ACCESS_PURPOSES = ["Visit", "VisitMine"];
+
+const EMPLOYMENT_STATUS_LABELS = { [STUDENT_FIELD_TRIP]: "Field Trip" };
+
+// A field trip's Ghana Card belongs to its coordinator, front and back.
+const FIELD_TRIP_DOCUMENT_LABELS: Partial<Record<DocType, string>> = {
+  ghana_card: "Coordinator's Ghana Card (front)",
+  ghana_card_back: "Coordinator's Ghana Card (back)",
+};
 
 const ACCESS_LEVEL_OPTIONS = [
   "Visitor Access",
@@ -96,7 +110,7 @@ const localFormSchema = z
     gender: z.string().min(1, "Required"),
     email: z.union([z.literal(""), z.email("Enter a valid email")]),
     phone: phoneFieldSchema,
-    telephoneOnSite: phoneFieldSchema,
+    telephoneOnSite: z.string(),
     emergencyContactName: z.string().min(1, "Required"),
     emergencyContactPhone: phoneFieldSchema,
     employmentStatus: z.string().min(1, "Required"),
@@ -122,7 +136,7 @@ const localFormSchema = z
     bringingEquipment: z.boolean(),
     ppeRequired: z.boolean(),
     itAccessRequired: z.boolean(),
-    accessLevel: z.string().min(1, "Required"),
+    accessLevel: z.string(),
     accommodationConfirmed: z.boolean(),
     itineraryAttached: z.boolean(),
     inflightUpdated: z.boolean(),
@@ -140,6 +154,8 @@ const localFormSchema = z
           ]),
           companyEmergencyName: z.string().min(1, "Required"),
           companyEmergencyTel: phoneFieldSchema,
+          telephoneOnSite: phoneFieldSchema,
+          accessLevel: z.string().min(1, "Required"),
         })
         .safeParse(values);
 
@@ -155,6 +171,14 @@ const localFormSchema = z
     }
 
     if (values.employmentStatus !== STUDENT_FIELD_TRIP) return;
+
+    if (!FIELD_TRIP_ACCESS_PURPOSES.includes(values.accessPurpose)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["accessPurpose"],
+        message: "Required",
+      });
+    }
 
     const result = studentFieldTripSchema.safeParse({
       schoolName: values.schoolName,
@@ -299,7 +323,7 @@ export function LocalRegistrationForm({
             values.employmentStatus === STUDENT_FIELD_TRIP
               ? Number(values.studentCount)
               : undefined,
-          telephoneOnSite: values.telephoneOnSite,
+          telephoneOnSite: studentFieldTrip ? "" : values.telephoneOnSite,
           companyName: studentFieldTrip ? "" : values.companyName,
           contactNameMonthly: studentFieldTrip ? "" : values.contactNameMonthly,
           contactEmail: studentFieldTrip
@@ -313,17 +337,25 @@ export function LocalRegistrationForm({
             : values.companyEmergencyTel,
           gmcLiaisonPerson: values.gmcLiaisonPerson,
           reasonForRequest: values.reasonForRequest,
-          airportPickup: values.airportPickup,
-          transportTo: values.transportTo,
-          transportFrom: values.transportFrom,
-          accommodationRequired: values.accommodationRequired,
-          permanentAccessBadge: values.permanentAccessBadge,
-          generalSiteInduction: values.generalSiteInduction,
-          otherInductions: values.otherInductions,
+          airportPickup: studentFieldTrip ? false : values.airportPickup,
+          transportTo: studentFieldTrip ? false : values.transportTo,
+          transportFrom: studentFieldTrip ? false : values.transportFrom,
+          accommodationRequired: studentFieldTrip
+            ? false
+            : values.accommodationRequired,
+          permanentAccessBadge: studentFieldTrip
+            ? false
+            : values.permanentAccessBadge,
+          generalSiteInduction: studentFieldTrip
+            ? true
+            : values.generalSiteInduction,
+          otherInductions: studentFieldTrip ? false : values.otherInductions,
           bringingEquipment: values.bringingEquipment,
           ppeRequired: values.ppeRequired,
-          itAccessRequired: values.itAccessRequired,
-          accessLevel: values.accessLevel,
+          itAccessRequired: studentFieldTrip ? false : values.itAccessRequired,
+          accessLevel: studentFieldTrip
+            ? FIELD_TRIP_ACCESS_LEVEL
+            : values.accessLevel,
           accommodationConfirmed: values.accommodationConfirmed,
           itineraryAttached: values.itineraryAttached,
           inflightUpdated: values.inflightUpdated,
@@ -363,12 +395,15 @@ export function LocalRegistrationForm({
               name="employmentStatus"
               label="Status"
               options={LOCAL_EMPLOYMENT_STATUSES}
+              optionLabels={EMPLOYMENT_STATUS_LABELS}
               disabled={isPending || documentBusy}
             />
             <TextField
               control={form.control}
               name="fullName"
-              label="Full Name"
+              label={
+                isStudentFieldTrip ? "Full Name of Coordinator" : "Full Name"
+              }
               casing="title"
               disabled={isPending}
             />
@@ -408,12 +443,14 @@ export function LocalRegistrationForm({
               label="Telephone No. (Off Site)"
               disabled={isPending}
             />
-            <PhoneField
-              control={form.control}
-              name="telephoneOnSite"
-              label="Telephone No. (On Site)"
-              disabled={isPending}
-            />
+            {!isStudentFieldTrip && (
+              <PhoneField
+                control={form.control}
+                name="telephoneOnSite"
+                label="Telephone No. (On Site)"
+                disabled={isPending}
+              />
+            )}
             <TextField
               control={form.control}
               name="emergencyContactName"
@@ -430,14 +467,13 @@ export function LocalRegistrationForm({
             <SelectField
               control={form.control}
               name="accessPurpose"
-              label="Access Purpose"
-              options={["Work", "WorkMine", "Visit", "VisitMine"]}
-              optionLabels={{
-                Work: "Coming to work",
-                WorkMine: "Require mine site access to work",
-                Visit: "Coming to visit (no mine site access)",
-                VisitMine: "Coming to visit + mine site access",
-              }}
+              label="Nature of Visit"
+              options={
+                isStudentFieldTrip
+                  ? FIELD_TRIP_ACCESS_PURPOSES
+                  : ["Work", "WorkMine", "Visit", "VisitMine"]
+              }
+              optionLabels={ACCESS_PURPOSE_LABELS}
               disabled={isPending}
             />
           </div>
@@ -446,19 +482,19 @@ export function LocalRegistrationForm({
         {isStudentFieldTrip && (
           <Card className="flex flex-col gap-4 p-6">
             <h2 className="text-lg font-semibold text-foreground">
-              {t("Student Field Trip")}
+              {t("Field Trip")}
             </h2>
             <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
               <TextField
                 control={form.control}
                 name="schoolName"
-                label="School Name"
+                label="Name of Institution"
                 disabled={isPending}
               />
               <TextField
                 control={form.control}
                 name="studentCount"
-                label="Number of Students Visiting"
+                label="Number of Persons Visiting"
                 type="number"
                 casing="none"
                 disabled={isPending}
@@ -569,30 +605,36 @@ export function LocalRegistrationForm({
             {t("Site Support Requirements")}
           </h2>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-            <YesNoField
-              control={form.control}
-              name="airportPickup"
-              label="Airport Pickup / Protocol Required"
-              disabled={isPending}
-            />
-            <YesNoField
-              control={form.control}
-              name="accommodationRequired"
-              label="Accommodation Required"
-              disabled={isPending}
-            />
-            <YesNoField
-              control={form.control}
-              name="permanentAccessBadge"
-              label="Permanent Access Badge"
-              disabled={isPending}
-            />
-            <YesNoField
-              control={form.control}
-              name="generalSiteInduction"
-              label="General Site Induction"
-              disabled={isPending}
-            />
+            {!isStudentFieldTrip && (
+              <YesNoField
+                control={form.control}
+                name="airportPickup"
+                label="Airport Pickup / Protocol Required"
+                disabled={isPending}
+              />
+            )}
+            {!isStudentFieldTrip && (
+              <>
+                <YesNoField
+                  control={form.control}
+                  name="accommodationRequired"
+                  label="Accommodation Required"
+                  disabled={isPending}
+                />
+                <YesNoField
+                  control={form.control}
+                  name="permanentAccessBadge"
+                  label="Permanent Access Badge"
+                  disabled={isPending}
+                />
+                <YesNoField
+                  control={form.control}
+                  name="generalSiteInduction"
+                  label="General Site Induction"
+                  disabled={isPending}
+                />
+              </>
+            )}
             <YesNoField
               control={form.control}
               name="bringingEquipment"
@@ -605,37 +647,41 @@ export function LocalRegistrationForm({
               label="PPE Required"
               disabled={isPending}
             />
-            <YesNoField
-              control={form.control}
-              name="itAccessRequired"
-              label="Internet Access Required"
-              disabled={isPending}
-            />
-            <YesNoField
-              control={form.control}
-              name="transportTo"
-              label="Transport Required To"
-              disabled={isPending}
-            />
-            <YesNoField
-              control={form.control}
-              name="transportFrom"
-              label="Transport Required From"
-              disabled={isPending}
-            />
-            <YesNoField
-              control={form.control}
-              name="otherInductions"
-              label="Other Inductions / Training"
-              disabled={isPending}
-            />
-            <SelectField
-              control={form.control}
-              name="accessLevel"
-              label="Access Level"
-              options={ACCESS_LEVEL_OPTIONS}
-              disabled={isPending}
-            />
+            {!isStudentFieldTrip && (
+              <>
+                <YesNoField
+                  control={form.control}
+                  name="itAccessRequired"
+                  label="Internet Access Required"
+                  disabled={isPending}
+                />
+                <YesNoField
+                  control={form.control}
+                  name="transportTo"
+                  label="Transport Required To"
+                  disabled={isPending}
+                />
+                <YesNoField
+                  control={form.control}
+                  name="transportFrom"
+                  label="Transport Required From"
+                  disabled={isPending}
+                />
+                <YesNoField
+                  control={form.control}
+                  name="otherInductions"
+                  label="Other Inductions / Training"
+                  disabled={isPending}
+                />
+                <SelectField
+                  control={form.control}
+                  name="accessLevel"
+                  label="Access Level"
+                  options={ACCESS_LEVEL_OPTIONS}
+                  disabled={isPending}
+                />
+              </>
+            )}
           </div>
         </Card>
 
@@ -648,13 +694,20 @@ export function LocalRegistrationForm({
             mode="required"
             docTypes={getRegistrationDocTypes("Local").filter(
               (docType) =>
-                docType !== "student_list" ||
-                (!isStudentFieldTrip &&
-                  uploadedDocuments.some(
-                    (document) => document.docType === "student_list",
-                  )),
+                !(
+                  isStudentFieldTrip &&
+                  (docType === "insurance_proof" ||
+                    docType === "assignment_letter")
+                ) &&
+                (isStudentFieldTrip || docType !== "ghana_card_back") &&
+                (docType !== "student_list" ||
+                  (!isStudentFieldTrip &&
+                    uploadedDocuments.some(
+                      (document) => document.docType === "student_list",
+                    ))),
             )}
             requiredDocTypes={requiredDocTypes}
+            labels={isStudentFieldTrip ? FIELD_TRIP_DOCUMENT_LABELS : undefined}
             uploadedDocuments={uploadedDocuments}
             onDocumentBusyChange={handleDocumentBusyChange}
             disabled={isPending}
@@ -674,7 +727,13 @@ export function LocalRegistrationForm({
             <p className="text-xs text-muted-foreground">
               {t("Upload these documents to continue:")}{" "}
               {missingRequiredDocs
-                .map((docType) => t(DOCUMENT_LABELS[docType]))
+                .map((docType) =>
+                  t(
+                    (isStudentFieldTrip &&
+                      FIELD_TRIP_DOCUMENT_LABELS[docType]) ||
+                      DOCUMENT_LABELS[docType],
+                  ),
+                )
                 .join(", ")}
             </p>
           )}

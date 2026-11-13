@@ -27,6 +27,7 @@ const DOC_TYPE_OWNERS: Record<DocType, WorkflowRole> = {
   mincom_letter: "Receptionist",
   work_residence_permit: "Receptionist",
   ghana_card: "Receptionist",
+  ghana_card_back: "Receptionist",
   assignment_letter: "Receptionist",
   insurance_proof: "Receptionist",
   induction_declaration_form: "TrainingStaff",

@@ -25,7 +25,7 @@ test("local status options contain only the three local choices", () => {
 test("only local student field trips require a student list", () => {
   assert.deepEqual(
     getRequiredRegistrationDocTypes("Local", undefined, STUDENT_FIELD_TRIP),
-    ["ghana_card", "student_list"],
+    ["ghana_card", "ghana_card_back", "student_list"],
   );
   assert.deepEqual(
     getRequiredRegistrationDocTypes("Local", undefined, "Visitor (Local)"),

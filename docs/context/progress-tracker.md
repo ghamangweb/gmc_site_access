@@ -1,5 +1,14 @@
 # Progress Tracker
 
+## Local field trip form tailoring (2026-11-13)
+
+- [x] "Student Field Trip" now shows as "Field Trip" (the saved value is unchanged). Labels renamed: Name of Institution,
+      Number of Persons Visiting, List of persons visiting, and Full Name of Coordinator for field trips.
+- [x] Field trips: Nature of Visit is limited to the two Familiarization Visit options. Hidden: On-Site Telephone, Airport
+      Pickup, Accommodation, Transport To/From, Permanent Badge, General Site Induction, Internet Access, Other Inductions, Access Level, Insurance proof and Letter of assignment.
+      Field trips require the coordinator's Ghana Card front (`ghana_card`) and back (new `ghana_card_back` doc type).
+      Submitted as Induction = yes, Access Level = Visitor Access, and the other hidden questions = no.
+
 ## Remove report authorship statement (2026-11-09)
 
 - [x] Removed the shared AI authorship note from report previews and DOCX/PDF downloads.
