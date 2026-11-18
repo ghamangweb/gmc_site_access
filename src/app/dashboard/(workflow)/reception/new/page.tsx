@@ -7,6 +7,7 @@ import { ReceptionForm } from "@/components/workflow/reception-form";
 import { RegistrationCompletionForm } from "@/components/workflow/registration-completion-form";
 import { requireWriteAccess } from "@/lib/auth/guards";
 import { registrationRequestToFormValues } from "@/lib/domain/registration-prefill";
+import { STUDENT_FIELD_TRIP } from "@/lib/domain/student-field-trip";
 import { isApplicableDocType } from "@/lib/domain/types";
 import { getDocumentsForInvitation } from "@/lib/services/document-service";
 import { getRegistrationRequest } from "@/lib/services/registration-service";
@@ -59,6 +60,10 @@ export default async function NewReceptionPage({
     ? registrationRequestToFormValues(request.formData)
     : {};
 
+  const isLocalFieldTrip =
+    request?.registrationType === "Local" &&
+    submittedValues.employmentStatus === STUDENT_FIELD_TRIP;
+
   return (
     <div>
       <PageHeader
@@ -71,7 +76,11 @@ export default async function NewReceptionPage({
       />
       {request ? (
         <PreviewEditPanel
-          previewHint="Submitted by the visitor. Review it, then complete the fields below."
+          previewHint={
+            isLocalFieldTrip
+              ? "Review the submitted field trip before creating the engagement."
+              : "Submitted by the visitor. Review it, then complete the fields below."
+          }
           editHint="Changes here replace what the visitor sent."
           editLabel="Edit submission"
           preview={
@@ -88,6 +97,7 @@ export default async function NewReceptionPage({
             <div id="create-engagement" className="scroll-mt-6">
               <RegistrationCompletionForm
                 registrationRequestId={request.id}
+                isLocalFieldTrip={isLocalFieldTrip}
                 isLocal={request.registrationType === "Local"}
                 documents={uploadedDocuments}
                 defaultApplicableDocuments={applicableDocuments}
@@ -96,6 +106,12 @@ export default async function NewReceptionPage({
           }
           editForm={
             <ReceptionForm
+              identityLabel={
+                request.registrationType === "Local"
+                  ? "Ghana Card No."
+                  : "Passport No."
+              }
+              hideApplicableUploads={isLocalFieldTrip}
               registrationRequestId={request.id}
               uploadedDocuments={uploadedDocuments}
               defaultValues={{ ...submittedValues, applicableDocuments }}

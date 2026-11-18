@@ -34,11 +34,13 @@ import type { Document } from "@/lib/services/document-service";
 export function RegistrationCompletionForm({
   registrationRequestId,
   isLocal,
+  isLocalFieldTrip,
   documents,
   defaultApplicableDocuments,
 }: {
   registrationRequestId: string;
   isLocal: boolean;
+  isLocalFieldTrip: boolean;
   documents: Document[];
   defaultApplicableDocuments: ApplicableDocType[];
 }) {
@@ -66,7 +68,8 @@ export function RegistrationCompletionForm({
 
   // Only the Local path can be missing it; a Foreign submission always
   // carries a nationality and the field isn't rendered at all.
-  const nationalityMissing = isLocal && nationality.length === 0;
+  const nationalityMissing =
+    isLocal && !isLocalFieldTrip && nationality.length === 0;
 
   function handleSubmit() {
     startTransition(async () => {
@@ -101,113 +104,117 @@ export function RegistrationCompletionForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="flex flex-col gap-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Reception Completes
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The visitor was not asked for these.
-          </p>
-        </div>
+      {!isLocalFieldTrip && (
+        <>
+          <Card className="flex flex-col gap-4 p-6">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">
+                Reception Completes
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The visitor was not asked for these.
+              </p>
+            </div>
 
-        {isLocal && (
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-            <div className="flex flex-col gap-2">
-              <Label>Nationality *</Label>
-              <Combobox
-                value={nationality}
-                onChange={setNationality}
-                options={NATIONALITIES}
-                placeholder="Select nationality"
-                searchPlaceholder="Search nationality..."
+            {isLocal && (
+              <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                <div className="flex flex-col gap-2">
+                  <Label>Nationality *</Label>
+                  <Combobox
+                    value={nationality}
+                    onChange={setNationality}
+                    options={NATIONALITIES}
+                    placeholder="Select nationality"
+                    searchPlaceholder="Search nationality..."
+                    disabled={isPending}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Visa Type</Label>
+                  <Select
+                    value={visaType}
+                    onValueChange={(next) => {
+                      // SAFETY: the Select's only options are VISA_TYPES members,
+                      // so `next` can be nothing else.
+                      setVisaType(next as VisaType);
+                    }}
+                    disabled={isPending}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VISA_TYPES.map((option: VisaType) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <CompletionCheckbox
+                  label="Ghana Visa Required"
+                  checked={ghanaVisaRequired}
+                  onChange={setGhanaVisaRequired}
+                  disabled={isPending}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+              <CompletionCheckbox
+                label="Accommodation Confirmed"
+                checked={accommodationConfirmed}
+                onChange={setAccommodationConfirmed}
+                disabled={isPending}
+              />
+              <CompletionCheckbox
+                label="Itinerary Attached"
+                checked={itineraryAttached}
+                onChange={setItineraryAttached}
+                disabled={isPending}
+              />
+              <CompletionCheckbox
+                label="Inflight Updated"
+                checked={inflightUpdated}
+                onChange={setInflightUpdated}
                 disabled={isPending}
               />
             </div>
+
             <div className="flex flex-col gap-2">
-              <Label>Visa Type</Label>
-              <Select
-                value={visaType}
-                onValueChange={(next) => {
-                  // SAFETY: the Select's only options are VISA_TYPES members,
-                  // so `next` can be nothing else.
-                  setVisaType(next as VisaType);
-                }}
+              <Label htmlFor="completion-remarks">
+                Remarks / Other Information
+              </Label>
+              <Textarea
+                id="completion-remarks"
+                value={remarks}
+                onChange={(event) => setRemarks(event.target.value)}
                 disabled={isPending}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {VISA_TYPES.map((option: VisaType) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
-            <CompletionCheckbox
-              label="Ghana Visa Required"
-              checked={ghanaVisaRequired}
-              onChange={setGhanaVisaRequired}
+          </Card>
+
+          <Card className="flex flex-col gap-4 p-6">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">
+                Applicable Document Uploads
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Tick every document this engagement requires. What the visitor
+                already supplied is ticked and attached.
+              </p>
+            </div>
+            <DocumentSelector
+              mode="select"
+              value={applicableDocuments}
+              onChange={(next) => setApplicableDocuments(next)}
+              uploadedDocuments={documents}
               disabled={isPending}
             />
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-          <CompletionCheckbox
-            label="Accommodation Confirmed"
-            checked={accommodationConfirmed}
-            onChange={setAccommodationConfirmed}
-            disabled={isPending}
-          />
-          <CompletionCheckbox
-            label="Itinerary Attached"
-            checked={itineraryAttached}
-            onChange={setItineraryAttached}
-            disabled={isPending}
-          />
-          <CompletionCheckbox
-            label="Inflight Updated"
-            checked={inflightUpdated}
-            onChange={setInflightUpdated}
-            disabled={isPending}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="completion-remarks">
-            Remarks / Other Information
-          </Label>
-          <Textarea
-            id="completion-remarks"
-            value={remarks}
-            onChange={(event) => setRemarks(event.target.value)}
-            disabled={isPending}
-          />
-        </div>
-      </Card>
-
-      <Card className="flex flex-col gap-4 p-6">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Applicable Document Uploads
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tick every document this engagement requires. What the visitor
-            already supplied is ticked and attached.
-          </p>
-        </div>
-        <DocumentSelector
-          mode="select"
-          value={applicableDocuments}
-          onChange={(next) => setApplicableDocuments(next)}
-          uploadedDocuments={documents}
-          disabled={isPending}
-        />
-      </Card>
+          </Card>
+        </>
+      )}
 
       <div className="flex flex-col gap-2">
         <Button

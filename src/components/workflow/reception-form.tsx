@@ -213,6 +213,8 @@ type ReceptionFormProps = {
   /** Set when this form was opened from a visitor's submission — creating the
    * Engagement then marks that submission converted and links the two. */
   registrationRequestId?: string;
+  identityLabel?: "Ghana Card No." | "Passport No.";
+  hideApplicableUploads?: boolean;
 };
 
 const DEFAULT_VALUES: ReceptionFormValues = {
@@ -268,6 +270,8 @@ export function ReceptionForm({
   allowLookup = false,
   publicToken,
   registrationRequestId,
+  identityLabel = "Passport No.",
+  hideApplicableUploads = false,
 }: ReceptionFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -572,6 +576,7 @@ export function ReceptionForm({
           )}
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <PassportField
+              label={identityLabel}
               control={form.control}
               disabled={disabled || !!engagementId}
               showLookup={allowLookup && !engagementId}
@@ -869,40 +874,44 @@ export function ReceptionForm({
           </div>
         </Card>
 
-        <Card className="flex flex-col gap-4 p-6">
-          <h2 className="text-lg font-semibold text-foreground">
-            {t(
-              publicToken ? "Document Uploads" : "Applicable Document Uploads",
-            )}
-          </h2>
-          {publicToken ? (
-            <DocumentSelector
-              invitationToken={publicToken}
-              mode="required"
-              docTypes={getRegistrationDocTypes("Foreign")}
-              requiredDocTypes={requiredDocTypes}
-              uploadedDocuments={uploadedDocuments}
-              onDocumentBusyChange={handleDocumentBusyChange}
-              disabled={disabled}
-            />
-          ) : (
-            <Controller
-              control={form.control}
-              name="applicableDocuments"
-              render={({ field }) => (
-                <DocumentSelector
-                  engagementId={engagementId}
-                  value={field.value}
-                  onChange={field.onChange}
-                  uploadedDocuments={uploadedDocuments}
-                  pendingFiles={pendingFiles}
-                  onPendingFilesChange={setPendingFiles}
-                  disabled={disabled}
-                />
+        {!hideApplicableUploads && (
+          <Card className="flex flex-col gap-4 p-6">
+            <h2 className="text-lg font-semibold text-foreground">
+              {t(
+                publicToken
+                  ? "Document Uploads"
+                  : "Applicable Document Uploads",
               )}
-            />
-          )}
-        </Card>
+            </h2>
+            {publicToken ? (
+              <DocumentSelector
+                invitationToken={publicToken}
+                mode="required"
+                docTypes={getRegistrationDocTypes("Foreign")}
+                requiredDocTypes={requiredDocTypes}
+                uploadedDocuments={uploadedDocuments}
+                onDocumentBusyChange={handleDocumentBusyChange}
+                disabled={disabled}
+              />
+            ) : (
+              <Controller
+                control={form.control}
+                name="applicableDocuments"
+                render={({ field }) => (
+                  <DocumentSelector
+                    engagementId={engagementId}
+                    value={field.value}
+                    onChange={field.onChange}
+                    uploadedDocuments={uploadedDocuments}
+                    pendingFiles={pendingFiles}
+                    onPendingFilesChange={setPendingFiles}
+                    disabled={disabled}
+                  />
+                )}
+              />
+            )}
+          </Card>
+        )}
 
         {/* Reception's own section — never shown to a public visitor. */}
         {!publicToken && (
@@ -1019,6 +1028,7 @@ function TextField<TName extends FieldPath<ReceptionFormValues>>({
 }
 
 function PassportField({
+  label,
   control,
   disabled,
   showLookup,
@@ -1027,6 +1037,7 @@ function PassportField({
 }: {
   control: Control<ReceptionFormValues>;
   disabled?: boolean;
+  label: string;
   showLookup: boolean;
   isLookingUp: boolean;
   onLookup: () => void;
@@ -1039,7 +1050,7 @@ function PassportField({
       name="passportNo"
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{t("Passport No.")} *</FormLabel>
+          <FormLabel>{t(label)} *</FormLabel>
           <FormControl>
             <div className="flex h-11 items-stretch rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
               <input

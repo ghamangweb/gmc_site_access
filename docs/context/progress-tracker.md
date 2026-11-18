@@ -2265,3 +2265,7 @@ cover the same five workflows as the existing exports and approved this backend 
 - [ ] User browser check: choose each new option, enter school/count, upload and replace a list,
       submit and verify staff preview/download. Live uploads/database writes remain untested;
       the attachment is retained as supplied, without parsing or comparing its rows to the count.
+
+- Local student field trips can be converted at Reception without completing nationality or selecting applicable uploads. Existing attachments stay with the engagement.
+
+- Corrected the identity label when Reception edits a local submission, including student field trips.
