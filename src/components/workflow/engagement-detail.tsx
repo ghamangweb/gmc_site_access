@@ -10,6 +10,7 @@ import { StakeholderPanel } from "@/components/workflow/stakeholder-panel";
 import { StayExtensionsCard } from "@/components/workflow/stay-extensions-card";
 import { WorkflowExemptionsSummary } from "@/components/workflow/workflow-exemptions-summary";
 import { requirePinConfirmed } from "@/lib/auth/guards";
+import { STUDENT_FIELD_TRIP } from "@/lib/domain/student-field-trip";
 import {
   type AccessPurpose,
   type ApproverRole,
@@ -176,6 +177,10 @@ export async function EngagementDetail({
             preview={preview}
             editForm={
               <ReceptionForm
+                hideApplicableUploads={
+                  queueHref === "/dashboard/reception" &&
+                  receptionData.employmentStatus === STUDENT_FIELD_TRIP
+                }
                 engagementId={engagementId}
                 defaultValues={defaultValues}
                 uploadedDocuments={documents}

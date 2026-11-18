@@ -642,7 +642,15 @@ export async function createEngagement(
           ACTIVE_ENGAGEMENT_ERROR(activeRow.workflowState as WorkflowState),
         );
       }
-      person = (await updatePerson(person.id, input.person, tx)) ?? person;
+      person =
+        (await updatePerson(
+          person.id,
+          {
+            ...input.person,
+            nationality: input.person.nationality || person.nationality,
+          },
+          tx,
+        )) ?? person;
     } else {
       person = await createPerson(input.person, tx);
     }

@@ -2741,3 +2741,7 @@ Shimmer = `animate-shimmer bg-linear-to-r bg-size-[200%_100%]` (+ `bg-clip-text
 text-transparent` for text); the `--animate-shimmer` token and keyframes live in
 `globals.css`. Every animation has `motion-reduce:animate-none`. Reuse these for any future
 AI feature instead of a spinner.
+
+- Reception field-trip review keeps the submitted documents and Create Engagement action visible while hiding Reception Completes and Applicable Document Uploads for local student field trips.
+
+- Reception uses the submitted registration type for the identity label in Edit submission (Ghana Card No. for Local, Passport No. for Foreign).
