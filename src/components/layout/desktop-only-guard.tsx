@@ -8,8 +8,9 @@ export function DesktopOnlyGuard() {
         Desktop Required
       </h1>
       <p className="max-w-sm text-sm text-muted-foreground">
-        This application is optimized for desktop use only. Please switch to a
-        desktop or laptop computer to continue.
+        This application needs a wider screen. If you are using a desktop or
+        laptop, maximize your browser window. If you are on a phone or tablet,
+        switch to a desktop or laptop to continue.
       </p>
     </div>
   );
