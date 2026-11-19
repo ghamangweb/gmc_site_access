@@ -16,4 +16,5 @@ export const RECORDED_COLUMNS: SkeletonColumn[] = [
   { header: "Name", cell: "name" },
   { header: "Inductions", cell: "text" },
   { header: "Completed", cell: "date" },
+  { header: "Cleared By", cell: "name" },
 ];

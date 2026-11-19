@@ -3093,6 +3093,7 @@ export async function getLatestInductionRecord(
 // again, and both sign-offs are history.
 export type InductionRow = {
   induction: InductionRecord;
+  clearedBy: string | null;
   engagement: Engagement;
   person: typeof persons.$inferSelect;
 };
@@ -3113,6 +3114,15 @@ export async function listRecentInductions(
         induction: inductionRecords,
         engagement: engagements,
         person: persons,
+        clearedBy: sql<string | null>`(
+          select ${staffUsers.displayName} from ${workflowTransitions}
+          left join ${staffUsers} on ${staffUsers.id} = ${workflowTransitions.performedBy}
+          where ${workflowTransitions.workflowCycleId} = ${inductionRecords.workflowCycleId}
+            and ${workflowTransitions.fromState} = 'AtTraining'
+            and ${workflowTransitions.toState} = 'AtSecurity'
+          order by ${workflowTransitions.performedAt} desc, ${workflowTransitions.id} desc
+          limit 1
+        )`,
       })
       .from(inductionRecords)
       .innerJoin(

@@ -2269,3 +2269,5 @@ cover the same five workflows as the existing exports and approved this backend 
 - Local student field trips can be converted at Reception without completing nationality or selecting applicable uploads. Existing attachments stay with the engagement.
 
 - Corrected the identity label when Reception edits a local submission, including student field trips.
+
+- Added the staff member who signed off each induction to Training School’s Recorded Inductions table using the workflow cycle’s clearance history.

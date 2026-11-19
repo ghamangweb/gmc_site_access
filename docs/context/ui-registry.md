@@ -2745,3 +2745,5 @@ AI feature instead of a spinner.
 - Reception field-trip review keeps the submitted documents and Create Engagement action visible while hiding Reception Completes and Applicable Document Uploads for local student field trips.
 
 - Reception uses the submitted registration type for the identity label in Edit submission (Ghana Card No. for Local, Passport No. for Foreign).
+
+- Training School shows Cleared By after Completed in Recorded Inductions. Missing signer names display as “Not recorded”.
