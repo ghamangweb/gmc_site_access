@@ -244,10 +244,11 @@ export default async function TrainingQueuePage({
                       <TableHead>Name</TableHead>
                       <TableHead>Inductions</TableHead>
                       <TableHead>Completed</TableHead>
+                      <TableHead>Cleared By</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recorded.rows.map(({ induction, person }) => (
+                    {recorded.rows.map(({ induction, person, clearedBy }) => (
                       <TableRow
                         key={induction.id}
                         className="hover:bg-muted/50"
@@ -266,6 +267,7 @@ export default async function TrainingQueuePage({
                         <TableCell className="text-muted-foreground">
                           {formatQueueDate(induction.completedAt)}
                         </TableCell>
+                        <TableCell>{clearedBy ?? "Not recorded"}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
