@@ -16,10 +16,13 @@ import {
 
 export default async function TrainingDetailPage({
   params,
+  searchParams,
 }: {
+  searchParams: Promise<{ induction?: string }>;
   params: Promise<{ engagementId: string }>;
 }) {
   const { engagementId } = await params;
+  const { induction } = await searchParams;
   const session = await requirePinConfirmed();
 
   if (!session.workflowRoles.includes("TrainingStaff")) {
@@ -43,17 +46,25 @@ export default async function TrainingDetailPage({
   ] = await Promise.all([
     checkHospitalClearanceAge(engagementId),
     getLatestHospitalClearance(engagementId),
-    getLatestInductionRecord(engagementId),
+    getLatestInductionRecord(engagementId, induction),
     getDocumentsForEngagement(engagementId),
     getActiveWorkflowCycle(engagementId),
   ]);
+
+  if (induction !== undefined && !latestInduction) notFound();
+  const completion =
+    induction !== undefined || engagement.workflowState !== "AtTraining"
+      ? latestInduction
+      : undefined;
+  const cycleId = completion?.workflowCycleId ?? activeCycle?.id;
+  const historical = cycleId !== activeCycle?.id;
 
   const isTrainingStaff =
     session.workflowRoles.includes("TrainingStaff") &&
     session.systemRole !== "Guest";
 
   const activeExemptions = exemptions.filter(
-    (exemption) => exemption.workflowCycleId === activeCycle?.id,
+    (exemption) => exemption.workflowCycleId === cycleId,
   );
 
   const hospitalExempted = activeExemptions.some(
@@ -62,6 +73,8 @@ export default async function TrainingDetailPage({
 
   const readOnly =
     engagement.workflowState !== "AtTraining" ||
+    !!completion ||
+    !cycleId ||
     !isTrainingStaff ||
     activeExemptions.some((exemption) => exemption.stage === "Training");
 
@@ -76,15 +89,16 @@ export default async function TrainingDetailPage({
         {/* A visit+mine visitor never went through Hospital, so there is
             nothing to hand over and the card is not rendered at all. */}
         <WorkflowExemptionsSummary exemptions={activeExemptions} />
-        {hospitalClearance && !hospitalExempted && (
+        {!historical && hospitalClearance && !hospitalExempted && (
           <HospitalHandoff clearance={hospitalClearance} />
         )}
         <TrainingForm
           engagementId={engagementId}
           clearance={clearance}
-          latestInduction={latestInduction}
+          workflowCycleId={cycleId}
+          latestInduction={completion}
           uploadedDocuments={documents.filter(
-            (document) => document.workflowCycleId === activeCycle?.id,
+            (document) => document.workflowCycleId === cycleId,
           )}
           readOnly={readOnly}
         />

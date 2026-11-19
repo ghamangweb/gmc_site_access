@@ -52,6 +52,7 @@ import {
   getActiveEngagementForPassport,
   getEngagementDetail,
   type HospitalClearanceInput,
+  InductionStateChangedError,
   type ReceptionFormInput,
   recordHospitalClearance,
   recordHospitalReview,
@@ -829,6 +830,7 @@ export async function submitHospitalReviewAction(
 export async function submitTrainingCompletionAction(
   engagementId: string,
   input: {
+    workflowCycleId: string;
     generalSiteInduction: boolean;
     otherInductions: boolean;
     trainerComments: string;
@@ -886,6 +888,14 @@ export async function submitTrainingCompletionAction(
       [...failedEmails],
     );
   } catch (error) {
+    if (error instanceof InductionStateChangedError) {
+      return {
+        success: false,
+        error: error.message,
+        errorCode: "induction_state_changed",
+      };
+    }
+
     console.error("[actions/engagements]", error);
 
     return {

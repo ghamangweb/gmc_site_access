@@ -19,16 +19,19 @@ type LatestInduction = {
   otherInductions: boolean;
   trainerComments: string;
   completedAt: Date;
+  clearedBy: string | null;
 };
 
 export function TrainingForm({
   engagementId,
+  workflowCycleId,
   clearance,
   latestInduction,
   uploadedDocuments,
   readOnly,
 }: {
   engagementId: string;
+  workflowCycleId?: string;
   /** Work-path medicals expire after three months; visit+mine records never
    * went through Hospital and report `applicable: false`. */
   clearance: ClearanceAge;
@@ -54,15 +57,23 @@ export function TrainingForm({
   const canSubmit = !disabled && !documentBusy;
 
   function handleSubmit() {
-    if (!canSubmit) return;
+    if (!canSubmit || !workflowCycleId) return;
     startTransition(async () => {
       const result = await submitTrainingCompletionAction(engagementId, {
+        workflowCycleId,
         generalSiteInduction,
         otherInductions,
         trainerComments: comments,
       });
 
       if (!result.success) {
+        if (result.errorCode === "induction_state_changed") {
+          router.refresh();
+          toast.info(
+            "The induction record has changed. Showing its current status.",
+          );
+          return;
+        }
         toast.error(result.error);
 
         return;
@@ -85,31 +96,37 @@ export function TrainingForm({
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <h2 className="mb-4 text-lg font-semibold text-foreground">
-        Induction Sign-Off
+        {latestInduction ? "Induction already completed" : "Induction Sign-Off"}
       </h2>
 
-      {clearance.applicable && (expired || clearance.expiringSoon) && (
-        <div
-          className={`mb-4 rounded-md px-4 py-3 text-sm ${
-            expired
-              ? "bg-status-danger-bg text-status-danger-fg"
-              : "bg-status-warning-bg text-status-warning-fg"
-          }`}
-        >
-          {expired
-            ? "Hospital clearance has expired. This record must go back to the Hospital stage before induction can be signed off."
-            : `Hospital clearance expires in ${clearance.daysRemaining} day${
-                clearance.daysRemaining === 1 ? "" : "s"
-              }. Complete the induction before then, or the record returns to Hospital.`}
-        </div>
-      )}
+      {!latestInduction &&
+        clearance.applicable &&
+        (expired || clearance.expiringSoon) && (
+          <div
+            className={`mb-4 rounded-md px-4 py-3 text-sm ${
+              expired
+                ? "bg-status-danger-bg text-status-danger-fg"
+                : "bg-status-warning-bg text-status-warning-fg"
+            }`}
+          >
+            {expired
+              ? "Hospital clearance has expired. This record must go back to the Hospital stage before induction can be signed off."
+              : `Hospital clearance expires in ${clearance.daysRemaining} day${
+                  clearance.daysRemaining === 1 ? "" : "s"
+                }. Complete the induction before then, or the record returns to Hospital.`}
+          </div>
+        )}
 
       {latestInduction && (
-        <p className="mb-4 text-xs text-muted-foreground">
-          Last recorded:{" "}
-          {latestInduction.trainerComments &&
-            `${latestInduction.trainerComments} `}
-          ({latestInduction.completedAt.toLocaleDateString()})
+        <p className="mb-4 rounded-md bg-status-success-bg px-4 py-3 text-sm text-status-success-fg">
+          Completed
+          {latestInduction.clearedBy && ` by ${latestInduction.clearedBy}`} on{" "}
+          {latestInduction.completedAt.toLocaleString("en-GB", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            timeZone: "UTC",
+          })}{" "}
+          UTC. No further action is needed.
         </p>
       )}
 
@@ -118,7 +135,9 @@ export function TrainingForm({
           <div className="flex items-center gap-2">
             <Checkbox
               id="general-site-induction"
-              checked={generalSiteInduction}
+              checked={
+                latestInduction?.generalSiteInduction ?? generalSiteInduction
+              }
               onCheckedChange={(checked) =>
                 setGeneralSiteInduction(checked === true)
               }
@@ -134,7 +153,7 @@ export function TrainingForm({
           <div className="flex items-center gap-2">
             <Checkbox
               id="other-inductions"
-              checked={otherInductions}
+              checked={latestInduction?.otherInductions ?? otherInductions}
               onCheckedChange={(checked) =>
                 setOtherInductions(checked === true)
               }
@@ -153,7 +172,7 @@ export function TrainingForm({
           <Label htmlFor="trainer-comments">Comments (optional)</Label>
           <Textarea
             id="trainer-comments"
-            value={comments}
+            value={latestInduction?.trainerComments ?? comments}
             onChange={(event) => setComments(event.target.value)}
             disabled={disabled}
           />

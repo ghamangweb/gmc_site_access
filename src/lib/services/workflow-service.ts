@@ -3059,33 +3059,42 @@ export async function checkHospitalClearanceAge(
   };
 }
 
+const inductionSigner = sql<string | null>`(
+          select ${staffUsers.displayName} from ${workflowTransitions}
+          left join ${staffUsers} on ${staffUsers.id} = ${workflowTransitions.performedBy}
+          where ${workflowTransitions.workflowCycleId} = ${inductionRecords.workflowCycleId}
+            and ${workflowTransitions.fromState} = 'AtTraining'
+            and ${workflowTransitions.toState} = 'AtSecurity'
+          order by ${workflowTransitions.performedAt} desc, ${workflowTransitions.id} desc
+          limit 1
+        )`;
+
 export async function getLatestInductionRecord(
   engagementId: string,
-): Promise<InductionRecord | undefined> {
-  const [cycle] = await db
-    .select()
-    .from(workflowCycles)
+  inductionId?: string,
+) {
+  const [row] = await db
+    .select({ induction: inductionRecords, clearedBy: inductionSigner })
+    .from(inductionRecords)
+    .innerJoin(
+      workflowCycles,
+      eq(workflowCycles.id, inductionRecords.workflowCycleId),
+    )
     .where(
       and(
         eq(workflowCycles.engagementId, engagementId),
-        isNull(workflowCycles.archivedAt),
+        inductionId === undefined
+          ? isNull(workflowCycles.archivedAt)
+          : sql`${inductionRecords.id}::text = ${inductionId}`,
       ),
     )
-    .orderBy(desc(workflowCycles.cycleNumber))
+    .orderBy(
+      desc(workflowCycles.cycleNumber),
+      desc(inductionRecords.completedAt),
+    )
     .limit(1);
 
-  if (!cycle) {
-    return undefined;
-  }
-
-  const [record] = await db
-    .select()
-    .from(inductionRecords)
-    .where(eq(inductionRecords.workflowCycleId, cycle.id))
-    .orderBy(desc(inductionRecords.completedAt))
-    .limit(1);
-
-  return record;
+  return row && { ...row.induction, clearedBy: row.clearedBy };
 }
 
 // Training's worked-on tab. Per induction record rather than per engagement:
@@ -3114,15 +3123,7 @@ export async function listRecentInductions(
         induction: inductionRecords,
         engagement: engagements,
         person: persons,
-        clearedBy: sql<string | null>`(
-          select ${staffUsers.displayName} from ${workflowTransitions}
-          left join ${staffUsers} on ${staffUsers.id} = ${workflowTransitions.performedBy}
-          where ${workflowTransitions.workflowCycleId} = ${inductionRecords.workflowCycleId}
-            and ${workflowTransitions.fromState} = 'AtTraining'
-            and ${workflowTransitions.toState} = 'AtSecurity'
-          order by ${workflowTransitions.performedAt} desc, ${workflowTransitions.id} desc
-          limit 1
-        )`,
+        clearedBy: inductionSigner,
       })
       .from(inductionRecords)
       .innerJoin(
@@ -4003,9 +4004,12 @@ export async function exportTrainingCsv(
   );
 }
 
+export class InductionStateChangedError extends Error {}
+
 export async function recordInductionCompletion(
   engagementId: string,
   input: {
+    workflowCycleId?: string;
     generalSiteInduction: boolean;
     otherInductions: boolean;
     trainerComments: string;
@@ -4024,7 +4028,9 @@ export async function recordInductionCompletion(
   }
 
   if (preCheck.workflowState !== "AtTraining") {
-    throw new Error("Engagement is not awaiting induction");
+    throw new InductionStateChangedError(
+      "Engagement is not awaiting induction",
+    );
   }
 
   // The medical has to still be valid at sign-off, not merely at the moment
@@ -4055,7 +4061,9 @@ export async function recordInductionCompletion(
     }
 
     if (engagement.workflowState !== "AtTraining") {
-      throw new Error("Engagement is not awaiting induction");
+      throw new InductionStateChangedError(
+        "Engagement is not awaiting induction",
+      );
     }
 
     const [cycle] = await tx
@@ -4072,6 +4080,12 @@ export async function recordInductionCompletion(
 
     if (!cycle) {
       throw new Error("No active workflow cycle for this engagement");
+    }
+
+    if (input.workflowCycleId && input.workflowCycleId !== cycle.id) {
+      throw new InductionStateChangedError(
+        "The workflow cycle has changed. Review the current record.",
+      );
     }
 
     const exemptions = await getActiveWorkflowExemptions(engagementId, tx);

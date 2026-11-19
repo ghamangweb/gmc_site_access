@@ -39,6 +39,7 @@ export type RegistrationType = "Local" | "Foreign";
 // sentence. `missingDocTypes` carries the parameters of the one code that
 // needs them.
 export type ActionErrorCode =
+  | "induction_state_changed"
   | "invalid_invitation"
   | "missing_documents"
   | "submit_failed";
