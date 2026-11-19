@@ -205,7 +205,7 @@ export default async function TrainingQueuePage({
                               <Link
                                 href={`/dashboard/training/${engagement.id}`}
                               >
-                                Record Induction
+                                Complete Induction
                               </Link>
                             </Button>
                           </TableCell>
@@ -245,31 +245,44 @@ export default async function TrainingQueuePage({
                       <TableHead>Inductions</TableHead>
                       <TableHead>Completed</TableHead>
                       <TableHead>Cleared By</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recorded.rows.map(({ induction, person, clearedBy }) => (
-                      <TableRow
-                        key={induction.id}
-                        className="hover:bg-muted/50"
-                      >
-                        <TableCell>{person.fullName}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {[
-                            induction.generalSiteInduction
-                              ? "General site"
-                              : null,
-                            induction.otherInductions ? "Other" : null,
-                          ]
-                            .filter((label) => label !== null)
-                            .join(", ") || "-"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatQueueDate(induction.completedAt)}
-                        </TableCell>
-                        <TableCell>{clearedBy ?? "Not recorded"}</TableCell>
-                      </TableRow>
-                    ))}
+                    {recorded.rows.map(
+                      ({ induction, engagement, person, clearedBy }) => (
+                        <TableRow
+                          key={induction.id}
+                          className="hover:bg-muted/50"
+                        >
+                          <TableCell>{person.fullName}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {[
+                              induction.generalSiteInduction
+                                ? "General site"
+                                : null,
+                              induction.otherInductions ? "Other" : null,
+                            ]
+                              .filter((label) => label !== null)
+                              .join(", ") || "-"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            Completed on{" "}
+                            {formatQueueDate(induction.completedAt)}
+                          </TableCell>
+                          <TableCell>{clearedBy ?? "Not recorded"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button asChild size="sm" variant="outline">
+                              <Link
+                                href={`/dashboard/training/${engagement.id}?induction=${induction.id}`}
+                              >
+                                View induction
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ),
+                    )}
                   </TableBody>
                 </Table>
               )}

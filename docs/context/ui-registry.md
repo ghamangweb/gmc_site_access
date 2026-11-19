@@ -2747,3 +2747,5 @@ AI feature instead of a spinner.
 - Reception uses the submitted registration type for the identity label in Edit submission (Ghana Card No. for Local, Passport No. for Foreign).
 
 - Training School shows Cleared By after Completed in Recorded Inductions. Missing signer names display as “Not recorded”.
+
+- Training sign-off uses a success panel with the completion time, signer when available, and read-only saved induction details.

@@ -2271,3 +2271,5 @@ cover the same five workflows as the existing exports and approved this backend 
 - Corrected the identity label when Reception edits a local submission, including student field trips.
 
 - Added the staff member who signed off each induction to Training School’s Recorded Inductions table using the workflow cycle’s clearance history.
+
+- Training links show saved sign-off details, including after a concurrent submission. Recorded Inductions links open the selected sign-off.
